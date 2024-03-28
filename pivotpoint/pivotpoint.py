@@ -109,7 +109,8 @@ def pivoting_interval_pairs(
     # parametize the pivots over `data`
     pivot_indices = find_disjoint_quasiisometric_interval_pairs(
         data,gapset,precision,search_mode = search_mode)
-    # curry of `pivot_from_data` with `data`
+    # curry `pivot_from_data` with `data` to get the constructor
     def _pivot(indices):
         return pivot_from_data(indices,data)
+    # lazily construct pivots parametized by `pivot_indices`
     return map(_pivot,pivot_indices)
