@@ -114,3 +114,11 @@ def pivoting_interval_pairs(
         return pivot_from_data(indices,data)
     # lazily construct pivots parametized by `pivot_indices`
     return map(_pivot,pivot_indices)
+
+# from a `list[PivotingIntervalPair]`, produce a `list[float]` of its centers.
+# construct a histogram from the centers; find its peaks (either iteratively, or not)
+# assign each `PivotingIntervalPair` to a peak in the centers histogram.
+# sort each cluster by proximity to its peak.
+# wrap the resulting data as `PivotPointPeakCluster` objects.
+
+# from a `PivotPointPeakCluster`, perform branch and bound search for compatible amino sequences.
