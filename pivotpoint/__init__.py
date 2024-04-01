@@ -5,5 +5,6 @@
 
 from . import awfmpy as awfm
 from . import msio
+from . import synth
 
 from .pivotpoint import *
