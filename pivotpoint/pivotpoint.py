@@ -1,4 +1,4 @@
-def gap_search_simple(arr: list[float], key: float, precision: float):
+def gap_search_simple(arr: list[float], key: float, precision: float, keyid: int):
     n = len(arr)
     candidates = list[tuple[float,float]]()
     for i in range(n):
@@ -9,11 +9,15 @@ def gap_search_simple(arr: list[float], key: float, precision: float):
             ε = abs(key - gap)
             if ε <= precision:
                 # `gap` is close enough to `key`; this is a match.
+                #print("search",keyid,"encountered\t(+)_pair\t",(arr[i],arr[j]))
                 candidates.append((i,j))
+                continue
             elif gap > ε:
                 # `gap` is out of bounds and larger than `key`; 
                 # we assume that `arr` is in ascending order, so 
                 # there's no point in looking past this point.
+                #print("search",keyid,"terminated\t(-)_pair\t",(arr[i],arr[j]))
+                #print()
                 break
             else:
                 # otherwise, `gap` is too small; keep looking.
@@ -55,16 +59,19 @@ def find_disjoint_quasiisometric_interval_pairs(
     search_mode = "simple"):
     dqiips = list[tuple[int,int,int,int]]()
     # choose a search algorithm
-    if search_mode == "binary":
-        gap_search = gap_search_binary
-    else:
-        gap_search = gap_search_simple
+    #if search_mode == "binary":
+    #    gap_search = gap_search_binary
+    #else:
+    #    gap_search = gap_search_simple
+    gap_search = gap_search_simple
     # sort data in ascending order
     data.sort()
-    for key in gapset:
+    N = len(gapset)
+    for i in range(N):
+        key = gapset[i]
         # for each key, find the pairs (x,y) from data
         # such that `y - x` is within `precision` of `key`
-        candidate_intervals = gap_search(data,key,precision)
+        candidate_intervals = gap_search(data,key,precision,i)
         # filter for disjoint (nonintersecting) pairs of intervals. 
         for ((b1,b2),(y1,y2)) in unique_ascending_pairs(candidate_intervals):
             if data[b1] < data[2] < data[y1] < data[y2]:

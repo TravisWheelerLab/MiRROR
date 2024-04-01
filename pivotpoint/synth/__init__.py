@@ -39,14 +39,14 @@ def generate_spectrum_from_sequence(seq: str, p: Param):
     
     # populate the spectrum
     generator.getSpectrum(spectrum, peptide, 1, 1)
-    
-    return list(map(lambda peak: peak.getMZ(), spectrum))
+    mz = list(map(lambda peak: peak.getMZ(), spectrum))
+    mz.sort()
+    return mz
 
-def generate_random_mz(lo: float, hi: float, nsample: int):
+def generate_random_spectrum(lo: float, hi: float, nsample: int):
     return [uniform(lo,hi) for _ in range(nsample)]
 
-def generate_gapset_from_sequence(seq: str, p: Param,max_gap=150):
-    mz = generate_spectrum_from_sequence(seq,p) 
+def generate_gapset_from_spectrum(mz,max_gap = 150):
     n = len(mz)
     gapset = []
     for i in range(n):
@@ -57,3 +57,11 @@ def generate_gapset_from_sequence(seq: str, p: Param,max_gap=150):
             else:
                 break
     return gapset 
+
+def generate_gapset_from_sequence(seq: str, p: Param,max_gap=150):
+    mz = generate_spectrum_from_sequence(seq,p) 
+    return generate_gapset_from_spectrum(mz,max_gap = max_gap)
+
+def generate_pivoting_interval_pairs_from_sequence(seq: str, p: Param,max_gap=150):
+    mz = generate_spectrum_from_sequence(seq,p)
+    gapset = generate_gapset_from_spectrum(mz,max_gap = max_gap)
