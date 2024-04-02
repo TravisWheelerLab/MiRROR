@@ -1,3 +1,5 @@
+from .interval_pair import find_disjoint_quasiisometric_interval_pairs
+
 class PivotingIntervalPair:
     def __init__(self, p):
         self._data = list(p)
@@ -28,7 +30,7 @@ def pivot_from_params(middle: float, gap: float, radius: float):
     data = (p1,p2,p3,p4)
     return PivotingIntervalPair(data)
 
-def pivoting_interval_pairs(
+def find_pivoting_interval_pairs(
     data: list[float], 
     gapset: list[float], 
     precision: float,

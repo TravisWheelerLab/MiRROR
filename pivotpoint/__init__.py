@@ -4,8 +4,8 @@
 #import pyopenms as oms
 
 from . import awfmpy as awfm
-from . import msio
-from . import synth
+from .msio import *
+from .synth import *
 
 from .interval_pair import *
 from .pivot import *
