@@ -7,4 +7,6 @@ from . import awfmpy as awfm
 from . import msio
 from . import synth
 
-from .pivotpoint import *
+from .interval_pair import *
+from .pivot import *
+from .peak import *
