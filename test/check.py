@@ -2,7 +2,6 @@ import sys
 from copy import deepcopy
 from pivotpoint import *
 
-"   subset(A,B) = A ⊆ B"
 def subset(A,B):
     return all([B.count(a) > 0 for a in A])
 
@@ -32,22 +31,30 @@ yb_yb_data = collect_data(yb_yb)
 yb_yba_data = collect_data(yb_yba)
 yba_yb_data = collect_data(yba_yb)
 yba_yba_data = collect_data(yba_yba)
-print()
-print("seq:", seq)
-print("n yb gaps <", max_gap, "\t",len(yb_gapset))
-print("n yba gaps <", max_gap, "\t",len(yba_gapset))
-print("yb_yb  ⊆ yb_yba  =", subset(yb_yb_data, yb_yba_data))
-print("yba_yb ⊆ yba_yba =", subset(yb_yb_data, yb_yba_data))
-print("yb_yb  ⊆ yba_yb  =", subset(yb_yb_data, yb_yba_data))
-print("yba_yb ⊆ yba_yba =", subset(yba_yb_data, yba_yba_data))
 
 resolution = 1000
 yb_yb_clusters = find_pivot_clusters(yb_yb,resolution)
 yb_yba_clusters = find_pivot_clusters(yb_yba,resolution)
 yba_yb_clusters = find_pivot_clusters(yba_yb,resolution)
 yba_yba_clusters = find_pivot_clusters(yba_yba,resolution)
+
+for clust in yb_yb_clusters:
+    print(sorted(list(set([mz for x in clust for mz in x.data()]))))
+
+#yb_yb_clusters = []
+#yb_yb_seq = sequentialize(ConnectedPivotCluster(yb_yb_clusters))
+'''
+print("seq:", seq)
+print("precision:", precision)
 print("resolution:", resolution)
+print()
+print("n yb gaps <", max_gap, "\t",len(yb_gapset))
+print("n yba gaps <", max_gap, "\t",len(yba_gapset))
+print("yb_yb  ⊆ yb_yba  =", subset(yb_yb_data, yb_yba_data))
+print("yba_yb ⊆ yba_yba =", subset(yb_yb_data, yb_yba_data))
+print("yb_yb  ⊆ yba_yb  =", subset(yb_yb_data, yb_yba_data))
+print("yba_yb ⊆ yba_yba =", subset(yba_yb_data, yba_yba_data))
 print("yb_yb_clusters",len(yb_yb_clusters))
 print("yb_yba_clusters",len(yb_yba_clusters))
 print("yba_yb_clusters",len(yba_yb_clusters))
-print("yba_yba_clusters",len(yba_yba_clusters))
+print("yba_yba_clusters",len(yba_yba_clusters))'''
