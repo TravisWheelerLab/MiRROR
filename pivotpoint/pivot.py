@@ -41,5 +41,5 @@ def find_pivoting_interval_pairs(
     # curry `pivot_from_data` with `data` to get the constructor
     def _pivot(indices):
         return pivot_from_data(indices,data)
-    # lazily construct pivots parametized by `pivot_indices`
-    return map(_pivot,pivot_indices)
+    # eagerly construct pivots parametized by `pivot_indices`
+    return list(map(_pivot,pivot_indices))
