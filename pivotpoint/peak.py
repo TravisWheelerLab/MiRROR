@@ -26,7 +26,7 @@ def find_pivot_point_peaks(
     peak_intervals = [(hist_bin_edges[l],hist_bin_edges[r]) for (l,r) in zip(prom_lefts,prom_rights)]
     return list(zip(peak_idcs,peak_proms,peak_intervals))
 
-def naiive_cluster_pivots(
+def naiive_pivot_clusters(
     pivots: list[PivotingIntervalPair],
     peaks: list[tuple[int,float,tuple[int,int]]]):
     return [peak_interval for (_,__,peak_interval) in peaks]
@@ -36,10 +36,10 @@ def cluster_pivots_by_peaks(
     peaks: list[tuple[int,float,tuple[int,int]]],
     pivot_clustering_method: str = "naiive"):
     if pivot_clustering_method == "naiive":
-        cluster_pivots = naiive_cluster_pivots
+        pivot_clusters = naiive_pivot_clusters
     else:
         raise NotImplementedError
-    return cluster_pivots(pivots,peaks)
+    return pivot_clusters(pivots,peaks)
 
 def find_pivot_clusters(
     pivots: list[PivotingIntervalPair],
