@@ -4,5 +4,5 @@ from .synth import *
 
 from .interval_pair import *
 from .pivot import *
-from .peak import *
+from .cluster import *
 from .sample import *
