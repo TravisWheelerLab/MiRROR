@@ -1,27 +1,36 @@
 def gap_search_simple(arr: list[float], key: float, precision: float, keyid: int):
     n = len(arr)
     candidates = list[tuple[float,float]]()
+    print("key",key)
     for i in range(n):
         x = arr[i]
         for j in range(i + 1,n):
             y = arr[j]
             gap = y - x
             ε = abs(key - gap)
+            print("search state=")
+            print("\tx",x)
+            print("\ty",y)
+            print("\tgap",gap)
+            print("\tε",ε)
             if ε <= precision:
+                print("match!")
                 # `gap` is close enough to `key`; this is a match.
                 #print("search",keyid,"encountered\t(+)_pair\t",(arr[i],arr[j]))
                 candidates.append((i,j))
                 continue
-            elif gap > ε:
+            elif gap > key:
                 # `gap` is out of bounds and larger than `key`; 
                 # we assume that `arr` is in ascending order, so 
                 # there's no point in looking past this point.
                 #print("search",keyid,"terminated\t(-)_pair\t",(arr[i],arr[j]))
                 #print()
+                print("oob")
                 break
             else:
                 # otherwise, `gap` is too small; keep looking.
                 continue
+    print()
     return candidates
 
 "floor divide"
