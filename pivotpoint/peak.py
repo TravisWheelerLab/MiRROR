@@ -21,7 +21,6 @@ def find_pivot_point_peaks(
     else:
         raise NotImplementedError
     peak_idcs,_ = find_peaks(pivot_point_hist)
-    # compute the prominence of each peak and bundle that data into the dict.
     peak_proms, prom_lefts, prom_rights = scipy_peak_prominences(pivot_point_hist,peak_idcs)
     peak_intervals = [(hist_bin_edges[l],hist_bin_edges[r]) for (l,r) in zip(prom_lefts,prom_rights)]
     return list(zip(peak_idcs,peak_proms,peak_intervals))
@@ -41,6 +40,19 @@ def cluster_pivots_by_peaks(
         raise NotImplementedError
     return pivot_clusters(pivots,peaks)
 
+def interpolate_pivot_cluster(
+    bounds: tuple[float,float],
+    pivots: list[PivotingIntervalPair]):
+    left_bound, right_bound = bounds
+    cluster = list[PivotingIntervalPair]()
+    n = len(pivots)
+    for i in range(n):
+        p = pivots[i]
+        c = p.center()
+        if left_bound < c < right_bound:
+            cluster.append(p)
+    return cluster
+
 def find_pivot_clusters(
     pivots: list[PivotingIntervalPair],
     resolution: int,
@@ -50,4 +62,5 @@ def find_pivot_clusters(
     pivot_point_hist_tuple = pivot_point_histogram(pivots,resolution)
     peaks = find_pivot_point_peaks(pivot_point_hist_tuple,peak_finding_method)
     # group pivots by their proximity and relatedness to peak structures
-    return cluster_pivots_by_peaks(pivots,peaks,pivot_clustering_method)
+    cluster_bounds = cluster_pivots_by_peaks(pivots,peaks,pivot_clustering_method)
+    return [interpolate_pivot_cluster(cb,pivots) for cb in cluster_bounds]

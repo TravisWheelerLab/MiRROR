@@ -5,7 +5,7 @@ class PivotingIntervalPair:
         self._data = list(p)
 
     def data(self):
-        return self._data
+        return tuple(self._data)
 
     def center(self):
         return (self._data[1] + self._data[2]) / 2
@@ -16,6 +16,12 @@ class PivotingIntervalPair:
     def error(self):
         gap_left, gap_right = self.gap()
         return abs(gap_right - gap_left)
+
+    def left(self):
+        return self.data()[[0,1]]
+
+    def right(self):
+        return self.data()[[2,3]]
 
     def outer(self):
         return self.data()[[0,3]]
@@ -29,10 +35,10 @@ class PivotingIntervalPair:
     def inner_diameter(self):
         return self.inner()[1] - self.inner()[0]
 
-    def succeeds(self, other: PivotingIntervalPair):
+    def succeeds(self, other):
         return self.outer() == other.inner()
 
-    def contains(self, other: PivotingIntervalPair):
+    def contains(self, other):
         return self.inner()[1] < other.outer()[1] < other.outer()[2] < self.inner()[2]
     
 def pivot_from_data(indices: tuple[int,int,int,int], dataset: list[float]):
