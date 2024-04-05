@@ -1,4 +1,5 @@
 from . import awfmpy as awfm
+from .util import *
 from .io import *
 from .synth import *
 

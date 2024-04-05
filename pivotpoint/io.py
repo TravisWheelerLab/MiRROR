@@ -1,18 +1,20 @@
 from pyopenms import MSExperiment, MzMLFile
 from pandas import DataFrame, read_csv
 from fastaparser import Reader as FASTAReader, Writer as FASTAWriter
-from .pivots import PivotingIntervalPair
+from .pivot import PivotingIntervalPair, pivot_from_data
 
-def write_pivots_to_csv(path: str, pivots: list[PivotingIntervalPairs]):
-    pivot_data = [pivot.data() for pivot in pivots]
+def write_pivots_to_csv(path: str, pivots: list[PivotingIntervalPair]):
+    pivot_data_strings = [f"{x1},{x2},{x3},{x4}\n" for (x1,x2,x3,x4) in map(lambda x: x.data(),pivots)]
     with open(path, 'w') as pivots_csv:
-
+        pivots_csv.writelines(pivot_data_strings)
 
 def read_csv_to_pivots(path: str):
     pivots = []
     with open(path) as pivots_csv:
         for pivot_line in pivots_csv.readlines():
-            data_strings = pivot_line.split(',')
+            pivot_data = [float(x) for x in pivot_line.split(',')]
+            pivots.append(PivotingIntervalPair(pivot_data))
+    return pivots
 
 def read_fasta_to_list(path: str):
     sequences = list[str]()

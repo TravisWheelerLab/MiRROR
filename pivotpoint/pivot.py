@@ -27,23 +27,19 @@ class PivotingIntervalPair:
         return self._data[0], self._data[3]
 
     def outer_diameter(self):
-        return self.outer()[1] - self.outer()[0]
+        return self._data[3] - self._data[0]
 
     def inner(self):
         return self._data[1], self._data[2]
 
     def inner_diameter(self):
-        return self.inner()[1] - self.inner()[0]
+        return self._data[2] - self._data[1]
 
     def succeeds(self, other):
         return self.outer() == other.inner()
 
     def contains(self, other):
         return self.inner()[1] < other.outer()[1] < other.outer()[2] < self.inner()[2]
-    
-def pivot_from_data(indices: tuple[int,int,int,int], dataset: list[float]):
-    data = (dataset[i] for i in indices)
-    return PivotingIntervalPair(data)
 
 def pivot_from_params(middle: float, gap: float, radius: float):
     hgap = gap / 2
@@ -52,6 +48,10 @@ def pivot_from_params(middle: float, gap: float, radius: float):
     p3 = middle + radius - hgap
     p4 = middle + radius + hgap
     data = (p1,p2,p3,p4)
+    return PivotingIntervalPair(data)
+    
+def pivot_from_data(indices: tuple[int,int,int,int], dataset: list[float]):
+    data = (dataset[i] for i in indices)
     return PivotingIntervalPair(data)
 
 def construct_pivoting_interval_pairs(
@@ -71,4 +71,5 @@ def find_pivoting_interval_pairs(
     # parametize the pivots over `data`
     pivot_indices = find_disjoint_quasiisometric_interval_pairs(
         data,gapset,precision,search_mode = search_mode)
+    # convert pivot indices, data to Pivot objects
     return construct_pivoting_interval_pairs(data,pivot_indices)
