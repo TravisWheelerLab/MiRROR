@@ -1,0 +1,10 @@
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/12/PXD004932/
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/12/PXD004947/
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/12/PXD003868/
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/08/PXD004467/
+ftp.pride.ebi.ac.uk/pride/data/archive/2017/02/PXD004424/
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/12/PXD005025/
+ftp.pride.ebi.ac.uk/pride/data/archive/2017/01/PXD005357/
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/09/PXD004325/
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/12/PXD004565/
+ftp.pride.ebi.ac.uk/pride/data/archive/2016/08/PXD004536/
