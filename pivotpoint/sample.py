@@ -1,12 +1,23 @@
 from .pivot import *
+from .util import *
 from .distribution import PivotPointsDistribution
 
 class PivotClusterSampler:
     def __init__(self, cluster: list[PivotingIntervalPair]):
         pivot_avg_diameter = lambda pivot: 0.5 * (pivot.inner_diameter() + pivot.outer_diameter())
-        self.pivots = sorted(cluster, by = pivot_avg_diameter)
+        self.pivots = sorted(cluster, key = pivot_avg_diameter)
         self.centers = [pivot.center() for pivot in cluster]
         self.data = sorted(unique(collect_pivot_data(cluster)))
+
+    def bilinearize(self):
+        forward_sequence = list[float]()
+        reverse_sequence = list[float]()
+        for pivot in self.pivots:
+            forward_sequence += list(pivot.left())
+            reverse_sequence += list(pivot.right())
+        forward_sequence = sorted(unique(forward_sequence))
+        reverse_sequence = sorted(unique(forward_sequence))
+        return forward_sequence, reverse_sequence
         
 def sort_pivot_cluster(cluster: list[PivotingIntervalPair]):
     average_diameter = lambda pivot: (1/2) * (pivot.outer_diameter() + pivot.inner_diameter())
@@ -43,5 +54,7 @@ def sequentialize(connected_cluster: ConnectedPivotCluster):
     for pivot in connected_cluster.pivot_sequence:
         forward_sequence += list(pivot.left())
         reverse_sequence += list(pivot.right())
+    forward_sequence = sorted(unique(forward_sequence))
+    reverse_sequence = sorted(unique(forward_sequence))
     return forward_sequence, reverse_sequence
     

@@ -19,7 +19,6 @@ for input_path in input_paths:
     print("\nclusters stats:")
     print(" \tsize\t average\t\t variance\t\t IQR\n")
     pivot_clusters = [[dist.pivot_points[pivot_id] for pivot_id in cluster] for cluster in dist.clusters]
-    pivot_clusters.sort(key = lambda x: -len(x))
     n_clusters = dist.n_clusters()
     cluster_pair_sums = np.zeros((n_clusters,n_clusters))
     for i in range(n_clusters):
@@ -40,4 +39,9 @@ for input_path in input_paths:
         for j in range(i,n_clusters):
             if abs(cluster_pair_sums[i,j] - primary_cluster) < 5:
                 print((i,j), ":\t", cluster_pair_sums[i,j])
+    print("\nprimary cluster m/z reads")
+    for_read, rev_read = PivotClusterSampler(dist.get_pivot_cluster(0)).bilinearize()
+    print(len(for_read),'\t',for_read)
+    print(len(rev_read),'\t',rev_read)
+    print("forward == reverse:", for_read == rev_read)
     input()

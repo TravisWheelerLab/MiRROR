@@ -8,6 +8,7 @@ class PivotPointsDistribution:
         pivots: list[PivotingIntervalPair],
         resolution: int):
         # construct the distribution itself.
+        self.pivots = pivots
         self._n_pivot_points = len(pivots)
         self.pivot_points = [pivot.center() for pivot in pivots]
         self.resolution = resolution
@@ -33,6 +34,7 @@ class PivotPointsDistribution:
                 right_val = self.pivot_points_bin_edges[right_index]
                 if left_val <= val <= right_val:
                     self.clusters[peak_id].append(pivot_id)
+        self.clusters.sort(key = lambda x: -len(x))
         
     def n_pivots(self):
         return self._n_pivot_points
@@ -40,6 +42,6 @@ class PivotPointsDistribution:
     def n_clusters(self):
         return self._n_peaks
 
-    def get_clusters(self):
-        return [PivotPointsCluster([self.pivot_points[pivot_id] for pivot_id in cluster]) for cluster in self.clusters]
+    def get_pivot_cluster(self,i):
+        return [self.pivots[pivot_id] for pivot_id in self.clusters[i]]
 
