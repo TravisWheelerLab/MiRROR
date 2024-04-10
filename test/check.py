@@ -11,13 +11,13 @@ def collect_data(pivotmap):
 def unique(a):
     return list(set(a))
 
-seq = "AAAAAA"
+seq = "AAAACA"
 max_gap = 250
 precision = 0.1
 resolution = 100
 
 spec = generate_spectrum_from_sequence(seq,parametize_yb_spectrum())
-gapset = [71.037]
+gapset = [71.037,103.009]
 pivotpairs = find_pivoting_interval_pairs(spec,gapset,precision)
 pivotpairdata = collect_data(pivotpairs)
 clusters = find_pivot_clusters(pivotpairs,resolution)
@@ -26,4 +26,6 @@ print("spectrum",spec)
 print("\t",[spec[i + 2] - spec[i] for i in range(len(spec) - 2)])
 print("gapset",gapset)
 print("data",pivotpairdata)
+print(len(pivotpairdata))
 print("clusters",cluster_data)
+print([len(x) for x in cluster_data])

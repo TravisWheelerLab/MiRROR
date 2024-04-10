@@ -55,11 +55,7 @@ def find_disjoint_quasiisometric_interval_pairs(
     precision: float,
     search_mode = "simple"):
     dqiips = list[tuple[int,int,int,int]]()
-    # choose a search algorithm
-    #if search_mode == "binary":
-    #    gap_search = gap_search_binary
-    #else:
-    #    gap_search = gap_search_simple
+    # (don't) choose a search algorithm
     gap_search = gap_search_simple
     # sort data in ascending order
     data.sort()

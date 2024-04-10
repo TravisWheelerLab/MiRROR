@@ -6,7 +6,7 @@ def load_pivot_inputs(path: str):
     return read_csv_to_pivots(path)
 
 def reduce_to_mz(pivots: list[PivotingIntervalPair]):
-    return unique([mz for pivot in pivots for mz in pivot.data()])
+    return collect_pivot_data(pivots)
 
 def recreate_pivots(data: list[float], gapset: list[float], precision = 0.1):
     return find_pivoting_interval_pairs(data,gapset,precision)

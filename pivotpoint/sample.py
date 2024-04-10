@@ -1,5 +1,5 @@
 from .pivot import *
-from distribution import PivotPointsDistribution
+from .distribution import PivotPointsDistribution
 
 class PivotClusterSampler:
     def __init__(self, cluster: list[PivotingIntervalPair]):

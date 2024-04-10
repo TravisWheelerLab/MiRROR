@@ -5,5 +5,5 @@ from .synth import *
 
 from .interval_pair import *
 from .pivot import *
-from .cluster import *
+from .distribution import *
 from .sample import *

@@ -26,24 +26,24 @@ AMINO_ACID_CHAR_REPRESENTATION = [
 
 AMINO_ACID_MASS_MONOISOTOPIC = [
     71.037,
-    156.101,
-    114.042,
-    115.027,
-    103.009,
-    129.043,
-    128.059,
+    156.10,
+    114.04,
+    115.03,
+    103.01,
+    129.04,
+    128.06,
     57.021,
-    137.059,
-    113.084,
-    113.084,
-    128.095,
-    131.040,
-    147.068,
+    137.06,
+    113.08,
+    113.08,
+    128.10,
+    131.04,
+    147.07,
     97.053,
     87.032,
-    101.048,
-    186.079,
-    163.063,
+    101.05,
+    186.08,
+    163.06,
     99.068]
 
 AMINO_ACID_MASS_AVERAGE = [
@@ -68,11 +68,11 @@ AMINO_ACID_MASS_AVERAGE = [
     163.2,
     99.13]
 
-def collect_data(pivotmap):
-    return [pivot.data() for pivot in deepcopy(pivotmap)]
-
 def unique(a):
     return list(set(a))
+
+def collect_pivot_data(pivotmap):
+    return unique([x for pivot in deepcopy(pivotmap) for x in pivot.data()])
 
 def subset(A,B):
     return all([B.count(a) > 0 for a in A])
