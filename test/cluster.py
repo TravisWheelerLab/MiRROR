@@ -13,9 +13,10 @@ def make_dist(path: str, bins = 100):
 input_paths = glob("./test/input/test_pivots_*")
 
 for input_path in input_paths:
+    print(input_path)
     file_name_suffix = input_path.split('/')[-1]
     dist = make_dist(input_path)
-    dump_object_data(dist)
+    #dump_object_data(dist)
     print("\nclusters stats:")
     print(" \tsize\t average\t\t variance\t\t IQR\n")
     pivot_clusters = [[dist.pivot_points[pivot_id] for pivot_id in cluster] for cluster in dist.clusters]
@@ -34,14 +35,19 @@ for input_path in input_paths:
             cluster_pair_sums[i,j] = 0.5 * (mean(pivot_clusters[i]) + mean(pivot_clusters[j]))
     np.set_printoptions(precision=3,suppress=True)
     primary_cluster = cluster_pair_sums[0,0]
-    print("\ncluster pair averages")
+    print("\ncluster pair averages:")
     for i in range(n_clusters):
         for j in range(i,n_clusters):
             if abs(cluster_pair_sums[i,j] - primary_cluster) < 5:
                 print((i,j), ":\t", cluster_pair_sums[i,j])
-    print("\nprimary cluster m/z reads")
-    for_read, rev_read = PivotClusterSampler(dist.get_pivot_cluster(0)).bilinearize()
+    print("\nprimary cluster m/z reads:")
+    primary_sampler = PivotClusterSampler(dist.get_pivot_cluster(0))
+    for_read, rev_read = primary_sampler.bilinearize()
     print(len(for_read),'\t',for_read)
     print(len(rev_read),'\t',rev_read)
-    print("forward == reverse:", for_read == rev_read)
+    print("(forward = reverse):", for_read == rev_read)
+    print("\nprimary cluster identifier vectors:")
+    identifier_vectors = primary_sampler.sequence()
+    for idvec in identifier_vectors:
+        print(idvec)
     input()

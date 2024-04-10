@@ -2,6 +2,13 @@ from .pivot import *
 from .util import *
 from .distribution import PivotPointsDistribution
 
+def calculate_identifier_vector(gap: float, mode = "average"):
+    if mode == "monoisotropic":
+        alphabet = AMINO_ACID_MASS_MONOISOTOPIC
+    else: # mode == "average":
+        alphabet = AMINO_ACID_MASS_AVERAGE
+    return [round(1/abs(a - gap),4) for a in alphabet]
+
 class PivotClusterSampler:
     def __init__(self, cluster: list[PivotingIntervalPair]):
         pivot_avg_diameter = lambda pivot: 0.5 * (pivot.inner_diameter() + pivot.outer_diameter())
@@ -10,51 +17,21 @@ class PivotClusterSampler:
         self.data = sorted(unique(collect_pivot_data(cluster)))
 
     def bilinearize(self):
-        forward_sequence = list[float]()
-        reverse_sequence = list[float]()
+        forward_read = list[float]()
+        reverse_read = list[float]()
         for pivot in self.pivots:
-            forward_sequence += list(pivot.left())
-            reverse_sequence += list(pivot.right())
-        forward_sequence = sorted(unique(forward_sequence))
-        reverse_sequence = sorted(unique(forward_sequence))
-        return forward_sequence, reverse_sequence
-        
-def sort_pivot_cluster(cluster: list[PivotingIntervalPair]):
-    average_diameter = lambda pivot: (1/2) * (pivot.outer_diameter() + pivot.inner_diameter())
-    return sorted(cluster, key = average_diameter)
+            forward_read += list(pivot.left())
+            reverse_read += list(pivot.right())
+        forward_read = sorted(forward_read)
+        reverse_read = sorted(forward_read)
+        return forward_read, reverse_read
 
-def successor_search_simple(pivots: list[PivotingIntervalPair]):
-    n = len(arr)
-    candidates = list[tuple[float,float]]()
-    for i in range(n):
-        a = pivots[i]
-        for j in range(i + 1,n):
-            b = pivots[j]
-            if b.succeeds(a):
-                # match.
-                candidates.append((i,j))
-                continue
-            elif a.contains(b):
-                # out of bounds, look elsewhere.
-                break
-            else:
-                # otherwise, keep looking.
-                continue
-    return candidates
-
-class ConnectedPivotCluster:
-    def __init__(self, cluster: list[PivotingIntervalPair]):
-        self.pivot_sequence = sort_pivot_cluster(cluster)
-        self.edges = successor_search_simple(pivot_sequence)
-        # self.pivot_point_error = cluster.error
-
-def sequentialize(connected_cluster: ConnectedPivotCluster):
-    forward_sequence = list[float]()
-    reverse_sequence = list[float]()
-    for pivot in connected_cluster.pivot_sequence:
-        forward_sequence += list(pivot.left())
-        reverse_sequence += list(pivot.right())
-    forward_sequence = sorted(unique(forward_sequence))
-    reverse_sequence = sorted(unique(forward_sequence))
-    return forward_sequence, reverse_sequence
-    
+    def sequence(self):
+        forward_read, reverse_read = self.bilinearize()
+        if forward_read == reverse_read:
+            n = len(forward_read)
+            gap_sequence = [forward_read[i + 1] - forward_read[i] for i in range(n - 1)]
+            identifier_vectors = list(map(calculate_identifier_vector,gap_sequence))
+            return identifier_vectors
+        else:
+            return "forward-reverse discrepancies are not yet implemented"
