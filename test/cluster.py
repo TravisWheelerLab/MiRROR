@@ -40,14 +40,19 @@ for input_path in input_paths:
         for j in range(i,n_clusters):
             if abs(cluster_pair_sums[i,j] - primary_cluster) < 5:
                 print((i,j), ":\t", cluster_pair_sums[i,j])
-    # print("\nprimary cluster m/z reads:")
-    # primary_sampler = PivotClusterSampler(dist.get_pivot_cluster(0))
-    # for_read, rev_read = primary_sampler.bilinearize()
-    # print(len(for_read),'\t',for_read)
-    # print(len(rev_read),'\t',rev_read)
-    # print("(forward = reverse):", for_read == rev_read)
-    # print("\nprimary cluster identifier vectors:")
-    # identifier_vectors = primary_sampler.sequence()
-    # for idvec in identifier_vectors:
-    #     print(idvec)
+    print("\nprimary cluster m/z reads:")
+    primary_sampler = PivotClusterSampler(dist.get_pivot_cluster(0))
+    for_read, rev_read = primary_sampler.bilinearize()
+    print(len(for_read),'\t',for_read)
+    print(len(rev_read),'\t',rev_read)
+    print("(forward = reverse):", for_read == rev_read)
+    print("\nprimary cluster identifier vectors:")
+    identifier_vectors = primary_sampler.sequence()
+    for idvec in identifier_vectors:
+        max_idx = np.argmax(idvec)
+        max_val = idvec[max_idx]
+        if max_val < 1:
+            continue
+        amino = AMINO_ACID_CHAR_REPRESENTATION[max_idx]
+        print(amino)
     input()

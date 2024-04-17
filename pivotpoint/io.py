@@ -16,12 +16,20 @@ def read_csv_to_pivots(inpath: str):
             pivots.append(PivotingIntervalPair(pivot_data))
     return pivots
 
-def read_fasta_to_list(inpath: str):
+def read_fasta_to_strings(inpath: str):
     sequences = list[str]()
     with open(inpath) as fasta:
         parser = FASTAReader(fasta,parse_method="quick")
         for record in parser:
             sequences.append(record.sequence)
+    return sequences
+
+def read_fasta_to_tuples(inpath: str):
+    sequences = list[tuple[str,str]]()
+    with open(inpath) as fasta:
+        parser = FASTAReader(fasta,parse_method="quick")
+        for record in parser:
+            sequences.append((record.header,record.sequence))
     return sequences
 
 def write_list_to_fasta(outpath: str, sequences: list[str], headers = None):

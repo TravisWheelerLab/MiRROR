@@ -1,6 +1,6 @@
 from scipy.signal import find_peaks as scipy_find_peaks, peak_prominences as scipy_peak_prominences
 from numpy import histogram
-from .pivot import PivotingIntervalPair
+from .pivot import PivotingIntervalPair, pivot_sort_key
 from .util import unique
 
 class PivotPointsDistribution:
@@ -43,5 +43,16 @@ class PivotPointsDistribution:
         return self._n_peaks
 
     def get_pivot_cluster(self,i):
-        return [self.pivots[pivot_id] for pivot_id in self.clusters[i]]
+        return PivotPointsCluster([self.pivots[pivot_id] for pivot_id in self.clusters[i]])
 
+
+class PivotPointsCluster:
+    def __init__(self,
+        pivots: list[PivotingIntervalPair]):
+        self.pivots = sorted(pivots,key = pivot_sort_key)
+
+    def get_data(self):
+        sorted(unique(collect_pivot_data([x.data for x in self.pivots])))
+
+    def get_pivots(self):
+        return self.pivots
