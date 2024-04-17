@@ -28,6 +28,13 @@ class DataGen(unittest.TestCase):
         path_format_sequence_pivots = path.join(self.dir, "test_pivots_sequence")
         create_sequence_yb_pivots_data(path_format_sequence_pivots,self.gapset,sequences)
 
+    def test_create_pivots_from_noKR_sequence_data(self):
+        # datasets from sequence
+        path_sequences = path.join(self.dir, "noKR_sequences.fasta")
+        sequences = read_fasta_to_list(path_sequences)
+        path_format_sequence_pivots = path.join(self.dir, "noKR_pivots_sequence")
+        create_sequence_yb_pivots_data(path_format_sequence_pivots,self.gapset,sequences)
+
 def create_random_pivots_data(outpath: str, gapset: list[float], nsamples: int, value_range: tuple[float,float], radius_range: tuple[float,float]):
     data = [pivot_from_params(
                 random.uniform(value_range[0],value_range[1]),

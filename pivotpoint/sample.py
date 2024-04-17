@@ -2,12 +2,12 @@ from .pivot import *
 from .util import *
 from .distribution import PivotPointsDistribution
 
-def calculate_identifier_vector(gap: float, mode = "average"):
+def calculate_identifier_vector(gap: float, mode = "average", precision = 4):
     if mode == "monoisotropic":
         alphabet = AMINO_ACID_MASS_MONOISOTOPIC
     else: # mode == "average":
         alphabet = AMINO_ACID_MASS_AVERAGE
-    return [round(1/abs(a - gap),4) for a in alphabet]
+    return [round(1/abs(a - gap),precision) for a in alphabet]
 
 class PivotClusterSampler:
     def __init__(self, cluster: list[PivotingIntervalPair]):
