@@ -1,2 +1,1 @@
-wget --recursive --no-parent --no-host-directories -e 'robots=off' --cut-dirs 5 --no-clobber "ftp://$1"
-
+wget --recursive --no-parent --no-host-directories -e 'robots=off' --cut-dirs 5 --no-clobber "ftp://$1" --directory-prefix="$2"
