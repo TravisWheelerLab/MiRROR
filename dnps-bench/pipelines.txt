@@ -1,5 +1,0 @@
-.raw                ThermoRawFileParser or pyRawTools
-.pdresult, .msf     SQLite
-.wiff, .wiff.scan   msconvert, wine, mono
-.mzid, .mzml, .xml  pyOpenMS
-.xlsx, .fasta       Pandas, FastaParser
