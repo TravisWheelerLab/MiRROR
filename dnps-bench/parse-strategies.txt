@@ -2,8 +2,31 @@ PXD003868
 The msms.txt table in PXD003868 has the following columns: 
 Index(['Raw file', 'Scan number', 'Scan index', 'Sequence', 'Length', 'Missed cleavages', 'Modifications', 'Modified sequence', 'Oxidation (M) Probabilities', 'Oxidation (M) Score Diffs', 'Acetyl (Protein N-term)', 'Oxidation (M)', 'Proteins', 'Gene Names', 'Protein Names', 'Charge', 'Fragmentation', 'Mass analyzer', 'Type', 'Scan event number', 'Isotope index', 'm/z', 'Mass', 'Mass Error [ppm]', 'Simple Mass Error [ppm]', 'Retention time', 'PEP', 'Score', 'Delta score', 'Score diff', 'Localization prob', 'Combinatorics', 'PIF', 'Fraction of total spectrum', 'Base peak fraction', 'Precursor Full ScanNumber', 'Precursor Intensity', 'Precursor Apex Fraction', 'Precursor Apex Offset', 'Precursor Apex Offset Time', 'Matches', 'Intensities', 'Mass Deviations [Da]', 'Mass Deviations [ppm]', 'Masses', 'Number of Matches', 'Intensity coverage', 'Peak coverage', 'Neutral loss level', 'ETD identification type', 'Reverse', 'All scores', 'All sequences', 'All modified sequences', 'id', 'Protein group IDs', 'Peptide ID', 'Mod. peptide ID', 'Evidence ID', 'Oxidation (M) site IDs'], dtype='object')
 
-PXD004325 [todo]
-The .msf files in PXD004325 are relational databases. Tables MassPeaks, PeptideScores and PeptideScores_decoy, Peptides (and related tables, and again for Proteins rather than Peptides), SpectraHeaders collectively about the same thing as an msms.txt.
+PXD004325 [inpr]
+The .msf files in PXD004325 are relational databases. Relevant tables are
+
+MSF_AMINO_TABLES = [
+    "AminoAcids",
+    "AminoAcidModifications",
+    "AminoAcidModificationsAminoAcid",
+    "AminoAcidModificationsAminoAcidNL",
+    "AminoAcidModificationsNeutralLosses",
+]
+
+MSF_PEPTIDE_TABLES = [
+    "Peptides",
+    "PeptideScores",
+    "PeptidesAminoAcidModifications",
+    "PeptidesTerminalModifications",]
+
+MSF_DECOY_TABLES = [table_name + "_decoy" for table_name in MSF_PEPTIDE_TABLES]
+
+MSF_METADATA_TABLES = [
+    "FileInfos",
+    "MassPeaks",
+    "SpectraHeaders",
+    "SpectrumScores",
+] 
 
 PXD004424 [inpr]
 The .xml files in PXD004424 are Mascot search results formatted according to 
