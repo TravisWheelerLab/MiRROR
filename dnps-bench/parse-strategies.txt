@@ -13,8 +13,9 @@ Since we have one .xml for every .mgf, we can more or less reconstruct peptide s
 PXD004467 [todo]
 appears to follow a similar format as PXD004424; there are large .raw files without related outputs, and smaller .mgf files associated to .mzid (which are xml).
 
-PXD004536 [inpr]
+PXD004536
 The .pdResult files in PXD004536 are redundant; we can reconstruct msms.txt-like data from the .xlsx and .fasta.
+./dnps-bench/collate_fasta_excel.py creates an extra column in the spreadsheet and interpolates it with sequences from the fasta records by matching accession.
 
 PXD004932 has an msms.txt.
 
