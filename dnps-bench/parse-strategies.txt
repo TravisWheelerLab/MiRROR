@@ -5,6 +5,7 @@ Index(['Raw file', 'Scan number', 'Scan index', 'Sequence', 'Length', 'Missed cl
 PXD004325 [inpr]
 The .msf files in PXD004325 are relational databases. Using pandas and sqlite3 -- as implemented in ./dnps-bench/database_to_dataframe.py, msms.txt-like information is reconstructed from each .msf.
 There are also what appear to be aggregate *.pep.xml (two triplets) so it may be better to query these rather than the *.msf. Analogously to .mzid, we can use Pyteomics to iterate msms.txt-like information from the file.
+Relevant data can be extracted using ./dnps-bench/collect_xml.py.
 
 PXD004424 [inpr]
 The .xml files in PXD004424 are Mascot search results formatted according to 
@@ -12,11 +13,12 @@ http://www.matrixscience.com/xmlns/schema/mascot_search_results_2/#ns_msr.
 These are not pepxml nor are they mzid. pyOpenMS has MascotXMLFile which appears to be the right format, but the documentation is lacking. The MascotXMLFile is initialized without any parameters, and then load is called with three arguments in addition to the filepath: ProteinIdentification, List[PeptideIdentification], and SpectrumMetaDataLookup. All of these are blank initialized and populated by mutation when `load` is called. 
 From PeptideIdentification objects (with m/z (getMZ) seemingly the only populated field) we can iterate PeptideHit objects that implement charge, score, and sequence, and in the metadata, b'EValue'.
 Since we have one .xml for every .mgf, we can more or less reconstruct peptide sequence to spectrum relationships.
+As above, use ./dnps-bench/collect_xml.py.
 
 PXD004467 [inpr]
 appears to follow a similar format as PXD004424; there are large .raw files without related outputs, and smaller .mgf files associated to .mzid (which are xml).
 Using Pyteomics, we can iterate and for each entry get msms.txt-like information from the .mzid files.
-
+As above, use ./dnps-bench/collect_xml.py.
 
 PXD004536
 The .pdResult files in PXD004536 are redundant; we can reconstruct msms.txt-like data from the .xlsx and .fasta.
