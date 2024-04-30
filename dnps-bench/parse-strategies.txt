@@ -1,0 +1,25 @@
+PXD003868
+The msms.txt table in PXD003868 has the following columns: 
+Index(['Raw file', 'Scan number', 'Scan index', 'Sequence', 'Length', 'Missed cleavages', 'Modifications', 'Modified sequence', 'Oxidation (M) Probabilities', 'Oxidation (M) Score Diffs', 'Acetyl (Protein N-term)', 'Oxidation (M)', 'Proteins', 'Gene Names', 'Protein Names', 'Charge', 'Fragmentation', 'Mass analyzer', 'Type', 'Scan event number', 'Isotope index', 'm/z', 'Mass', 'Mass Error [ppm]', 'Simple Mass Error [ppm]', 'Retention time', 'PEP', 'Score', 'Delta score', 'Score diff', 'Localization prob', 'Combinatorics', 'PIF', 'Fraction of total spectrum', 'Base peak fraction', 'Precursor Full ScanNumber', 'Precursor Intensity', 'Precursor Apex Fraction', 'Precursor Apex Offset', 'Precursor Apex Offset Time', 'Matches', 'Intensities', 'Mass Deviations [Da]', 'Mass Deviations [ppm]', 'Masses', 'Number of Matches', 'Intensity coverage', 'Peak coverage', 'Neutral loss level', 'ETD identification type', 'Reverse', 'All scores', 'All sequences', 'All modified sequences', 'id', 'Protein group IDs', 'Peptide ID', 'Mod. peptide ID', 'Evidence ID', 'Oxidation (M) site IDs'], dtype='object')
+
+PXD004325 [todo]
+The .msf files in PXD004325 are relational databases. Tables MassPeaks, PeptideScores and PeptideScores_decoy, Peptides (and related tables, and again for Proteins rather than Peptides), SpectraHeaders collectively about the same thing as an msms.txt.
+
+PXD004424 [inpr]
+The .xml files in PXD004424 are Mascot search results formatted according to 
+http://www.matrixscience.com/xmlns/schema/mascot_search_results_2/#ns_msr.
+Since we have one .xml for every .mgf, we can more or less reconstruct peptide sequence to spectrum relationships. The .mgf are relatively small, though, compared to quite a few half-gig .raw files. Not sure what's going on, the paper alludes to maybe combining portions of the .raw files. Iterating the .mgf using Pyteomics yields standard spectra data.
+
+PXD004467 [todo]
+appears to follow a similar format as PXD004424; there are large .raw files without related outputs, and smaller .mgf files associated to .mzid (which are xml).
+
+PXD004536 [inpr]
+The .pdResult files in PXD004536 are redundant; we can reconstruct msms.txt-like data from the .xlsx and .fasta.
+
+PXD004932 has an msms.txt.
+
+PXD004947 has an msms.txt
+
+PXD005025 has an msms.txt
+
+PXD005357 [todo] also uses .msf, one for each .raw.
