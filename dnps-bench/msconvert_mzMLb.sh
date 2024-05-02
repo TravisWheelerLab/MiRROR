@@ -15,4 +15,4 @@ echo datafile "$DATAFILE"
 echo inputpath "$INPUTPATH"
 echo outputdir "$OUTPUTDIR"
 
-singularity exec --writable --cleanenv -B "$DATADIR":/data -B `mktemp -d /home/u24/georgeglidden/pwiz-msconvert/wineXXX`:/mywineprefix --writable-tmpfs "$PWIZDIR" mywine msconvert "$INPUTPATH" -o "$OUTPUTDIR"
+singularity exec --writable --cleanenv -B "$DATADIR":/data -B `mktemp -d /home/u24/georgeglidden/pwiz-msconvert/wineXXX`:/mywineprefix --writable-tmpfs "$PWIZDIR" mywine msconvert "$INPUTPATH" -o "$OUTPUTDIR" --mzMLb
