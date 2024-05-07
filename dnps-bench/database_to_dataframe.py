@@ -14,9 +14,10 @@ MSF_PEPTIDE_TABLES = [
     "Peptides",
     "PeptideScores",
     "PeptidesAminoAcidModifications",
-    "PeptidesTerminalModifications",]
+    "PeptidesTerminalModifications",
+]
 
-MSF_DECOY_TABLES = [table_name + "_decoy" for table_name in MSF_PEPTIDE_TABLES]
+MSF_DECOY_TABLES = [peptide_table_name + "_decoy" for peptide_table_name in MSF_PEPTIDE_TABLES]
 
 MSF_METADATA_TABLES = [
     "FileInfos",
@@ -89,3 +90,7 @@ if __name__ == "__main__":
     bigtable = merge_tables([bigtable,db_tables_dict["SpectrumHeaders"],db_tables_dict["SpectrumScores"]],"SpectrumID")
     print(bigtable.columns)
     cnx.close()
+    
+    for _,x in bigtable.iterrows():
+        print(x)
+        input()

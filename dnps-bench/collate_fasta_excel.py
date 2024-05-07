@@ -29,4 +29,8 @@ def collate(fastapath: str, excelpath: str):
 if __name__ == "__main__":
     fastapath, excelpath, outpath = sys.argv[1:4]
     sheet = collate(fastapath,excelpath)
-    sheet.to_csv(outpath)
+    #sheet.to_csv(outpath)
+    
+    for _,x in bigtable.iterrows():
+        print(x)
+        input()

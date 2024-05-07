@@ -59,6 +59,7 @@ if __name__ == "__main__":
     else:
         print("format mode", mode, "is not implemented.")
         data = []
+    
     for x in data:
         print(x)
         input()
