@@ -2,6 +2,10 @@ from Bio import SeqIO
 import pyopenms as oms
 import numpy as np
 import itertools
+from tqdm import tqdm
+
+def add_tqdm(inputs):
+    return tqdm(inputs, total=len(inputs))
 
 AMINO_MASS = [
     71.08,

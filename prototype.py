@@ -1,7 +1,8 @@
-import statistics as stat
-import numpy as np
 import multiprocessing
+import statistics
 from time import time
+
+import numpy as np
 
 from util import *
 from search import *
@@ -15,6 +16,8 @@ def generate_spectrum_and_list_mz(seq):
 
 def locate_pivot_point(spectrum, tolerance):
     pivots_overlap, pivots_disjoint = search(spectrum, tolerance, AMINO_MASS_MONO)
+    if len(pivots_overlap) == 0:
+        return stat.mode(pivots_disjoint)
     return pivots_overlap
     # todo: check overlap
     # if overlap fails with outputs, try to recover nested structure.
@@ -42,25 +45,26 @@ def main(argv):
 
         print("⚙\tsimulating trypsin digest...")
         init_t = time()
-        tryptic_peptides = pool.map(digest_trypsin, fasta_sequences)
+        tryptic_peptides = pool.map(digest_trypsin, add_tqdm(fasta_sequences))
         tryptic_peptides = collapse_second_order_list(tryptic_peptides)
+        tryptic_peptides = list(filter(lambda seq: 'X' not in seq, tryptic_peptides))
         n_pep = len(tryptic_peptides)
         elapsed_t = time() - init_t
         print(f"separated {n_pep} peptides in {elapsed_t} seconds.")
 
         print("⚙\tgenerating fragment spectra...")
         init_t = time()
-        viable_peptides = filter(lambda seq: 'X' not in seq, tryptic_peptides)
-        spectra = pool.map(generate_spectrum_and_list_mz, viable_peptides)
+        spectra = pool.map(generate_spectrum_and_list_mz, add_tqdm(tryptic_peptides))
         n_spec = len(spectra)
         elapsed_t = time() - init_t
         print(f"synthesized {n_spec} spectra in {elapsed_t} seconds.")
 
         print("⚙\tlocating pivot points...")
         init_t = time()
-        tolerances = [tolerance] * n_spec
-        pivots = pool.starmap(locate_pivot_point, zip(spectra, tolerances))
-        num_successes = sum(pool.starmap(check_pivot, zip(pivots, spectra)))
+        spectra_with_tolerances = list(zip(spectra, [tolerance] * n_spec))
+        pivots = pool.starmap(locate_pivot_point, add_tqdm(spectra_with_tolerance))
+        pivots_with_spectra = list(zip(pivots, spectra))
+        num_successes = sum(pool.starmap(check_pivot, add_tqdm(pivots_with_spectra)))
         elapsed_t = time() - init_t
         print(f"solved {num_successes} / {len(spectra)} ({100*num_successes/len(spectra)}%) of pivot point locations in {elapsed_t} seconds.")
         
