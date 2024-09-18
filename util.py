@@ -47,7 +47,7 @@ AMINO_MASS_MONO = [
     163.06,
     99.068]
 
-AVERAGE_MASSWISE_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
+AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
 
 AMINOS = [
     'A',
@@ -118,3 +118,14 @@ def generate_default_fragment_spectrum(seq: str):
 
 def list_mz(spec: oms.MSSpectrum):
     return np.array([peak.getMZ() for peak in spec])
+
+def reflect(x, center: float):
+    return 2 * center - x
+
+def measure_mirror_symmetry(arr: np.array, center: float, tolerance = 0.01):
+    reflected_arr = reflect(arr, center)
+    n_symmetric = 0
+    for x in reflected_arr:
+        if min(arr - x) < tolerance:
+            n_symmetric += 1
+    return n_symmetric, len(arr)
