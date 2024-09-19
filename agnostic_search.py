@@ -36,11 +36,11 @@ def _search_overlap(spectrum: list[float], min_gap: float, max_gap: float, toler
             q = candidate_pairs[j]
             q_gap = q[1] - q[0]
             if (abs(p_gap - q_gap) < intergap_tolerance) and (p[0] < q[0] < p[1] < q[1]):
-                pivots.append(Pivot(p,q,target_gap))
+                pivots.append(Pivot(p,q,(p_gap + q_gap) / 2))
     return pivots
 
 def _search_disjoint(spectrum: list[float], min_gap: float, max_gap: float, tolerance: float, intergap_tolerance = 0.01):
-    candidate_pairs = _find_gapped_pairs(spectrum, target_gap, tolerance)
+    candidate_pairs = _find_gapped_pairs(spectrum, min_gap, max_gap, tolerance)
     pivots = []
     n = len(candidate_pairs)
     for i in range(n):
@@ -50,7 +50,7 @@ def _search_disjoint(spectrum: list[float], min_gap: float, max_gap: float, tole
             q = candidate_pairs[j]
             q_gap = q[1] - q[0]
             if (abs(p_gap - q_gap) < intergap_tolerance) and (p[0] < p[1] < q[0] < q[1]):
-                pivots.append(Pivot(p,q,target_gap))
+                pivots.append(Pivot(p,q,(p_gap + q_gap) / 2))
     return pivots
 
 def search(
