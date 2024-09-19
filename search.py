@@ -1,42 +1,15 @@
-def _search_overlap2(spectrum: list[float], tolerance: float, key: float):
-    # identify candidate pairs with gap ~= a mass in the alphabet
-    n = len(spectrum)
-    candidate_pairs = []
-    for i in range(n):
-        p1 = spectrum[i]
-        for j in range(i + 1, n):
-            p2 = spectrum[j]
-            p_gap = p2 - p1
-            if p_gap - tolerance > key:
-                break
-            elif p_gap + tolerance < key:
-                continue
-            else:
-                p_delta = abs(key - p_gap)
-                if p_delta < tolerance:
-                    candidate_pairs.append((p1,p2))
-    # among candidate pairs, identify overlapping and disjoint pairs
-    m = len(candidate_pairs)
-    pivots_overlap = []
-    for i in range(m):
-        p1, p2 = candidate_pairs[i]
-        for j in range(i + 1, m):
-            q1, q2 = candidate_pairs[j]            
-            if q1 > p2:
-                break
-            elif p1 < q1 < p2 < q2:
-                pivots_overlap.append((p1,q1,p2,q2))
+class Pivot:
+    def __init__(self, pair_a, pair_b, target_gap):
+        self.data = sorted([*pair_a, *pair_b])
+        self.target_gap = target_gap
 
-    return pivots_overlap
+        self.pair_a = pair_a
+        self.gap_a = pair_a[1] - pair_a[0]
+        
+        self.pair_b = pair_b
+        self.gap_b = pair_b[1] - pair_b[0]
 
-def search_overlap2(spectrum: list[float], tolerance: float, alphabet: list[float]):
-    pivots_overlap = []
-    for key in alphabet:
-        p_o = _search_overlap2(spectrum, tolerance, key)
-        pivots_overlap.extend(p_o)
-    return pivots_overlap
-    
-def _search_overlap(spectrum: list[float], tolerance: float, key: float):
+def _search_overlap_alt(spectrum: list[float], target_gap: float, tolerance: float):
     pivots = []
     n = len(spectrum)
     for i in range(n):
@@ -44,68 +17,81 @@ def _search_overlap(spectrum: list[float], tolerance: float, key: float):
         for j in range(i + 1, n):
             p2 = spectrum[j]
             p_gap = p2 - p1
-            if p_gap - tolerance > key:
+            if p_gap > target_gap + tolerance:
                 break
-            elif p_gap + tolerance < key:
+            elif p_gap < target_gap - tolerance:
                 continue
             else:
-                p_delta = abs(key - p_gap)
+                p_delta = abs(target_gap - p_gap)
                 if p_delta < tolerance:
                     for k in range(i + 1, j):
                         q1 = spectrum[k]
                         for l in range(j + 1, n):
                             q2 = spectrum[l]
                             q_gap = q2 - q1
-                            if q_gap - tolerance > key:
+                            if q_gap > target_gap + tolerance:
                                 break
-                            elif q_gap + tolerance < key:
+                            elif q_gap < target_gap - tolerance:
                                 continue
                             else:
-                                pivots.append((p1,q1,p2,q2))
+                                pivots.append(Pivot((p1,p2),(q1,q2),target_gap))
     return pivots
 
-def search_overlap(spectrum: list[float], tolerance: float, alphabet: list[float]):
-    pivots = []
-    for key in alphabet:
-        p_o = _search_overlap(spectrum, tolerance, key)
-        pivots.extend(p_o)
-    return pivots
-
-def _search(spectrum: list[float], tolerance: float, key: float):
-    # identify candidate pairs with gap ~= a mass in the alphabet
+def _find_gapped_pairs(spectrum: list[float], target_gap: float, tolerance: float):
+    pairs = []
     n = len(spectrum)
-    candidate_pairs = []
     for i in range(n):
         p1 = spectrum[i]
         for j in range(i + 1, n):
             p2 = spectrum[j]
-            p_gap = p2 - p1
-            delta = abs(key - p_gap)
-            if delta < tolerance:
-                candidate_pairs.append((p1,p2))
-    # among candidate pairs, identify overlapping and disjoint pairs
-    m = len(candidate_pairs)
-    pivots_overlap = []
-    pivots_disjoint = []
-    for i in range(m):
-        p1, p2 = candidate_pairs[i]
-        for j in range(i + 1, m):
-            q1, q2 = candidate_pairs[j]
-            if p1 < q1 < p2 < q2:
-                pivots_overlap.append((p1,q1,p2,q2))
-            if p1 < p2 < q1 < q2:
-                pivots_disjoint.append((p1,p2,q1,q2))
-    return pivots_overlap, pivots_disjoint
+            pair_gap = p2 - p1
+            if pair_gap > target_gap + tolerance:
+                break
+            elif pair_gap < target_gap - tolerance:
+                continue
+            else:
+                pairs.append((p1,p2))
+    return pairs
 
-def search(spectrum: list[float], tolerance: float, alphabet: list[float]):
-    pivots_overlap = []
-    pivots_disjoint = []
-    for key in alphabet:
-        p_o, p_d = _search(spectrum, tolerance, key)
-        pivots_overlap.extend(p_o)
-        pivots_disjoint.extend(p_d)
-    return pivots_overlap, pivots_disjoint
+def _search_overlap(spectrum: list[float], target_gap: float, tolerance: float):
+    candidate_pairs = _find_gapped_pairs(spectrum, target_gap, tolerance)
+    pivots = []
+    n = len(candidate_pairs)
+    for i in range(n):
+        p = candidate_pairs[i]
+        for j in range(i + 1, n):
+            q = candidate_pairs[j]
+            if p[0] < q[0] < p[1] < q[1]:
+                pivots.append(Pivot(p,q,target_gap))
+    return pivots
 
-# NOTE: both search modes are being performed simultaneously for convenience of testing
-# in practice, overlap is performed first and identifies a handful of candidates.
-# disjoint will identify many, many more, and should only be used when necessary.
+def _search_disjoint(spectrum: list[float], target_gap: float, tolerance: float):
+    candidate_pairs = _find_gapped_pairs(spectrum, target_gap, tolerance)
+    pivots = []
+    n = len(candidate_pairs)
+    for i in range(n):
+        p = candidate_pairs[i]
+        for j in range(i + 1, n):
+            q = candidate_pairs[j]
+            if p[0] < p[1] < q[0] < q[1]:
+                pivots.append(Pivot(p,q,target_gap))
+    return pivots
+
+def search(
+    spectrum: list[float], 
+    strategy: str, 
+    target_gaps: list[float], 
+    tolerance: float
+):
+    pivots = []
+    if strategy == 'overlap':
+        _search_strategy = _search_overlap
+    elif strategy == 'overlap_alt':
+        _search_strategy = _search_overlap_alt
+    elif strategy == 'disjoint':
+        _search_strategy = _search_disjoint
+    else:
+        raise ValueError(f"Unrecognized search strategy: `{strategy}`.") 
+    for target_gap in target_gaps:
+        pivots.extend(_search_strategy(spectrum, target_gap, tolerance))
+    return pivots
