@@ -5,7 +5,7 @@ import itertools
 from tqdm import tqdm
 
 def add_tqdm(inputs):
-    return tqdm(inputs, total=len(inputs))
+    return tqdm(inputs, total=len(inputs), ascii=" ▖▘▝▗▚▞█", leave=False)
 
 AMINO_MASS = [
     71.08,
@@ -122,6 +122,18 @@ def generate_default_fragment_spectrum(seq: str):
 
 def list_mz(spec: oms.MSSpectrum):
     return np.array([peak.getMZ() for peak in spec])
+
+def get_b_ion_series(seq: str):
+    param = oms.Param()
+    param.setValue("add_b_ions", "true")
+    param.setValue("add_y_ions", "false")
+    return list_mz(generate_fragment_spectrum(seq,param))
+    
+def get_y_ion_series(seq: str):
+    param = oms.Param()
+    param.setValue("add_b_ions", "false")
+    param.setValue("add_y_ions", "true")
+    return list_mz(generate_fragment_spectrum(seq,param))
 
 def reflect(x, center: float):
     return 2 * center - x

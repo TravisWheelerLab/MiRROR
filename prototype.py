@@ -15,18 +15,24 @@ def generate_spectrum_and_list_mz(seq):
     return list_mz(generate_default_fragment_spectrum(seq))
 
 def locate_pivot_point(spectrum, tolerance):
-    pivots_overlap = search_overlap(spectrum, tolerance, AMINO_MASS_MONO)
-    pivot_scores = [measure_mirror_symmetry(spectrum, np.mean(pivot)) for pivot in pivots_overlap]
-    return pivots_overlap[np.argmax(pivot_scores)]
-    # todo: check overlap
-    # if overlap fails with outputs, try to recover nested structure.
-    # if nested structure is not present, or overlap has no outputs, 
-    # use the mode of disjoint.
+    pivots_overlap = search(spectrum, "overlap", AMINO_MASS_MONO, tolerance)
+    if len(pivots_overlap) == 0:
+        pivots_disjoint = search(spectrum, "disjoint", AMINO_MASS_MONO, tolerance)
+        pivot_centers = [np.mean(pivot.data) for pivot in pivots_disjoint]
+        return statistics.mode(pivot_centers)
+    else:    
+        pivot_centers = [np.mean(pivot.data) for pivot in pivots_overlap]
+        pivot_scores = [measure_mirror_symmetry(spectrum, center) for center in pivot_centers]
+        return pivot_centers[np.argmax(pivot_scores)]
 
-def check_pivot(pivot, spectrum):
-    center = np.mean(pivot)
-    score = measure_mirror_symmetry(spectrum, center)
-    return score > 0.9
+def check_pivot(pivot, peptide):
+    b = get_b_ion_series(peptide)
+    y = get_y_ion_series(peptide)
+    true_pivot = [*b_series[0:2],*y_series[-3:-1]]
+    true_pivot_location = np.mean(true_pivot)
+    return abs(pivot - true_pivot_location) < 0.1
+    #score = measure_mirror_symmetry(spectrum, pivot)
+    #return score > 0.9
 
 def main(argv):
     mode = argv[1]
@@ -60,12 +66,12 @@ def main(argv):
 
         print("⚙\tlocating pivot points...")
         init_t = time()
-        # generate pivot point locations
+        print("\t(processing)")
         spectra_with_tolerances = list(zip(spectra, [tolerance] * n_spec))
         pivots = pool.starmap(locate_pivot_point, add_tqdm(spectra_with_tolerances))
-        # check quality
-        pivots_with_spectra = list(zip(pivots, spectra))
-        num_successes = sum(pool.starmap(check_pivot, add_tqdm(pivots_with_spectra)))
+        print("\t(checking)")
+        pivots_with_peptides = list(zip(pivots, tryptic_peptides))
+        num_successes = sum(pool.starmap(check_pivot, add_tqdm(pivots_with_peptides)))
         elapsed_t = time() - init_t
         print(f"solved {num_successes} / {len(spectra)} ({100*num_successes/len(spectra)}%) of pivot point locations in {elapsed_t} seconds.")
     else:
