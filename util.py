@@ -4,8 +4,8 @@ import numpy as np
 import itertools
 from tqdm import tqdm
 
-def add_tqdm(inputs):
-    return tqdm(inputs, total=len(inputs), ascii=" ▖▘▝▗▚▞█", leave=False)
+def add_tqdm(inputs, description=None):
+    return tqdm(inputs, total=len(inputs), ascii=True, leave=False, desc=description)
 
 AMINO_MASS = [
     71.08,
@@ -141,7 +141,7 @@ def reflect(x, center: float):
 def measure_mirror_symmetry(arr: np.array, center: float, tolerance = 0.01):
     reflected_arr = reflect(arr, center)
     n_symmetric = 0
-    for x in reflected_arr:
-        if min(arr - x) < tolerance:
+    for reflected_val in reflected_arr:
+        if np.min(np.abs(arr - reflected_val)) < tolerance:
             n_symmetric += 1
     return n_symmetric / len(arr)

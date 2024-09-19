@@ -1,6 +1,7 @@
 import multiprocessing
 import statistics
 from time import time
+from random import shuffle
 
 import numpy as np
 
@@ -25,14 +26,12 @@ def locate_pivot_point(spectrum, tolerance):
         pivot_scores = [measure_mirror_symmetry(spectrum, center) for center in pivot_centers]
         return pivot_centers[np.argmax(pivot_scores)]
 
-def check_pivot(pivot, peptide):
+def check_pivot(pivot, peptide, spectrum):
     b = get_b_ion_series(peptide)
     y = get_y_ion_series(peptide)
-    true_pivot = [*b_series[0:2],*y_series[-3:-1]]
+    true_pivot = [*b[0:2],*y[-3:-1]]
     true_pivot_location = np.mean(true_pivot)
-    return abs(pivot - true_pivot_location) < 0.1
-    #score = measure_mirror_symmetry(spectrum, pivot)
-    #return score > 0.9
+    return abs(true_pivot_location - pivot) < 0.01
 
 def main(argv):
     mode = argv[1]
@@ -53,6 +52,7 @@ def main(argv):
         tryptic_peptides = pool.map(digest_trypsin, add_tqdm(fasta_sequences))
         tryptic_peptides = collapse_second_order_list(tryptic_peptides)
         tryptic_peptides = list(filter(lambda seq: 'X' not in seq, tryptic_peptides))
+        shuffle(tryptic_peptides)
         n_pep = len(tryptic_peptides)
         elapsed_t = time() - init_t
         print(f"separated {n_pep} peptides in {elapsed_t} seconds.")
@@ -66,14 +66,13 @@ def main(argv):
 
         print("⚙\tlocating pivot points...")
         init_t = time()
-        print("\t(processing)")
         spectra_with_tolerances = list(zip(spectra, [tolerance] * n_spec))
-        pivots = pool.starmap(locate_pivot_point, add_tqdm(spectra_with_tolerances))
-        print("\t(checking)")
-        pivots_with_peptides = list(zip(pivots, tryptic_peptides))
-        num_successes = sum(pool.starmap(check_pivot, add_tqdm(pivots_with_peptides)))
+        pivots = pool.starmap(locate_pivot_point, add_tqdm(spectra_with_tolerances, description="processing"))
+        pivots_peptides_spectra = list(zip(pivots, tryptic_peptides, spectra))
+        num_successes = sum(pool.starmap(check_pivot, add_tqdm(pivots_peptides_spectra, description="validating")))
         elapsed_t = time() - init_t
-        print(f"solved {num_successes} / {len(spectra)} ({100*num_successes/len(spectra)}%) of pivot point locations in {elapsed_t} seconds.")
+        percent_success = round(100*num_successes/len(spectra), 3)
+        print(f"solved {num_successes} / {len(spectra)} ({percent_success}%) of pivot point locations in {elapsed_t} seconds.")
     else:
         # todo: load spectrum from .mzML and .mzMLb
         print(f"unsupported mode `{mode}`")
