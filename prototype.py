@@ -7,10 +7,10 @@ import numpy as np
 
 from util import *
 
-from search import search
+from search import search as gap_driven_search
 from agnostic_search import search as agnostic_search
 
-SEARCHMODE = "search"
+SEARCHMODE = "gap-driven"
 
 def load_fasta_records_as_str(path_to_fasta):
     fasta_records = load_fasta_records(path_to_fasta)
@@ -21,14 +21,14 @@ def generate_spectrum_and_list_mz(seq):
 
 def locate_pivot_point(spectrum, tolerance):
     global SEARCHMODE
-    if SEARCHMODE == "search":
-        search_fn = search
-    elif SEARCHMODE == "agnostic":
+    if SEARCHMODE == "gap-driven":
+        search_fn = gap_driven_search
+    elif SEARCHMODE == "gap-agnostic":
         search_fn = agnostic_search
-    print(SEARCHMODE)
-    pivots_overlap = search(spectrum, "overlap", AMINO_MASS_MONO, tolerance)
+    #print(SEARCHMODE)
+    pivots_overlap = search_fn(spectrum, "overlap", AMINO_MASS_MONO, tolerance)
     if len(pivots_overlap) == 0:
-        pivots_disjoint = search(spectrum, "disjoint", AMINO_MASS_MONO, tolerance)
+        pivots_disjoint = search_fn(spectrum, "disjoint", AMINO_MASS_MONO, tolerance)
         pivot_centers = [np.mean(pivot.data) for pivot in pivots_disjoint]
         return statistics.mode(pivot_centers)
     else:    
@@ -47,7 +47,7 @@ def main(argv):
     global SEARCHMODE
     mode = argv[1]
     if mode == "test":
-        SEARCHMODE = "search"
+        SEARCHMODE = "gap-driven"
 
         path_fasta = argv[2]
         tolerance = float(argv[3]) if len(argv) == 4 else 2 * AVERAGE_MASS_DIFFERENCE
@@ -87,7 +87,7 @@ def main(argv):
         percent_success = round(100*num_successes/len(spectra), 3)
         print(f"solved {num_successes} / {len(spectra)} ({percent_success}%) of pivot point locations in {elapsed_t} seconds.")
     if mode == "test-agnostic":
-        SEARCHMODE = "agnostic"
+        SEARCHMODE = "gap-agnostic"
         
         path_fasta = argv[2]
         tolerance = float(argv[3]) if len(argv) == 4 else 2 * AVERAGE_MASS_DIFFERENCE
