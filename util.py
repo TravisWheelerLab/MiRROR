@@ -132,4 +132,4 @@ def measure_mirror_symmetry(arr: np.array, center: float, tolerance = 0.01):
     for x in reflected_arr:
         if min(arr - x) < tolerance:
             n_symmetric += 1
-    return n_symmetric, len(arr)
+    return n_symmetric / len(arr)

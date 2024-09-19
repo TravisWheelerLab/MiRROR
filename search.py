@@ -1,3 +1,38 @@
+def _search_overlap(spectrum: list[float], tolerance: float, key: float):
+    pivots = []
+    n = len(spectrum)
+    for i in range(n):
+        p1 = spectrum[i]
+        for j in range(i + 1, n):
+            p2 = spectrum[j]
+            p_gap = p2 - p1
+            if p_gap - tolerance > key:
+                break
+            elif p_gap + tolerance < key:
+                continue
+            else:
+                p_delta = abs(key - p_gap)
+                if p_delta < tolerance:
+                    for k in range(i + 1, j):
+                        q1 = spectrum[k]
+                        for l in range(j + 1, n):
+                            q2 = spectrum[l]
+                            q_gap = q2 - q1
+                            if q_gap - tolerance > key:
+                                break
+                            elif q_gap + tolerance < key:
+                                continue
+                            else:
+                                pivots.append((p1,q1,p2,q2))
+    return pivots
+
+def search_overlap(spectrum: list[float], tolerance: float, alphabet: list[float]):
+    pivots = []
+    for key in alphabet:
+        p_o = _search_overlap(spectrum, tolerance, key)
+        pivots.extend(p_o)
+    return pivots
+
 def _search(spectrum: list[float], tolerance: float, key: float):
     # identify candidate pairs with gap ~= a mass in the alphabet
     n = len(spectrum)

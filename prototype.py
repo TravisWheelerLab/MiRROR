@@ -15,10 +15,9 @@ def generate_spectrum_and_list_mz(seq):
     return list_mz(generate_default_fragment_spectrum(seq))
 
 def locate_pivot_point(spectrum, tolerance):
-    pivots_overlap, pivots_disjoint = search(spectrum, tolerance, AMINO_MASS_MONO)
-    if len(pivots_overlap) == 0:
-        return stat.mode(pivots_disjoint)
-    return pivots_overlap
+    pivots_overlap = search_overlap(spectrum, tolerance, AMINO_MASS_MONO)
+    pivot_scores = [measure_mirror_symmetry(spectrum, np.mean(pivot)) for pivot in pivots_overlap]
+    return pivots_overlap[np.argmax(pivot_scores)]
     # todo: check overlap
     # if overlap fails with outputs, try to recover nested structure.
     # if nested structure is not present, or overlap has no outputs, 
@@ -26,8 +25,8 @@ def locate_pivot_point(spectrum, tolerance):
 
 def check_pivot(pivot, spectrum):
     center = np.mean(pivot)
-    n_sym, n_tot = measure_mirror_symmetry(spectrum, center)
-    return n_sym / n_tot > 0.9
+    score = measure_mirror_symmetry(spectrum, center)
+    return score > 0.9
 
 def main(argv):
     mode = argv[1]
@@ -61,13 +60,14 @@ def main(argv):
 
         print("⚙\tlocating pivot points...")
         init_t = time()
+        # generate pivot point locations
         spectra_with_tolerances = list(zip(spectra, [tolerance] * n_spec))
-        pivots = pool.starmap(locate_pivot_point, add_tqdm(spectra_with_tolerance))
+        pivots = pool.starmap(locate_pivot_point, add_tqdm(spectra_with_tolerances))
+        # check quality
         pivots_with_spectra = list(zip(pivots, spectra))
         num_successes = sum(pool.starmap(check_pivot, add_tqdm(pivots_with_spectra)))
         elapsed_t = time() - init_t
         print(f"solved {num_successes} / {len(spectra)} ({100*num_successes/len(spectra)}%) of pivot point locations in {elapsed_t} seconds.")
-        
     else:
         # todo: load spectrum from .mzML and .mzMLb
         print(f"unsupported mode `{mode}`")
