@@ -44,7 +44,8 @@ def check_pivot(pivot, peptide, spectrum):
     return abs(true_pivot_location - pivot) < 0.01
 
 def run_validation_test(argv):
-    print(f"mode: {argv[1]}")
+    global SEARCHMODE
+    print(f"search mode: {SEARCHMODE}")
     path_fasta = argv[2]
     tolerance = float(argv[3]) if len(argv) == 4 else 2 * AVERAGE_MASS_DIFFERENCE
     pool = multiprocessing.Pool()
