@@ -1,5 +1,6 @@
 import multiprocessing
 import statistics
+import os
 from time import time
 from random import shuffle
 
@@ -53,9 +54,9 @@ def run_validation_test(argv):
     print(f"⚙\tloading fasta records from `{path_fasta}`...")
     init_t = time()
     fasta_sequences = load_fasta_records_as_str(path_fasta)
-    n_seq = len(fasta_sequences)
+    num_seq = len(fasta_sequences)
     elapsed_t = time() - init_t
-    print(f"read {n_seq} sequences in {elapsed_t} seconds.")
+    print(f"read {num_seq} sequences in {elapsed_t} seconds.")
 
     print("⚙\tsimulating trypsin digest...")
     init_t = time()
@@ -63,34 +64,50 @@ def run_validation_test(argv):
     tryptic_peptides = collapse_second_order_list(tryptic_peptides)
     tryptic_peptides = list(filter(lambda seq: 'X' not in seq, tryptic_peptides))
     shuffle(tryptic_peptides)
-    n_pep = len(tryptic_peptides)
+    num_pep = len(tryptic_peptides)
     elapsed_t = time() - init_t
-    print(f"separated {n_pep} peptides in {elapsed_t} seconds.")
+    print(f"separated {num_pep} peptides in {elapsed_t} seconds.")
 
     print("⚙\tgenerating fragment spectra...")
     init_t = time()
     spectra = pool.map(generate_spectrum_and_list_mz, add_tqdm(tryptic_peptides))
-    n_spec = len(spectra)
+    num_spec = len(spectra)
     elapsed_t = time() - init_t
-    print(f"synthesized {n_spec} spectra in {elapsed_t} seconds.")
+    print(f"synthesized {num_spec} spectra in {elapsed_t} seconds.")
 
     print("⚙\tlocating pivot points...")
     init_t = time()
-    spectra_with_tolerances = list(zip(spectra, [tolerance] * n_spec))
+    spectra_with_tolerances = list(zip(spectra, [tolerance] * num_spec))
     pivots = pool.starmap(locate_pivot_point, add_tqdm(spectra_with_tolerances, description="processing"))
     pivots_peptides_spectra = list(zip(pivots, tryptic_peptides, spectra))
-    num_successes = sum(pool.starmap(check_pivot, add_tqdm(pivots_peptides_spectra, description="validating")))
+    validation = pool.starmap(check_pivot, add_tqdm(pivots_peptides_spectra, description="validating"))
+    num_successes = sum(validation)
     elapsed_t = time() - init_t
     percent_success = round(100*num_successes/len(spectra), 3)
-    print(f"solved {num_successes} / {len(spectra)} ({percent_success}%) of pivot point locations in {elapsed_t} seconds.")
+    print(f"solved {num_successes} / {num_spec} ({percent_success}%) of pivot point locations in {elapsed_t} seconds.")
 
+    if num_successes != num_spec:
+        print("⚙\trecording missed peptides...")
+        init_t = time()
+        unsolved_peptides = [x[1] for x in zip(validation,tryptic_peptides) if not(x[0])]
+        num_misses = len(unsolved_peptides)
+        assert num_misses == num_spec - num_successes 
+        input_fasta_suffix = os.path.basename(path_fasta)
+        misses_dir = "./misses/"
+        if not(os.path.exists(misses_dir)):
+            os.mkdir(misses_dir)
+        misses_fasta = f"{misses_dir}misses_{SEARCHMODE}_{input_fasta_suffix}"
+        num_written = save_strings_to_fasta(misses_fasta, unsolved_peptides)
+        assert num_written == num_misses
+        elapsed_t = time() - init_t
+        print(f"wrote {num_written} peptides to '{misses_fasta}' in {elapsed_t} seconds.")
 def main(argv):
     global SEARCHMODE
     mode = argv[1]
     if mode == "test":
         SEARCHMODE = "gap-driven"
         run_validation_test(argv)
-    if mode == "test-agnostic":
+    elif mode == "test-agnostic":
         SEARCHMODE = "gap-agnostic"
         run_validation_test(argv)
     else:

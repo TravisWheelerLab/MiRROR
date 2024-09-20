@@ -1,4 +1,4 @@
-from Bio import SeqIO
+from Bio import Seq, SeqRecord, SeqIO
 import pyopenms as oms
 import numpy as np
 import itertools
@@ -99,6 +99,12 @@ def load_fasta_records(path_to_fasta: str):
     with open(path_to_fasta) as handle:
         records = list(SeqIO.parse(handle, "fasta"))
     return records
+
+def save_strings_to_fasta(path_to_fasta: str, seqs: list[str]):
+    n = len(seqs)
+    records = [SeqRecord.SeqRecord(Seq.Seq(seqs[i]), id=f"miss_{i}", name="", description="") for i in range(n)]
+    with open(path_to_fasta, "w") as handle:
+        return SeqIO.write(records, handle, "fasta")
 
 def digest_trypsin(seq: str, minimum_length: int = 7, maximum_length: int = 40):
     dig = oms.ProteaseDigestion()
