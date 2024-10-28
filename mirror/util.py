@@ -7,7 +7,7 @@ from tqdm import tqdm
 def add_tqdm(inputs, total=None, description=None):
     if total == None:
         total = len(inputs)
-    return tqdm(inputs, total=total, ascii=True, leave=False, desc=description)
+    return tqdm(inputs, total=total, leave=False, desc=description)
 
 AMINO_MASS = [
     71.08,

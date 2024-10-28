@@ -4,9 +4,9 @@ from .scan import ScanConstraint, constrained_pair_scan
 class GapTargetConstraint(ScanConstraint):
     # match to a single gap
 
-    def __init__(self, gap, threshold):
+    def __init__(self, gap, tolerance):
         self.target_gap = gap
-        self.threshold = threshold
+        self.tolerance = tolerance
 
     def evaluate(self, state):
         return state[1] - state[0]
@@ -15,15 +15,15 @@ class GapTargetConstraint(ScanConstraint):
         return gap > self.target_gap + self.tolerance
 
     def match(self, gap):
-        return gap <= self.target_gap + tolerance 
+        return self.target_gap - self.tolerance <= gap <= self.target_gap + self.tolerance 
 
 class GapRangeConstraint(ScanConstraint):
     # match to a range of gap values
 
-    def __init__(self, gaps, threshold):
+    def __init__(self, gaps, tolerance):
         self.min_gap = min(gaps)
         self.max_gap = max(gaps)
-        self.threshold = threshold
+        self.tolerance = tolerance
 
     def evaluate(self, state):
         return state[1] - state[0]
@@ -36,7 +36,7 @@ class GapRangeConstraint(ScanConstraint):
         # `match` is being called, only the first half of the inequality needs 
         # to be checked. the second half is unnecessary, but is still included 
         # for the sake of legibility.
-        return self.min_gap - self.tolerance < gap <= self.max_gap + self.tolerance
+        return self.min_gap - self.tolerance <= gap <= self.max_gap + self.tolerance
 
 def find_gaps(
     spectrum,
@@ -46,11 +46,12 @@ def find_gaps(
         spectrum,
         gap_constraint
     )
-    gap_indices = list(gap_indices)
+    gap_indices = gap_indices
+    gap_indices = sorted(gap_indices, key = lambda idx: spectrum[idx[1]] - spectrum[idx[0]])
     gap_mz = [(spectrum[i],spectrum[j]) for (i,j) in gap_indices]
     return gap_indices, gap_mz
 
-class PivotOverlapConstraint(ScanConstraint):
+class AbstractPivotConstraint(ScanConstraint):
     
     def __init__(self, tolerance):
         self.tolerance = tolerance
@@ -65,42 +66,26 @@ class PivotOverlapConstraint(ScanConstraint):
     def stop(self, val):
         gap_dif_ba, _, __ = val
         return gap_dif_ba > self.tolerance
+
+    def is_ordered(self, pair_a, pair_b):
+        raise NotImplementedError("use PivotOverlapConstraint, or PivotDisjointConstraint, or roll your own subclass.")
+
+    def match(self, val):
+        gap_dif_ba, pair_a, pair_b = val
+        if abs(gap_dif_ba) <= self.tolerance:
+            return self.is_ordered(pair_a, pair_b) or self.is_ordered(pair_b, pair_a)
+        else:
+            return False
+
+class PivotOverlapConstraint(AbstractPivotConstraint):
 
     def is_ordered(self, pair_a, pair_b):
         return pair_a[0] < pair_b[0] < pair_a[1] < pair_b[1]
 
-    def match(self, val):
-        gap_dif_ba, pair_a, pair_b = val
-        if abs(gap_dif_ba) <= self.tolerance:
-            return self.is_ordered(pair_a, pair_b) or self.is_ordered(pair_b, pair_a)
-        else:
-            return False
-
-class PivotDisjointConstraint(ScanConstraint):
-    
-    def __init__(self, tolerance):
-        self.tolerance = tolerance
-    
-    def evaluate(self, state):
-        pair_a, pair_b = state
-        gap_a = pair_a[1] - pair_a[0]
-        gap_b = pair_b[1] - pair_b[0]
-        gap_dif_ba = gap_b - gap_a
-        return (gap_dif_ba, pair_a, pair_b)
-    
-    def stop(self, val):
-        gap_dif_ba, _, __ = val
-        return gap_dif_ba > self.tolerance
+class PivotDisjointConstraint(AbstractPivotConstraint):
 
     def is_ordered(self, pair_a, pair_b):
         return pair_a[0] < pair_a[1] < pair_b[0] < pair_b[1]
-
-    def match(self, val):
-        gap_dif_ba, pair_a, pair_b = val
-        if abs(gap_dif_ba) <= self.tolerance:
-            return self.is_ordered(pair_a, pair_b) or self.is_ordered(pair_b, pair_a)
-        else:
-            return False
 
 def find_pivots(
     gap_indices,
@@ -121,5 +106,6 @@ def find_pivots(
             pivots.append(Pivot(p, q, indices_p, indices_q))
         elif pivot_constraint.is_ordered(q,p):
             pivots.append(Pivot(q, p, indices_q, indices_p))
+        else:
+            raise ValueError(f"malformed pivot! {p, q}")
     return pivots
-
