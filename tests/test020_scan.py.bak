@@ -26,7 +26,11 @@ def _naiive_pair_scan(arr, threshold):
 			if arr[j] - arr[i] <= threshold:
 				yield (i,j)
 
-class TestScan(unittest.TestCase):
+class Test020_Scan(unittest.TestCase):
+
+	@classmethod
+	def setUpClass(cls):
+		print(f"\n{cls.__name__}")
 
 	def naiive_pair_scan(self, arr, threshold):
 		return list(_naiive_pair_scan(arr, threshold))
@@ -35,7 +39,7 @@ class TestScan(unittest.TestCase):
 		return list(constrained_pair_scan(arr, DummyConstraint(threshold)))
 
 	def test_scan(self, tries = 10, size = 10000, threshold = 0.02):
-		print(f"\ntest_scan tries={tries} size={size} threshold={threshold}")
+		print(f"test_scan tries={tries} size={size} threshold={threshold}")
 		t_elap_n = 0
 		t_elap_c = 0
 		for _ in add_tqdm(range(tries),tries):

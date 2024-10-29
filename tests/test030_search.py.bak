@@ -55,7 +55,11 @@ def dummy_overlap_pivots(size, mass_alphabet):
 	assert all(PivotOverlapConstraint(0).is_ordered(p.pair_a, p.pair_b) for p in pivots)
 	return mz, pivots
 
-class TestSearch(unittest.TestCase):
+class Test030_Search(unittest.TestCase):
+
+	@classmethod
+	def setUpClass(cls):
+		print(f"\n{cls.__name__}")
 
 	def test_gap_constraints(self):
 		# gap target looks for a particular gap
