@@ -62,7 +62,7 @@ class Test030_Search(unittest.TestCase):
         print(f"\n{cls.__name__}")
 
     def test_gap_constraints(self):
-        # gap target looks for a particular gap
+        # gap target finds a particular gap width within margin of error
         pos_pair = (1,3.5)
         neg_pair = (1,10)
         neg_pair2 = (1,1.5)
@@ -78,7 +78,7 @@ class Test030_Search(unittest.TestCase):
         self.assertFalse(
             gt.match(gt.evaluate(neg_pair2))
         )
-        # gap range looks for gaps in an interval
+        # gap range searches in the [min gap, max gap] interval
         pos_pair = (1,3.5)
         pos_pair2 = (1,10)
         pos_pair3 = (1,7)

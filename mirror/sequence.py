@@ -1,8 +1,11 @@
 from .util import collapse_second_order_list, reflect, AMINOS, AMINO_MASS_MONO, ION_OFFSET_LOOKUP
 from .scan import ScanConstraint, constrained_pair_scan
 from .pivot import Pivot
+from .paired_paths import * 
+
 from numpy import argmin
 from networkx import DiGraph
+
 import itertools
 
 TOLERANCE = min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
@@ -99,15 +102,6 @@ def construct_spectrum_graphs(
     # 
     return asc_graph, desc_graph
 
-def get_sources(D: DiGraph):
-    return [i for i in D.nodes if D.in_degree(i) == 0]
-
-def get_sinks(D: DiGraph):
-    return [i for i in D.nodes if D.out_degree(i) == 0]
-
-def get_weights(graph, path, key):
-    return [graph[path[i]][path[i + 1]][key] for i in range(len(path) - 1)]
-
 class PartialSequence:
 
     def __init__(self,
@@ -128,6 +122,15 @@ class PartialSequence:
     # todo instance methods
     # - determine whether two partial sequences can be concatenated
     # - reverse the sequence
+
+def get_sources(D: DiGraph):
+    return [i for i in D.nodes if D.in_degree(i) == 0]
+
+def get_sinks(D: DiGraph):
+    return [i for i in D.nodes if D.out_degree(i) == 0]
+
+def get_weights(graph, path, key):
+    return [graph[path[i]][path[i + 1]][key] for i in range(len(path) - 1)]
 
 def partial_sequences(
     asc_graph: DiGraph,

@@ -55,7 +55,7 @@ class Test020_Scan(unittest.TestCase):
             t_elap_c += time() - t_init_c
                         # check equality
             self.assertEqual(naiive_results,constrained_results)
-        print(f"\tnaiive scan time (avg)\t{t_elap_n / tries}\n\tconstr. scan time (avg)\t{t_elap_c / tries}")
+        print(f"\tnaiive pair scan time\t\t{t_elap_n}\n\tconstrained pair scan time\t{t_elap_c}")
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,8 +1,9 @@
-from Bio import Seq, SeqRecord, SeqIO
 import pyopenms as oms
 import numpy as np
-import itertools
+from Bio import Seq, SeqRecord, SeqIO
 from tqdm import tqdm
+
+import itertools
 
 def add_tqdm(inputs, total=None, description=None):
     if total == None:
