@@ -1,5 +1,6 @@
 import unittest
 from mirror.pivot import Pivot
+from mirror.sequence import *
 
 EXAMPLE_1 = {
     "peptide" : 'SIAGGLQTIGR',
@@ -18,11 +19,13 @@ class Test050_Sequence(unittest.TestCase):
         print(f"\n{cls.__name__}")
     
     def test_spectrum_graphs(self):
-        pass
-    
-    def test_partial_sequences(self):
-        pass
+        asc_graph, desc_graph = construct_spectrum_graphs(EXAMPLE_1["spectrum"], EXAMPLE_1["pivot"])
+        self.assertEqual(list(asc_graph.edges), EXAMPLE_1["asc_edges"])
+        self.assertEqual(list(desc_graph.edges), EXAMPLE_1["desc_edges"])
     
     def test_candidate_sequences(self):
-        # not yet implemented
+        # not yet implemented. this will look like: given the original peptide 
+        # and a bag of PartialSequence objects, is the original peptide
+        # present - up to the limitations of the mass -> peptide map - in the
+        # set of candidate constructions?
         pass

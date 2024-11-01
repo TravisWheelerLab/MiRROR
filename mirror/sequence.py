@@ -75,30 +75,32 @@ def construct_spectrum_graphs(
     outer_left, inner_left, inner_right, outer_right = pivot.index_data
     # build the descending graph
     desc_graph = DiGraph()
-    desc_outer_loop_range = lambda size: (0, inner_l + 1)
-    desc_inner_loop_range = lambda size,idx: (idx + 1, inner_l + 1)
+    desc_outer_loop_range = lambda size: (0, inner_left + 1)
+    desc_inner_loop_range = lambda size,idx: (idx + 1, inner_left + 1)
     desc_constraint = SpectrumGraphConstraint()
     desc_edges = constrained_pair_scan(
         spectrum,
-        constraint,
-        outer_loop_range,
-        inner_loop_range
+        desc_constraint,
+        desc_outer_loop_range,
+        desc_inner_loop_range
     )
-    for (i,j,v) in desc_edges:
+    for (i,j) in desc_edges:
+        v = abs(spectrum[i] - spectrum[j])
         desc_graph.add_edge(j, i, gap = v, peaks = (spectrum[j], spectrum[i]))
     # build the ascending graph
     asc_graph = DiGraph()
-    asc_outer_loop_range = lambda size: (inner_r, size)
+    asc_outer_loop_range = lambda size: (inner_right, size)
     asc_inner_loop_range = lambda size,idx: (idx + 1, size)
     asc_constraint = SpectrumGraphConstraint()
     asc_edges = constrained_pair_scan(
         spectrum,
-        constraint,
-        outer_loop_range,
-        inner_loop_range
+        asc_constraint,
+        asc_outer_loop_range,
+        asc_inner_loop_range
     )
-    for (i,j,v) in asc_edges:
-        asc_graph.add_edge(j, i, gap = v, peaks = (spectrum[j], spectrum[i]))
+    for (i,j) in asc_edges:
+        v = abs(spectrum[i] - spectrum[j])
+        asc_graph.add_edge(i, j, gap = v, peaks = (spectrum[j], spectrum[i]))
     # 
     return asc_graph, desc_graph
 

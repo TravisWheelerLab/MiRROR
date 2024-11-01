@@ -36,6 +36,10 @@ EASY_EXAMPLE = {
                 ((8, 6), 113.08)]
 }
 
+EXAMPLE_GRAPHS = [
+    EASY_EXAMPLE
+]
+
 class Test040_PairedPaths(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -85,7 +89,8 @@ class Test040_PairedPaths(unittest.TestCase):
         return naiive_paths, t_elap_n, dfs_paths, t_elap_d
 
     def test_examples(self):
-        graph_a = self._reconstruct_graph(EASY_EXAMPLE["graph_a"])
-        graph_b = self._reconstruct_graph(EASY_EXAMPLE["graph_b"])
-        naiive_result, naiive_time, dfs_result, dfs_time = self._test(graph_a, graph_b)
-        self.assertTrue(all((p in dfs_result) for p in naiive_result))
+        for ex in EXAMPLE_GRAPHS:
+            graph_a = self._reconstruct_graph(ex["graph_a"])
+            graph_b = self._reconstruct_graph(ex["graph_b"])
+            naiive_result, naiive_time, dfs_result, dfs_time = self._test(graph_a, graph_b)
+            self.assertTrue(all((p in dfs_result) for p in naiive_result))
