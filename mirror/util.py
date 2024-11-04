@@ -5,6 +5,9 @@ from tqdm import tqdm
 
 import itertools
 
+def log(message, prefix=""):
+    print(prefix + f"⚙\t{message}")
+
 def add_tqdm(inputs, total=None, description=None):
     if total == None:
         total = len(inputs)
