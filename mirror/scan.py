@@ -6,13 +6,13 @@ class ScanConstraint:
     # `stop` and `match` use the same arguments.
     # to avoid redundancy, `evaluate` precomputes those inputs.
     def evaluate(self, state):
-        pass
+        return None
 
     def stop(self, val):
-        pass
+        return True
 
     def match(self, val):
-        pass
+        return False
 
 # searches the product space `arr` x `arr` for pairs satisfying the condition 
 # defined in `constraint`, which also defines the stop condition that prevents 

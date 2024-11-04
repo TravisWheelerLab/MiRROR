@@ -10,22 +10,34 @@ EXAMPLE_1 = {
                     (7, 9),
                     (8, 10)),
     "asc_edges" : [(9, 11), (11, 13), (11, 14), (10, 12), (12, 15), (13, 14), (13, 15), (13, 16), (14, 16), (14, 17), (15, 17), (16, 18)],
-    "desc_edges": [(2, 0), (3, 0), (3, 1), (4, 1), (4, 2), (4, 3), (5, 2), (6, 3), (6, 4), (7, 5), (8, 6)]
+    "desc_edges": [(2, 0), (3, 0), (3, 1), (4, 1), (4, 2), (4, 3), (5, 2), (6, 3), (6, 4), (7, 5), (8, 6)],
+    "partial_sequences": []
 }
+
+EXAMPLES = [
+    EXAMPLE_1
+]
 
 class Test050_Sequence(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print(f"\n{cls.__name__}")
     
-    def test_spectrum_graphs(self):
-        asc_graph, desc_graph = construct_spectrum_graphs(EXAMPLE_1["spectrum"], EXAMPLE_1["pivot"])
-        self.assertEqual(list(asc_graph.edges), EXAMPLE_1["asc_edges"])
-        self.assertEqual(list(desc_graph.edges), EXAMPLE_1["desc_edges"])
+    def test1_spectrum_graphs(self, examples = EXAMPLES):
+        for ex in examples:
+            asc_graph, desc_graph = construct_spectrum_graphs(ex["spectrum"], ex["pivot"])
+            self.assertEqual(list(asc_graph.edges), ex["asc_edges"])
+            self.assertEqual(list(desc_graph.edges), ex["desc_edges"])
     
-    def test_candidate_sequences(self):
-        # not yet implemented. this will look like: given the original peptide 
-        # and a bag of PartialSequence objects, is the original peptide
-        # present - up to the limitations of the mass -> peptide map - in the
-        # set of candidate constructions?
-        pass
+    def test2_partial_sequences(self, examples = EXAMPLES):
+        for ex in examples:
+            asc_graph, desc_graph = construct_spectrum_graphs(ex["spectrum"], ex["pivot"])
+            partial_sequences = list(construct_partial_sequences(asc_graph, desc_graph))
+            print(partial_sequences)
+        
+    def test3_candidates(self, examples = EXAMPLES):
+        for ex in examples:
+            asc_graph, desc_graph = construct_spectrum_graphs(ex["spectrum"], ex["pivot"])
+            partial_sequences = list(construct_partial_sequences(asc_graph, desc_graph))
+            candidates = construct_candidates(partial_sequences, ex["pivot"])
+            print(candidates)

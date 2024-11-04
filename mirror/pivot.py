@@ -10,3 +10,6 @@ class Pivot:
         self.indices_b = indices_b
         self.pair_b = pair_b
         self.gap_b = pair_b[1] - pair_b[0]
+    
+    def get_gap(self):
+        return (self.gap_a + self.gap_b) / 2

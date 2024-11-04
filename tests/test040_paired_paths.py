@@ -40,13 +40,13 @@ EXAMPLE_GRAPHS = [
     EASY_EXAMPLE
 ]
 
+def _reconstruct_graph(weighted_edgelist, weight_key = WEIGHT_KEY):
+    return nx.from_edgelist([(i,j,{WEIGHT_KEY : w}) for ((i,j),w) in weighted_edgelist], create_using=nx.DiGraph)
+
 class Test040_PairedPaths(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print(f"\n{cls.__name__}")
-    
-    def _reconstruct_graph(self, weighted_edgelist, weight_key = WEIGHT_KEY):
-        return nx.from_edgelist([(i,j,{WEIGHT_KEY : w}) for ((i,j),w) in weighted_edgelist], create_using=nx.DiGraph)
     
     def _naiive_paired_paths(self, graph_a: nx.DiGraph, graph_b: nx.DiGraph, weight_key = WEIGHT_KEY):
         sinks_a = get_sinks(graph_a)
@@ -88,9 +88,10 @@ class Test040_PairedPaths(unittest.TestCase):
 
         return naiive_paths, t_elap_n, dfs_paths, t_elap_d
 
-    def test_examples(self):
-        for ex in EXAMPLE_GRAPHS:
-            graph_a = self._reconstruct_graph(ex["graph_a"])
-            graph_b = self._reconstruct_graph(ex["graph_b"])
+    def test_examples(self, examples = EXAMPLE_GRAPHS):
+        for ex in examples:
+            graph_a = _reconstruct_graph(ex["graph_a"])
+            graph_b = _reconstruct_graph(ex["graph_b"])
             naiive_result, naiive_time, dfs_result, dfs_time = self._test(graph_a, graph_b)
+            # all naiive_results are identified by dfs_result
             self.assertTrue(all((p in dfs_result) for p in naiive_result))
