@@ -30,36 +30,74 @@ class PartialSequence:
 
     def __init__(self,
         desc_path,
-        asc_path,
         desc_graph,
+        desc_sources,
+        desc_sinks,
+        asc_path,
         asc_graph,
+        asc_sources,
+        asc_sinks,
         gap_key,
         res_key
     ):
         assert len(desc_path) == len(asc_path)
         self._len = len(asc_path)
+        
         self._desc_path = desc_path
-        self._asc_path = asc_path
         self._desc_graph = desc_graph
+        self._desc_sources = desc_sources
+        self._desc_sinks = desc_sinks
+        
+        self._asc_path = asc_path
         self._asc_graph = asc_graph
+        self._asc_sources = asc_sources
+        self._asc_sinks = asc_sinks
+
         self._gap_key = gap_key
         self._res_key = res_key
-    
+
     def __len__(self):
         return self._len
-    
+
     def get_edges(self):
-        di = self.desc_path
-        ai = self.asc_path
+        di = self._desc_path
+        ai = self._asc_path
         return [((di[i], di[i + 1]), (ai[i], ai[i + 1])) for i in range(len(self) - 1)]
-    
+
     def is_disjoint(self, other):
         return len(set(self.get_edges()) & set(other.get_edges())) == 0
     
     def get_residues(self):
-        desc_residues = list(map(self._weight_transform, get_weights(self._desc_graph, self._desc_path, self._gap_key)))
+        return get_weights(self._desc_graph, self._desc_path, self._res_key)
+    
+    def get_extended_residues(self):
+        res = self.get_residues()
+        ext_res = []
+
+        asc_target = self._asc_path[-1]
+        if asc_target not in self._asc_sinks:
+            for adj in self._asc_graph[asc_target]:
+                if adj in self._asc_sinks:
+                    new_res = res + [self._asc_graph[asc_target][adj][self._res_key]]
+                    ext_res.append(new_res)
+
+        desc_target = self._desc_path[-1]
+        if desc_target not in self._desc_sinks:
+            for adj in self._desc_graph[desc_target]:
+                if adj in self._desc_sinks:
+                    new_res = res + [self._desc_graph[desc_target][adj][self._res_key]]
+                    ext_res.append(new_res)
+        
+        if len(ext_res) == 0:
+            ext_res = [res]
+        
+        return ext_res
         
     def __repr__(self):
+        desc_path = ','.join(map(str,self._desc_path))
+        asc_path = ','.join(map(str,self._asc_path))
+        res = '\n'.join(map(lambda x: ' '.join(x), self.get_extended_residues()))
+        return f"desc: {desc_path}\nasc: {asc_path}\nres: {res}\n"
         #precision = 3
         #round_gaps = lambda gaps: list(map(lambda x: round(x, precision), gaps))
         #round_pairs = lambda pairs: list(map(lambda x: (round(x[0], precision),round(x[1], precision)), pairs))
@@ -94,7 +132,10 @@ def construct_partial_sequences(
     # iterate paths; use path weights to generate amino sequences
     for mirror_path_pair in mirror_paths_iterator:
         desc_path, asc_path = list(zip(*mirror_path_pair))
-        yield PartialSequence(desc_path, asc_path, desc_graph, asc_path, gap_key, res_key)
+        yield PartialSequence(
+            desc_path, desc_graph, desc_sources, desc_sinks, 
+            asc_path, asc_graph, asc_sources, asc_sinks,
+            gap_key, res_key)
     
 class JoinedSequence:
 
@@ -109,19 +150,22 @@ class JoinedSequence:
         # using initial and final residues, order the partial sequence pair
         # reverse and concatenate residue strings around pivot char
         pivot = [residue_lookup(self.pivot.gap())]
-        seq_a = self.sequence_a.residues
-        seq_b = self.sequence_b.residues
-        return [
-            seq_a + pivot + seq_b[::-1],
-            seq_b + pivot + seq_a[::-1],
-            seq_a[::-1] + pivot + seq_b,
-            seq_b[::-1] + pivot + seq_a,
-        ]
+
+        for seq_a in self.sequence_a.get_extended_residues():
+            for seq_b in self.sequence_b.get_extended_residues():
+                yield (
+                    seq_a + pivot + seq_b[::-1],
+                    seq_b + pivot + seq_a[::-1],
+                    seq_a[::-1] + pivot + seq_b,
+                    seq_b[::-1] + pivot + seq_a,
+                )
     
     def __repr__(self):
-        calls = self.call()
-        call_abr, call_bar, call_arb, call_bra = map(lambda x: ' '.join(x), calls)
-        return f"ab̅:\t{call_abr}\nba̅:\t{call_bar}\na̅b:\t{call_arb}\nb̅a:\t{call_bra}\n"
+        reps = []
+        for calls in self.call():
+            call_abr, call_bar, call_arb, call_bra = map(lambda x: ' '.join(x), calls)
+            reps.append(f"ab̅:\t{call_abr}\nba̅:\t{call_bar}\na̅b:\t{call_arb}\nb̅a:\t{call_bra}\n")
+        return '\n'.join(reps)
 
 
 def construct_candidates(partial_seqs: list[PartialSequence], pivot: Pivot):

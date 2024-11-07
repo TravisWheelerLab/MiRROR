@@ -1,7 +1,7 @@
 # based on the implementation and interface in `networkx.algorithms.simple_paths`
 # https://github.com/networkx/networkx/blob/main/networkx/algorithms/simple_paths.py
 import networkx as nx
-from .util import AMINOS, AMINO_MASS_MONO, TOLERANCE
+from .util import residue_lookup, AMINOS, AMINO_MASS_MONO, TOLERANCE
 from .scan import ScanConstraint, constrained_pair_scan
 from .pivot import Pivot
 
@@ -52,6 +52,7 @@ def construct_spectrum_graphs(
         v = abs(spectrum[i] - spectrum[j])
         desc_graph.add_edge(j, i)
         desc_graph[j][i][gap_key] = v
+        desc_graph[j][i][res_key] = residue_lookup(v)
     # build the ascending graph
     asc_graph = nx.DiGraph()
     asc_outer_loop_range = lambda size: (inner_right, size)
@@ -68,6 +69,7 @@ def construct_spectrum_graphs(
         v = abs(spectrum[i] - spectrum[j])
         asc_graph.add_edge(i, j, gap = v)
         asc_graph[i][j][gap_key] = v
+        asc_graph[i][j][res_key] = residue_lookup(v)
     # 
     return asc_graph, desc_graph
 
