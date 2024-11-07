@@ -23,19 +23,13 @@ class Test050_Sequence(unittest.TestCase):
     def setUpClass(cls):
         print(f"\n{cls.__name__}")
     
-    def test1_spectrum_graphs(self, examples = EXAMPLES):
-        for ex in examples:
-            asc_graph, desc_graph = construct_spectrum_graphs(ex["spectrum"], ex["pivot"])
-            self.assertEqual(list(asc_graph.edges), ex["asc_edges"])
-            self.assertEqual(list(desc_graph.edges), ex["desc_edges"])
-    
-    def test2_partial_sequences(self, examples = EXAMPLES):
+    def test1_partial_sequences(self, examples = EXAMPLES):
         for ex in examples:
             asc_graph, desc_graph = construct_spectrum_graphs(ex["spectrum"], ex["pivot"])
             partial_sequences = list(construct_partial_sequences(asc_graph, desc_graph))
             print(partial_sequences)
         
-    def test3_candidates(self, examples = EXAMPLES):
+    def test2_candidates(self, examples = EXAMPLES):
         for ex in examples:
             asc_graph, desc_graph = construct_spectrum_graphs(ex["spectrum"], ex["pivot"])
             partial_sequences = list(construct_partial_sequences(asc_graph, desc_graph))

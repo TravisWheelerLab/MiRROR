@@ -4,12 +4,23 @@ from time import time
 import networkx as nx
 
 from mirror.util import collapse_second_order_list
-from mirror.paired_paths import *
-from mirror.sequence import get_sinks, get_sources, get_weights
+from mirror.spectrum_graphs import *
 
 WEIGHT_KEY = "weight"
 
-EASY_EXAMPLE = {
+SPECTRUM_GRAPH_EXAMPLE = {
+    "peptide" : 'SIAGGLQTIGR',
+    "spectrum" : [175.11895291, 201.12336998, 232.14041701, 272.16048414, 329.18194823, 345.22448136, 386.20341233, 446.27216058, 499.28747668, 574.33073884, 627.34605493, 687.41480319, 728.39373416, 744.43626729, 801.45773138, 841.47779851, 872.49484554, 898.4992626 , 985.57890989],
+    "pivot" : Pivot((446.27216058327105, 574.330738838471),
+                    (499.2874766789711, 627.3460549341711),
+                    (7, 9),
+                    (8, 10)),
+    "asc_edges" : [(9, 11), (11, 13), (11, 14), (10, 12), (12, 15), (13, 14), (13, 15), (13, 16), (14, 16), (14, 17), (15, 17), (16, 18)],
+    "desc_edges": [(2, 0), (3, 0), (3, 1), (4, 1), (4, 2), (4, 3), (5, 2), (6, 3), (6, 4), (7, 5), (8, 6)],
+    "partial_sequences": []
+}
+
+PAIRS_EXAMPLE = {
     "graph_a" : [((9, 11), 113.08),
                 ((11, 13), 57.021),
                 ((11, 14), 114.04),
@@ -36,14 +47,10 @@ EASY_EXAMPLE = {
                 ((8, 6), 113.08)]
 }
 
-EXAMPLE_GRAPHS = [
-    EASY_EXAMPLE
-]
-
 def _reconstruct_graph(weighted_edgelist, weight_key = WEIGHT_KEY):
     return nx.from_edgelist([(i,j,{WEIGHT_KEY : w}) for ((i,j),w) in weighted_edgelist], create_using=nx.DiGraph)
 
-class Test040_PairedPaths(unittest.TestCase):
+class Test040_SpectrumGraphs(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         print(f"\n{cls.__name__}")
@@ -71,9 +78,8 @@ class Test040_PairedPaths(unittest.TestCase):
         sinks_b = get_sinks(graph_b)
         sources_b = get_sources(graph_b)
     
-        weight_transform = lambda x: x
         return collapse_second_order_list([
-            weighted_paired_simple_paths(graph_a, src_a, sinks_a, graph_b, src_b, sinks_b, weight_key, weight_transform)
+            weighted_paired_simple_paths(graph_a, src_a, sinks_a, graph_b, src_b, sinks_b, weight_key)
             for src_a in sources_a
             for src_b in sources_b])
 
@@ -88,10 +94,16 @@ class Test040_PairedPaths(unittest.TestCase):
 
         return naiive_paths, t_elap_n, dfs_paths, t_elap_d
 
-    def test_examples(self, examples = EXAMPLE_GRAPHS):
+    def test_examples(self, examples = [PAIRS_EXAMPLE]):
         for ex in examples:
             graph_a = _reconstruct_graph(ex["graph_a"])
             graph_b = _reconstruct_graph(ex["graph_b"])
             naiive_result, naiive_time, dfs_result, dfs_time = self._test(graph_a, graph_b)
             # all naiive_results are identified by dfs_result
             self.assertTrue(all((p in dfs_result) for p in naiive_result))
+    
+    def test2_spectrum_graphs(self, examples = [SPECTRUM_GRAPH_EXAMPLE]):
+        for ex in examples:
+            asc_graph, desc_graph = construct_spectrum_graphs(ex["spectrum"], ex["pivot"])
+            self.assertEqual(list(asc_graph.edges), ex["asc_edges"])
+            self.assertEqual(list(desc_graph.edges), ex["desc_edges"])
