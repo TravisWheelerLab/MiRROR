@@ -5,14 +5,6 @@ from tqdm import tqdm
 
 import itertools
 
-def log(message, prefix=""):
-    print(prefix + f"⚙\t{message}")
-
-def add_tqdm(inputs, total=None, description=None):
-    if total == None:
-        total = len(inputs)
-    return tqdm(inputs, total=total, leave=False, desc=description)
-
 AMINO_MASS = [
     71.08,
     156.2,
@@ -59,6 +51,8 @@ AMINO_MASS_MONO = [
 
 AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
 
+TOLERANCE = min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
+
 AMINOS = [
     'A',
     'R',
@@ -80,6 +74,12 @@ AMINOS = [
     'W',
     'Y',
     'V']
+
+RESIDUES = AMINOS
+
+TERMINAL_RESIDUES = ['R', 'K']
+
+NONTERMINAL_RESIDUES = [r for r in RESIDUES if r not in TERMINAL_RESIDUES]
 
 AMINO_MASS_LOOKUP = dict(zip(AMINOS,AMINO_MASS))
 
@@ -103,8 +103,53 @@ ION_SERIES = [
 
 ION_OFFSET_LOOKUP = dict(zip(ION_SERIES,ION_SERIES_OFFSETS))
 
+def generate_random_residues(length: int, alphabet = RESIDUES):
+    return np.random.choice(alphabet, length, replace=True)
+
+def generate_random_peptide(length: int, alphabet = RESIDUES):
+    return ''.join(generate_random_residues(length, alphabet))
+
+def generate_random_tryptic_peptide(length: int):
+    terminus = np.random.choice(TERMINAL_RESIDUES)
+    prefix = generate_random_peptide(length - 1, alphabet = NONTERMINAL_RESIDUES)
+    return prefix + terminus
+
+def mask_ambiguous_residues(res: chr):
+    if res == "L" or res == "I":
+        return "I/L"
+    else:
+        return res
+
+def mass_error(
+    mass: float,
+    mass_table: list[float] = AMINO_MASS_MONO,
+):
+    return min([abs(m - mass) for m in mass_table])
+
+def residue_lookup(
+    mass: float,
+    letters: list[str] = AMINOS,
+    mass_table: list[float] = AMINO_MASS_MONO,
+    tolerance: float = TOLERANCE,
+):
+    dif = [abs(m - mass) for m in mass_table]
+    i = np.argmin(dif)
+    optimum = dif[i]
+    if optimum > tolerance: # no match
+        return 'X'
+    else:
+        return mask_ambiguous_residues(letters[i])
+
 def collapse_second_order_list(llist: list[list]):
     return list(itertools.chain.from_iterable(llist))
+
+def log(message, prefix=""):
+    print(prefix + f"⚙\t{message}")
+
+def add_tqdm(inputs, total=None, description=None):
+    if total == None:
+        total = len(inputs)
+    return tqdm(inputs, total=total, leave=False, desc=description)
 
 def load_fasta_records(path_to_fasta: str):
     records = []
@@ -156,10 +201,13 @@ def get_y_ion_series(seq: str):
 def reflect(x, center: float):
     return 2 * center - x
 
-def measure_mirror_symmetry(arr: np.array, center: float, tolerance = 0.01):
+def count_mirror_symmetries(arr: np.array, center: float, tolerance = 0.01):
     reflected_arr = reflect(arr, center)
     n_symmetric = 0
     for reflected_val in reflected_arr:
         if np.min(np.abs(arr - reflected_val)) < tolerance:
             n_symmetric += 1
-    return n_symmetric / len(arr)
+    return n_symmetric
+
+def measure_mirror_symmetry(arr: np.array, center: float, tolerance = 0.01):
+    return count_mirror_symmetries(arr, center, tolerance) / len(arr)

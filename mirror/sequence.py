@@ -1,33 +1,13 @@
-from .util import collapse_second_order_list, reflect, AMINOS, AMINO_MASS_MONO, ION_OFFSET_LOOKUP
+from .util import residue_lookup, collapse_second_order_list, reflect, AMINOS, AMINO_MASS_MONO, ION_OFFSET_LOOKUP, TOLERANCE
 from .scan import ScanConstraint, constrained_pair_scan
 from .pivot import Pivot
 from .paired_paths import * 
 
-from numpy import argmin
 from networkx import DiGraph
 
 import itertools
 
-TOLERANCE = min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
-
-def residue_lookup(
-    mass: float,
-    letters: list[str] = AMINOS,
-    mass_table: list[float] = AMINO_MASS_MONO,
-    tolerance: float = TOLERANCE,
-):
-    dif = [abs(m - mass) for m in mass_table]
-    i = argmin(dif)
-    optimum = dif[i]
-    if optimum > tolerance: # no match
-        return 'X'
-    else:
-        l = letters[i]
-        if l == "L" or l == "I": # these have the same mass
-            return "I/L"
-        else:
-            return l
-
+        
 def recover_initial_residue(
     mz: float,
     pivot: float,
@@ -199,17 +179,27 @@ class JoinedSequence:
         self.sequence_a = sequence_a
         self.sequence_b = sequence_b
         self.pivot = pivot
-    
-    def __repr__(self):
-        pivot_chr = residue_lookup(self.pivot.get_gap())
-        return f"pivot char: {pivot_chr}\npartial seqs\n{self.sequence_a.residues}\n{self.sequence_b.residues}\n"
 
-    def call_sequence(self):
-        pass
+    def call(self):
         # TODO
         # recover initial and final residues
         # using initial and final residues, order the partial sequence pair
         # reverse and concatenate residue strings around pivot char
+        pivot = [residue_lookup(self.pivot.gap())]
+        seq_a = self.sequence_a.residues
+        seq_b = self.sequence_b.residues
+        return [
+            seq_a + pivot + seq_b[::-1],
+            seq_b + pivot + seq_a[::-1],
+            seq_a[::-1] + pivot + seq_b,
+            seq_b[::-1] + pivot + seq_a,
+        ]
+    
+    def __repr__(self):
+        calls = self.call()
+        call_abr, call_bar, call_arb, call_bra = map(lambda x: ' '.join(x), calls)
+        return f"ab̅:\t{call_abr}\nba̅:\t{call_bar}\na̅b:\t{call_arb}\nb̅a:\t{call_bra}\n"
+
 
 def construct_candidates(partial_seqs: list[PartialSequence], pivot: Pivot):
     # if the size of partial_seqs becomes unruly, implement the methods from ../2024_1101-disjoint_pairs.

@@ -10,6 +10,12 @@ class Pivot:
         self.indices_b = indices_b
         self.pair_b = pair_b
         self.gap_b = pair_b[1] - pair_b[0]
+
+    def center(self):
+        return sum(self.data) / 4
     
-    def get_gap(self):
+    def gap(self):
         return (self.gap_a + self.gap_b) / 2
+
+    def __repr__(self):
+        return f"gap:\t{self.gap()}\npeaks:\t{[round(x,3) for x in self.data]}"
