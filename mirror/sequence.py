@@ -72,7 +72,7 @@ class PartialSequence:
     
     def get_extended_residues(self):
         res = self.get_residues()
-        ext_res = []
+        ext_res = [res]
 
         asc_target = self._asc_path[-1]
         if asc_target not in self._asc_sinks:
@@ -88,16 +88,13 @@ class PartialSequence:
                     new_res = res + [self._desc_graph[desc_target][adj][self._res_key]]
                     ext_res.append(new_res)
         
-        if len(ext_res) == 0:
-            ext_res = [res]
-        
         return ext_res
         
     def __repr__(self):
         desc_path = ','.join(map(str,self._desc_path))
         asc_path = ','.join(map(str,self._asc_path))
-        res = '\n'.join(map(lambda x: ' '.join(x), self.get_extended_residues()))
-        return f"desc: {desc_path}\nasc: {asc_path}\nres: {res}\n"
+        res = ', '.join(map(lambda x: ' '.join(x), self.get_extended_residues()))
+        return f"desc:\t{desc_path}\nasc:\t{asc_path}\nres:\t{res}\n"
         #precision = 3
         #round_gaps = lambda gaps: list(map(lambda x: round(x, precision), gaps))
         #round_pairs = lambda pairs: list(map(lambda x: (round(x[0], precision),round(x[1], precision)), pairs))

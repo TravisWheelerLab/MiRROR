@@ -1,5 +1,6 @@
 import unittest
 from mirror.pivot import Pivot
+from mirror.spectrum_graphs import construct_spectrum_graphs
 from mirror.sequence import *
 
 EXAMPLE_1 = {
