@@ -6,7 +6,7 @@ from .spectrum_graphs import *
 from networkx import DiGraph
 
 import itertools
-        
+
 def recover_initial_residue(
     mz: float,
     pivot: float,
@@ -103,6 +103,7 @@ class PartialSequence:
         #asc = make_str(self.asc_indices, self.asc_gaps, self.asc_pairs)
         #return f"\n{self.residues}\nd {desc}\na {asc}\n"
 
+# wraps 'weighted_paired_simple_paths' with a PartialSequence generator
 def construct_partial_sequences(
     asc_graph: DiGraph,
     desc_graph: DiGraph,
@@ -165,7 +166,8 @@ class JoinedSequence:
         return '\n'.join(reps)
 
 
+# naiive method
+# TODO - tables method
 def construct_candidates(partial_seqs: list[PartialSequence], pivot: Pivot):
-    # if the size of partial_seqs becomes unruly, implement the methods from ../2024_1101-disjoint_pairs.
     n = len(partial_seqs)
     return [JoinedSequence(partial_seqs[i], partial_seqs[j], pivot) for i in range(n) for j in range(i + 1, n) if partial_seqs[i].is_disjoint(partial_seqs[j])]

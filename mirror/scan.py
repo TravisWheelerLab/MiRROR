@@ -15,8 +15,7 @@ class ScanConstraint:
         return False
 
 # searches the product space `arr` x `arr` for pairs satisfying the condition 
-# defined in `constraint`, which also defines the stop condition that prevents 
-# quadratic time complexity.
+# defined in `constraint`, which also defines the stop condition.
 def constrained_pair_scan(
     arr: list,
     constraint: ScanConstraint,
@@ -29,7 +28,7 @@ def constrained_pair_scan(
         inner_lo, inner_hi = inner_loop_range(n, i)
         for j in range(inner_lo, inner_hi):
             val = constraint.evaluate((arr[i],arr[j]))
-            if constraint.stop(val):
-                break
-            elif constraint.match(val):
+            if constraint.match(val):
                 yield (i,j)
+            elif constraint.stop(val):
+                break

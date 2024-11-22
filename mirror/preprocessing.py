@@ -21,7 +21,7 @@ def generate_bins(data_iterable, n_bins: int, max_val: int):
         #)
     return hist_arr
 
-def create_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, parallelize = False, n_processes = 4):
+def create_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, parallelize = False, n_processes = 4, verbose = False):
     n_bins = int(max_mz / resolution)
     n_spectra = exp.getNrSpectra()
     spectrum_bins = np.zeros(n_bins)
@@ -38,7 +38,8 @@ def create_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, paralleli
             )
             range_iterable = ((i * n_elts_per_process, min(n_spectra - 1, (i + 1) * n_elts_per_process)) for i in range(n_processes))
             for ((lo,hi),b) in zip(range_iterable,bins_by_process):
-                print('\t', (lo,hi), sum(b == 0), '/', len(b))
+                if verbose:
+                    print('\t', (lo,hi), sum(b == 0), '/', len(b))
                 spectrum_bins += b
     else:
         for spectrum_idx in add_tqdm(range(n_spectra)):
@@ -47,5 +48,6 @@ def create_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, paralleli
                 spectrum_bins,
                 n_bins,
                 max_mz)
-    print(sum(spectrum_bins == 0), '/', len(spectrum_bins))
+    if verbose:
+        print(sum(spectrum_bins == 0), '/', len(spectrum_bins))
     return spectrum_bins

@@ -1,15 +1,19 @@
 # based on the implementation and interface in `networkx.algorithms.simple_paths`
 # https://github.com/networkx/networkx/blob/main/networkx/algorithms/simple_paths.py
 import networkx as nx
-from .util import residue_lookup, AMINOS, AMINO_MASS_MONO, TOLERANCE
+from .util import AMINO_MASS_MONO, TOLERANCE
 from .scan import ScanConstraint, constrained_pair_scan
 from .pivot import Pivot
+
+#=========================#
+# constructing the graphs #
+#=========================#
 
 class SpectrumGraphConstraint(ScanConstraint):
 
     def __init__(self, 
-        tolerance = TOLERANCE,
-        amino_masses = AMINO_MASS_MONO,
+        tolerance,
+        amino_masses,
     ):
         self.tolerance = tolerance
         self.amino_masses = amino_masses
@@ -27,21 +31,19 @@ class SpectrumGraphConstraint(ScanConstraint):
         return min(abs(mass - gap) for mass in self.amino_masses) < self.tolerance
 
 GAP_KEY = "gap"
-RES_KEY = "res"
 
 def construct_spectrum_graphs(
     spectrum,
     pivot: Pivot,
-    gap_key = GAP_KEY,
-    res_key = RES_KEY
+    gap_key = GAP_KEY
 ):
     outer_left, inner_left, inner_right, outer_right = pivot.index_data
-    # build the descending graph
+    
+    # build the descending graph on the lower half of the spectrum
     desc_graph = nx.DiGraph()
     desc_outer_loop_range = lambda size: (0, inner_left + 1)
     desc_inner_loop_range = lambda size,idx: (idx + 1, inner_left + 1)
-    desc_constraint = SpectrumGraphConstraint()
-    ## this step could be a linear scan of the precomputed gaps.
+    desc_constraint = SpectrumGraphConstraint(TOLERANCE, AMINO_MASS_MONO)
     desc_edges = constrained_pair_scan(
         spectrum,
         desc_constraint,
@@ -52,13 +54,12 @@ def construct_spectrum_graphs(
         v = abs(spectrum[i] - spectrum[j])
         desc_graph.add_edge(j, i)
         desc_graph[j][i][gap_key] = v
-        desc_graph[j][i][res_key] = residue_lookup(v)
-    # build the ascending graph
+    
+    # build the ascending graph on the upper half of the spectrum
     asc_graph = nx.DiGraph()
     asc_outer_loop_range = lambda size: (inner_right, size)
     asc_inner_loop_range = lambda size,idx: (idx + 1, size)
-    asc_constraint = SpectrumGraphConstraint()
-    ## this step could be a linear scan of the precomputed gaps.
+    asc_constraint = SpectrumGraphConstraint(TOLERANCE, AMINO_MASS_MONO)
     asc_edges = constrained_pair_scan(
         spectrum,
         asc_constraint,
@@ -69,8 +70,7 @@ def construct_spectrum_graphs(
         v = abs(spectrum[i] - spectrum[j])
         asc_graph.add_edge(i, j, gap = v)
         asc_graph[i][j][gap_key] = v
-        asc_graph[i][j][res_key] = residue_lookup(v)
-    # 
+    
     return asc_graph, desc_graph
 
 def get_sources(D: nx.DiGraph):
@@ -84,6 +84,10 @@ def get_weights(graph, path, key):
 
 def get_edges(graph,node):
     return graph.edges(node)
+
+#==================================#
+# generating the paired path space #
+#==================================#
 
 def weighted_paired_simple_paths(
     G: nx.DiGraph,
@@ -187,3 +191,30 @@ def _weighted_paired_simple_edge_paths(
                 for (h_e, h_w) in zip(h_edges, h_weights) 
                 if g_w == h_w]
             stack.append(iter(edge_itx))
+
+#====================================#
+# repairing broken (truncated) paths #
+#====================================#
+
+def extend_truncated_paths(
+    paired_paths,
+    G: nx.DiGraph,
+    H: nx.DiGraph,
+):
+    G_sinks = get_sinks(G)
+    H_sinks = get_sinks(H)
+    for paired_path in paired_paths:
+        G_target, H_target = paired_path[-1]
+        G_terminated = (G_target in G_sinks)
+        H_terminated = (H_target in H_sinks)
+        if G_terminated and H_terminated:
+            yield paired_path
+        if not G_terminated:
+            extensions = nx.algorithms.simple_paths.all_simple_paths(G, G_target, G_sinks)
+            for path_extension in extensions:
+                yield paired_path + [(node, -1) for node in path_extension]
+        elif not H_terminated:
+            extensions = nx.algorithms.simple_paths.all_simple_paths(H, H_target, H_sinks)
+            for path_extension in extensions:
+                yield paired_path + [(-1, node) for node in path_extension]
+            
