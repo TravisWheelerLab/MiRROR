@@ -51,7 +51,8 @@ AMINO_MASS_MONO = [
 
 AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
 
-TOLERANCE = min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
+GAP_TOLERANCE = min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
+INTERGAP_TOLERANCE = GAP_TOLERANCE / 2
 
 AMINOS = [
     'A',
@@ -74,6 +75,8 @@ AMINOS = [
     'W',
     'Y',
     'V']
+
+UNKNOWN_AMINO = 'X'
 
 RESIDUES = AMINOS
 
@@ -127,16 +130,19 @@ def mass_error(
     return min([abs(m - mass) for m in mass_table])
 
 def residue_lookup(
-    mass: float,
+    gap: float,
     letters: list[str] = AMINOS,
     mass_table: list[float] = AMINO_MASS_MONO,
-    tolerance: float = TOLERANCE,
+    tolerance: float = GAP_TOLERANCE,
+    unknown = UNKNOWN_AMINO,
 ):
-    dif = [abs(m - mass) for m in mass_table]
+    if gap == -1:
+        return unknown
+    dif = [abs(m - gap) for m in mass_table]
     i = np.argmin(dif)
     optimum = dif[i]
     if optimum > tolerance: # no match
-        return 'X'
+        return unknown
     else:
         return mask_ambiguous_residues(letters[i])
 
@@ -208,6 +214,3 @@ def count_mirror_symmetries(arr: np.array, center: float, tolerance = 0.01):
         if np.min(np.abs(arr - reflected_val)) < tolerance:
             n_symmetric += 1
     return n_symmetric
-
-def measure_mirror_symmetry(arr: np.array, center: float, tolerance = 0.01):
-    return count_mirror_symmetries(arr, center, tolerance) / len(arr)

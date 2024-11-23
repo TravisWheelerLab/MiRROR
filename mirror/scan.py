@@ -23,10 +23,8 @@ def constrained_pair_scan(
     inner_loop_range = lambda size,idx: (idx + 1, size),
 ):
     n = len(arr)
-    outer_lo, outer_hi = outer_loop_range(n)
-    for i in range(outer_lo, outer_hi):
-        inner_lo, inner_hi = inner_loop_range(n, i)
-        for j in range(inner_lo, inner_hi):
+    for i in range(*outer_loop_range(n)):
+        for j in range(*inner_loop_range(n, i)):
             val = constraint.evaluate((arr[i],arr[j]))
             if constraint.match(val):
                 yield (i,j)
