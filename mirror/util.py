@@ -1,9 +1,9 @@
+import itertools
+
 import pyopenms as oms
 import numpy as np
 from Bio import Seq, SeqRecord, SeqIO
 from tqdm import tqdm
-
-import itertools
 
 AMINO_MASS = [
     71.08,

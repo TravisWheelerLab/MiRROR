@@ -1,5 +1,8 @@
-import networkx as nx
 import itertools
+from enum import Enum
+
+import networkx as nx
+
 from .util import AMINO_MASS_MONO, GAP_TOLERANCE, INTERGAP_TOLERANCE
 from .scan import ScanConstraint, constrained_pair_scan
 from .pivot import Pivot
@@ -29,7 +32,55 @@ class SpectrumGraphConstraint(ScanConstraint):
 
 GAP_KEY = "gap"
 
-def _construct_half_graph(
+class SpectrumGraphOrientation(Enum):
+    ASCENDING = 1
+    DESCENDING = 2
+
+def _half_graph_edges(
+    gaps,
+    pivot,
+    orientation,
+):
+    n_gaps = len(gaps)
+    if orientation == SpectrumGraphOrientation.ASCENDING:
+        reverse_edges = False
+        gap_range = range(n_gaps - 1, -1, -1)
+        gap_constraint = lambda i: i >= pivot.inner_right()
+    elif orientation == SpectrumGraphOrientation.DESCENDING:
+        reverse_edges = True
+        gap_range = range(0, n_gaps)
+        gap_constraint = lambda i: i <= pivot.inner_left()
+    else:
+        raise ValueError(f"Unrecognized orientation: {orientation}.\nAre you sure it's a SpectrumGraphOrientation object?")
+    for (i,j) in gaps:
+        if gap_constraint(i) and gap_constraint(j):
+            if reverse_edges:
+                yield (j, i)
+            else:
+                yield (i, j)
+            
+def _construct_half_graph_from_gaps(
+    spectrum,
+    gaps,
+    pivot,
+    gap_key,
+    orientation,
+):
+    edges = list(_half_graph_edges(gaps, pivot, orientation))
+    half_graph = nx.DiGraph()
+    for (i, j) in edges:
+        v = abs(spectrum[j] - spectrum[i])
+        half_graph.add_edge(i, j)
+        half_graph[i][j][gap_key] = v
+    
+    for i in list(half_graph.nodes):
+        half_graph.add_edge(i, -1)
+        half_graph[i][-1][gap_key] = -1
+    
+    return half_graph
+
+# deprecated, just here for the sanity check.
+def _construct_half_graph_from_spectrum(
     spectrum,
     gap_key,
     outer_loop_range,
@@ -38,12 +89,12 @@ def _construct_half_graph(
     reverse_edges = False
 ):
     half_graph = nx.DiGraph()
-    edges = constrained_pair_scan(
+    edges = list(constrained_pair_scan(
         spectrum,
         constraint,
         outer_loop_range,
         inner_loop_range
-    )
+    ))
     for (i, j) in edges:
         v = spectrum[j] - spectrum[i]
         if reverse_edges:
@@ -57,8 +108,35 @@ def _construct_half_graph(
 
 def construct_spectrum_graphs(
     spectrum,
+    gaps: list[tuple[int,int]],
     pivot: Pivot,
-    gap_key = GAP_KEY
+    gap_key = GAP_KEY,
+):
+    # build the descending graph on the lower half of the spectrum
+    desc_graph = _construct_half_graph_from_gaps(
+        spectrum,
+        gaps,
+        pivot,
+        gap_key,
+        SpectrumGraphOrientation.DESCENDING
+    )
+    
+    # build the ascending graph on the upper half of the spectrum
+    asc_graph = _construct_half_graph_from_gaps(
+        spectrum,
+        gaps,
+        pivot,
+        gap_key,
+        SpectrumGraphOrientation.ASCENDING
+    )
+    
+    return asc_graph, desc_graph
+
+# deprecated, just here for the sanity check.
+def construct_spectrum_graphs_from_spectrum(
+    spectrum,
+    pivot: Pivot,
+    gap_key = GAP_KEY,
 ):
     outer_left, inner_left, inner_right, outer_right = pivot.index_data
     
@@ -66,7 +144,7 @@ def construct_spectrum_graphs(
     desc_outer_loop_range = lambda size: (0, inner_left + 1)
     desc_inner_loop_range = lambda size,idx: (idx + 1, inner_left + 1)
     desc_constraint = SpectrumGraphConstraint(GAP_TOLERANCE, AMINO_MASS_MONO)
-    desc_graph = _construct_half_graph(
+    desc_graph = _construct_half_graph_from_spectrum(
         spectrum,
         gap_key,
         desc_outer_loop_range,
@@ -79,7 +157,7 @@ def construct_spectrum_graphs(
     asc_outer_loop_range = lambda size: (inner_right, size)
     asc_inner_loop_range = lambda size,idx: (idx + 1, size)
     asc_constraint = SpectrumGraphConstraint(GAP_TOLERANCE, AMINO_MASS_MONO)
-    asc_graph = _construct_half_graph(
+    asc_graph = _construct_half_graph_from_spectrum(
         spectrum,
         gap_key,
         asc_outer_loop_range,

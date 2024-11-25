@@ -1,4 +1,4 @@
-from scan import constrained_pair_scan, ScanConstraint
+from .scan import ScanConstraint, constrained_pair_scan
 
 class Pivot:
     def __init__(self, pair_a, pair_b, indices_a, indices_b):
@@ -12,6 +12,18 @@ class Pivot:
         self.indices_b = indices_b
         self.pair_b = pair_b
         self.gap_b = pair_b[1] - pair_b[0]
+    
+    def outer_left(self):
+        return self.index_data[0]
+    
+    def inner_left(self):
+        return self.index_data[1]
+    
+    def inner_right(self):
+        return self.index_data[2]
+    
+    def outer_right(self):
+        return self.index_data[3]
 
     def center(self):
         return sum(self.data) / 4
@@ -63,6 +75,7 @@ def find_pivots(
     gap_indices,
     pivot_constraint
 ):
+    gap_mz = [(spectrum[i], spectrum[j]) for (i, j) in gap_indices]
     pivot_indices = constrained_pair_scan(
         gap_mz,
         pivot_constraint
