@@ -2,9 +2,7 @@ import itertools
 
 import networkx as nx
 
-#=============================================================================#
-# based on the implementation in networkx.algorithms.simple_paths
-# https://github.com/networkx/networkx/blob/main/networkx/algorithms/simple_paths.py
+from .util import disjoint_pairs
 
 def get_sources(D: nx.DiGraph):
     return [i for i in D.nodes if D.in_degree(i) == 0 if i != -1]
@@ -15,24 +13,29 @@ def get_sinks(D: nx.DiGraph):
 def get_edges(graph,node):
     return [i for i in graph.edges(node) if i != -1]
 
+#=============================================================================#
+# methods for iterating the mutual path space of a pair of graphs.
+# based on the implementation in networkx.algorithms.simple_paths
+# https://github.com/networkx/networkx/blob/main/networkx/algorithms/simple_paths.py
+
 def all_weighted_paired_simple_paths(
     G: nx.DiGraph,
     H: nx.DiGraph,
     weight_key,
     weight_comparator
 ):
-    G_sinks = get_sinks(G)
+    G_sinks = set(get_sinks(G))
     G_sources = get_sources(G)
-    H_sinks = get_sinks(H_graph)
+    H_sinks = set(get_sinks(H_graph))
     H_sources = get_sources(H_graph)
     return itertools.chain.from_iterable(
             weighted_paired_simple_paths(
                 G, 
                 g_source, 
-                set(G_sinks),
+                G_sinks,
                 H, 
                 h_source, 
-                set(H_sinks),
+                H_sinks,
                 weight_key,
                 weight_comparator
             ) 
@@ -145,12 +148,14 @@ def _weighted_paired_simple_edge_paths(
             stack.append(iter(edge_itx))
 
 #=============================================================================#
+# methods for transforming and analyzing paired paths.
 
 def extend_truncated_paths(
     paired_paths,
     G: nx.DiGraph,
     H: nx.DiGraph,
 ):
+    "identifies and extends paired paths that end on a non-sink vertex in one of their supporting graphs."
     G_sinks = get_sinks(G)
     H_sinks = get_sinks(H)
     for paired_path in paired_paths:
@@ -159,7 +164,7 @@ def extend_truncated_paths(
         H_terminated = (H_target in H_sinks)
         if G_terminated and H_terminated:
             yield paired_path
-        if not G_terminated:
+        elif not G_terminated:
             extensions = nx.algorithms.simple_paths.all_simple_paths(G, G_target, G_sinks)
             for path_extension in extensions:
                 yield paired_path + [(node, -1) for node in path_extension[1:]]
@@ -167,15 +172,38 @@ def extend_truncated_paths(
             extensions = nx.algorithms.simple_paths.all_simple_paths(H, H_target, H_sinks)
             for path_extension in extensions:
                 yield paired_path + [(-1, node) for node in path_extension[1:]]
+        else:
+            raise ValueError("dually-truncated paths cannot be passed to this function.")
 
-#=============================================================================#
-
-def edge_disjoint_paths_naiive(
-    paths
+def paired_path_to_matrix(
+    paired_path: list[tuple[int,int]]
 ):
-    pass
+    "transforms a paired path of length n into an (n,2) numpy array"
+    return np.array(paired_path)
 
-def edge_disjoint_paths_hashed(
-    paths
+def unzip_paired_path(
+    paired_path: list[tuple[int,int]]
 ):
-    pass
+    "transforms a paired path [(x1,y1),(x2,y2),...] into a pair of paths ([x1,x2,...],[y1,y2,...])"
+    return list(zip(*paired_path))
+
+def path_to_edges(
+    path: list[int]
+):
+    n = len(path)
+    return [(path[i], path[i + 1]) for i in range(n - 1)]
+
+def paired_path_to_edge_set(
+    paired_path: list[tuple[int,int]]
+):
+    "transforms a paired path into the set containing all its edges in both graphs."
+    path1, path2 = unzip_paired_path(paired_path)
+    return set(path_to_edges(path1)).union(set(path_to_edges(path2)))
+
+def find_edge_disjoint_paired_paths(
+    paired_paths,
+    pair_mode = "table",
+):
+    "associates between paths that do not share any edges."
+    path_edge_sets = list(map(paired_path_to_edge_set, paired_paths))
+    return disjoint_pairs(path_edge_sets, pair_mode)

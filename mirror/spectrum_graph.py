@@ -13,6 +13,7 @@ GAP_KEY = "gap"
 GAP_COMPARATOR = lambda x,y: (abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)
 
 #=============================================================================#
+# spectrum graph constructors
 
 class SpectrumGraphOrientation(Enum):
     ASCENDING = 1
@@ -88,7 +89,7 @@ def construct_spectrum_graphs(
     return asc_graph, desc_graph
 
 #=============================================================================#
-# deprecated, just here for the sanity check.
+# old constructors, just here for the sanity check.
 
 class SpectrumGraphConstraint(ScanConstraint):
 
@@ -176,11 +177,14 @@ def construct_spectrum_graphs_from_spectrum(
 
 def find_mirrored_paths(
     spectrum,
-    pivot: Pivot
+    gaps,
+    pivot: Pivot,
+    gap_key = GAP_KEY,
+    gap_comparator = GAP_COMPARATOR
 ):
-    ascending_graph, descending_graph = construct_spectrum_graphs(spectrum, pivot, GAP_KEY)
+    ascending_graph, descending_graph = construct_spectrum_graphs(spectrum, gaps, pivot, gap_key)
     
-    mirrored_paths = all_weighted_paired_simple_paths(ascending_graph, descending_graph, GAP_KEY, GAP_COMPARATOR)
+    mirrored_paths = all_weighted_paired_simple_paths(ascending_graph, descending_graph, gap_key, gap_comparator)
     
     extended_paths = extend_truncated_paths(mirrored_paths, ascending_graph, descending_graph)
 

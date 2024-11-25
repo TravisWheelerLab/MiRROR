@@ -1,3 +1,6 @@
+import numpy as np
+
+from .util import reflect
 from .scan import ScanConstraint, constrained_pair_scan
 
 class Pivot:
@@ -33,6 +36,9 @@ class Pivot:
 
     def __repr__(self):
         return f"gap:\t{self.gap()}\npeaks:\t{[round(x,3) for x in self.data]}\nindices:\t{self.index_data}"
+
+#=============================================================================#
+# finding pivots in the gaps of a spectrum
 
 class AbstractPivotConstraint(ScanConstraint):
     
@@ -93,3 +99,33 @@ def find_pivots(
         else:
             raise ValueError(f"malformed pivot! {p, q}")
     return pivots
+
+#=============================================================================#
+# use a pivot to analyze mirror symmetries
+
+def _mirror_symmetric_gaps(
+    gaps_mz: list[np.array],
+    center: float,
+    threshold: float,
+):
+    "return the subset of gaps that is closed under mirror symmetry w.r.t. the pivot center."
+    reflector = lambda x: reflect(x, center)
+    mirrored_gaps_mz = [np.array([reflector(peak_2), reflector(peak_1)]) for (peak_1, peak_2) in gaps_mz]
+    n = len(gaps_mz)
+    for i in range(n):
+        x = gaps_mz[i]
+        for j in range(i + 1, n):
+            z = mirrored_gaps_mz[j]
+            if abs(sum(x - z)) < threshold:
+                yield i
+                break
+
+def pivot_symmetric_gaps(
+    spectrum,
+    gap_indices: list[tuple[int,int]],
+    pivot: Pivot,
+    threshold = 0.01
+):
+    gaps_mz = [np.array([spectrum[i], spectrum[j]]) for (i, j) in gap_indices]
+    pivot_center = pivot.center()
+    return [gap_indices[i] for i in _mirror_symmetric_gaps(gaps_mz, pivot_center, threshold)]

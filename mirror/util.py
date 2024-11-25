@@ -145,6 +145,9 @@ def residue_lookup(
         return unknown
     else:
         return mask_ambiguous_residues(letters[i])
+    
+#=============================================================================#
+# misc utilities
 
 def collapse_second_order_list(llist: list[list]):
     return list(itertools.chain.from_iterable(llist))
@@ -157,17 +160,8 @@ def add_tqdm(inputs, total=None, description=None):
         total = len(inputs)
     return tqdm(inputs, total=total, leave=False, desc=description)
 
-def load_fasta_records(path_to_fasta: str):
-    records = []
-    with open(path_to_fasta) as handle:
-        records = list(SeqIO.parse(handle, "fasta"))
-    return records
-
-def save_strings_to_fasta(path_to_fasta: str, seqs: list[str]):
-    n = len(seqs)
-    records = [SeqRecord.SeqRecord(Seq.Seq(seqs[i]), id=f"miss_{i}", name="", description="") for i in range(n)]
-    with open(path_to_fasta, "w") as handle:
-        return SeqIO.write(records, handle, "fasta")
+#=============================================================================#
+# simulation via pyOpenMS
 
 def digest_trypsin(seq: str, minimum_length: int = 7, maximum_length: int = 40):
     dig = oms.ProteaseDigestion()
@@ -204,6 +198,9 @@ def get_y_ion_series(seq: str):
     param.setValue("add_y_ions", "true")
     return list_mz(generate_fragment_spectrum(seq,param))
 
+#=============================================================================#
+# mirror symmetry
+
 def reflect(x, center: float):
     return 2 * center - x
 
@@ -214,3 +211,66 @@ def count_mirror_symmetries(arr: np.array, center: float, tolerance = 0.01):
         if np.min(np.abs(arr - reflected_val)) < tolerance:
             n_symmetric += 1
     return n_symmetric
+
+#=============================================================================#
+# disjoint pairs
+
+def _construct_membership_table(
+    X: list[set]
+):
+    S = set(itertools.chain.from_iterable(X))
+    table = {
+        s: []
+        for s in S
+    }
+    n = len(X)
+    for i in range(n):
+        for elt in X[i]:
+            table[elt].append(i)
+    return table
+
+def _find_disjoint(
+    x: set,
+    n: int,
+    membership_table: dict
+):
+    disjoint = [
+        True 
+        for _ in range(n)
+    ]
+    for elt in x:
+        for set_idx in membership_table[elt]:
+            disjoint[set_idx] = False
+    return [
+        i 
+        for i in range(n) 
+        if disjoint[i]
+    ]
+
+def _table_disjoint_pairs(
+    X: list[set]
+):
+    membership_table = _construct_membership_table(X)
+    n = len(X)
+    for i in range(n):
+        for j in _find_disjoint(X[i], n, membership_table):
+            if j > i:
+                yield (i,j)
+
+def _naiive_disjoint_pairs(
+    X: list[set]
+):
+    n = len(X)
+    return [(i, j) for i in range(n) for j in range(i + 1, n) if X[i].isdisjoint(X[j])]
+
+def disjoint_pairs(
+    X: list[set],
+    mode = "table"
+):
+    "associates sets that do not share elements."
+    if mode == "table":
+        return list(_table_disjoint_pairs(X))
+    elif mode == "naiive":
+        return _naiive_disjoint_pairs(X)
+    else:
+        raise ValueError(f"unknown pairing mode {mode}. supported modes are [\"table\", \"naiive\"]")

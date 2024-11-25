@@ -165,7 +165,6 @@ class JoinedSequence:
             reps.append(f"ab̅:\t{call_abr}\nba̅:\t{call_bar}\na̅b:\t{call_arb}\nb̅a:\t{call_bra}\n")
         return '\n'.join(reps)
 
-
 # naiive method
 # TODO - tables method
 def construct_candidates(partial_seqs: list[PartialSequence], pivot: Pivot):
