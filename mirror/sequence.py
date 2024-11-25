@@ -1,7 +1,7 @@
 from .util import residue_lookup, collapse_second_order_list, reflect, AMINOS, AMINO_MASS_MONO, ION_OFFSET_LOOKUP, TOLERANCE
 from .scan import ScanConstraint, constrained_pair_scan
 from .pivot import Pivot
-from .spectrum_graphs import * 
+from .spectrum_graph import * 
 
 from networkx import DiGraph
 

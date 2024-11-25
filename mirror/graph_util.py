@@ -26,15 +26,15 @@ def all_weighted_paired_simple_paths(
     H_sinks = get_sinks(H_graph)
     H_sources = get_sources(H_graph)
     return itertools.chain.from_iterable(
-            mirror.spectrum_graphs.weighted_paired_simple_paths(
+            weighted_paired_simple_paths(
                 G, 
                 g_source, 
                 set(G_sinks),
                 H, 
                 h_source, 
                 set(H_sinks),
-                weight_key, #mirror.spectrum_graphs.GAP_KEY,
-                weight_comparator #mirror.spectrum_graphs.GAP_COMPARATOR
+                weight_key,
+                weight_comparator
             ) 
             for h_source in H_sources 
             for g_source in G_sources)
