@@ -51,8 +51,9 @@ AMINO_MASS_MONO = [
 
 AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
 
-GAP_TOLERANCE = min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
-INTERGAP_TOLERANCE = GAP_TOLERANCE / 2
+LOOKUP_TOLERANCE = 0.1
+GAP_TOLERANCE = 0.01 # min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
+INTERGAP_TOLERANCE = GAP_TOLERANCE * 2 
 
 AMINOS = [
     'A',
@@ -133,7 +134,7 @@ def residue_lookup(
     gap: float,
     letters: list[str] = AMINOS,
     mass_table: list[float] = AMINO_MASS_MONO,
-    tolerance: float = GAP_TOLERANCE,
+    tolerance: float = LOOKUP_TOLERANCE,
     unknown = UNKNOWN_AMINO,
 ):
     if gap == -1:

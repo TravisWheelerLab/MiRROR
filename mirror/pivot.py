@@ -101,7 +101,7 @@ def find_pivots(
     return pivots
 
 #=============================================================================#
-# use a pivot to analyze mirror symmetries
+# use pivot in analyses
 
 def _mirror_symmetric_gaps(
     gaps_mz: list[np.array],
@@ -110,14 +110,16 @@ def _mirror_symmetric_gaps(
 ):
     "return the subset of gaps that is closed under mirror symmetry w.r.t. the pivot center."
     reflector = lambda x: reflect(x, center)
-    mirrored_gaps_mz = [np.array([reflector(peak_2), reflector(peak_1)]) for (peak_1, peak_2) in gaps_mz]
+    mirrored_gaps_mz = [np.array([reflector(peak_1), reflector(peak_2)]) for (peak_1, peak_2) in gaps_mz]
     n = len(gaps_mz)
     for i in range(n):
         x = gaps_mz[i]
         for j in range(i + 1, n):
             z = mirrored_gaps_mz[j]
-            if abs(sum(x - z)) < threshold:
+            zb = z[::-1]
+            if abs(sum(x - z)) < threshold or abs(sum(x - zb)) < threshold:
                 yield i
+                yield j
                 break
 
 def pivot_symmetric_gaps(

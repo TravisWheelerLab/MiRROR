@@ -26,8 +26,8 @@ def all_weighted_paired_simple_paths(
 ):
     G_sinks = set(get_sinks(G))
     G_sources = get_sources(G)
-    H_sinks = set(get_sinks(H_graph))
-    H_sources = get_sources(H_graph)
+    H_sinks = set(get_sinks(H))
+    H_sources = get_sources(H)
     return itertools.chain.from_iterable(
             weighted_paired_simple_paths(
                 G, 

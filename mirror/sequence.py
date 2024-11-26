@@ -1,11 +1,47 @@
-from .util import residue_lookup, collapse_second_order_list, reflect, AMINOS, AMINO_MASS_MONO, ION_OFFSET_LOOKUP, TOLERANCE
+from .util import residue_lookup, collapse_second_order_list, reflect, AMINOS, AMINO_MASS_MONO, ION_OFFSET_LOOKUP, GAP_TOLERANCE
 from .scan import ScanConstraint, constrained_pair_scan
 from .pivot import Pivot
+from .graph_util import unzip_paired_path, path_to_edges
 from .spectrum_graph import * 
 
 from networkx import DiGraph
 
 import itertools
+
+class PairedAffix:
+
+    def __init__(self, spectrum, paired_path):
+        self._spectrum = spectrum
+        self._path1, self._path2 = unzip_paired_path(paired_path)
+
+    def get_paths(self):
+        return (self._path1, 
+            self._path2)
+    
+    def get_mz(self):
+        path1, path2 = self.get_paths()
+        return (self._spectrum[path1], 
+            self._spectrum[path2])
+    
+    def get_edges(self):
+        path1, path2 = self.get_paths()
+        return (path_to_edges(path1),
+            path_to_edges(path2))
+    
+    def get_gaps(self):
+        _get_gaps = lambda edges: [self._spectrum[max(e)] - self._spectrum[min(e)] for e in edges]
+        edges1, edges2 = self.get_edges()
+        return (_get_gaps(edges1),
+            _get_gaps(edges2))
+    
+    def get_res(self):
+        _get_res = lambda gaps: list(map(residue_lookup, gaps))
+        gaps1, gaps2 = self.get_gaps()
+        return (_get_res(gaps1),
+            _get_res(gaps2))
+    
+    def reverse(self):
+        return PairedAffix(self._spectrum, list(zip(*self._get_paths))[::-1])
 
 def recover_initial_residue(
     mz: float,
@@ -107,11 +143,10 @@ class PartialSequence:
 def construct_partial_sequences(
     asc_graph: DiGraph,
     desc_graph: DiGraph,
-    tolerance = TOLERANCE,
+    tolerance = GAP_TOLERANCE,
     amino_names = AMINOS,
     amino_masses = AMINO_MASS_MONO,
-    gap_key = GAP_KEY,
-    res_key = RES_KEY
+    gap_key = GAP_KEY
 ):
     #asc_graph, desc_graph = construct_spectrum_graphs(spectrum, pivot)
     asc_sources = get_sources(asc_graph)
