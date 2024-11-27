@@ -1,6 +1,7 @@
 import numpy as np
+from statistics import mode
 
-from .util import reflect
+from .util import mass_error, count_mirror_symmetries, residue_lookup, reflect, INTERGAP_TOLERANCE
 from .scan import ScanConstraint, constrained_pair_scan
 
 class Pivot:
@@ -8,13 +9,22 @@ class Pivot:
         self.index_data = sorted([*indices_a, *indices_b])
         self.data = sorted([*pair_a, *pair_b])
 
-        self.indices_a = indices_a
-        self.pair_a = pair_a
-        self.gap_a = pair_a[1] - pair_a[0]
-        
-        self.indices_b = indices_b
-        self.pair_b = pair_b
-        self.gap_b = pair_b[1] - pair_b[0]
+        self._indices_a = indices_a
+        self._indices_b = indices_b
+        self._pair_a = pair_a
+        self._pair_b = pair_b
+    
+    def peaks(self):
+        return self.data
+
+    def indices(self):
+        return self.indices
+
+    def peak_pairs(self):
+        return self._pair_a, self._pair_b
+    
+    def index_pairs(self):
+        return self._indices_a, self._indices_b
     
     def outer_left(self):
         return self.index_data[0]
@@ -32,10 +42,30 @@ class Pivot:
         return sum(self.data) / 4
     
     def gap(self):
-        return (self.gap_a + self.gap_b) / 2
+        gap_a = data[1] - data[0]
+        gap_b = data[3] - data[2]
+        return (gap_a + gap_b) / 2
 
     def __repr__(self):
-        return f"gap:\t{self.gap()}\npeaks:\t{[round(x,3) for x in self.data]}\nindices:\t{self.index_data}"
+        peaks_a, peaks_b = self.peak_pairs()
+        ind_a, ind_b = self.index_pairs()
+        return f"Pivot{peaks_a, peaks_b, ind_a, ind_b}"
+
+class VirtualPivot(Pivot):
+
+    def __init__(self, data, index_data):
+        self.index_data = index_data
+        self.data = data
+
+    def data_pairs(self):
+        raise NotImplementedError("Virtual pivots are not composed of pairs.")
+    
+    def index_pairs(self):
+        raise NotImplementedError("Virtual pivots are not composed of pairs.")
+
+    def __repr__(self):
+        return f"VirtualPivot{self.peaks(), self.indices()}"
+        
 
 #=============================================================================#
 # finding pivots in the gaps of a spectrum
@@ -100,34 +130,24 @@ def find_pivots(
             raise ValueError(f"malformed pivot! {p, q}")
     return pivots
 
-#=============================================================================#
-# use pivot in analyses
-
-def _mirror_symmetric_gaps(
-    gaps_mz: list[np.array],
-    center: float,
-    threshold: float,
-):
-    "return the subset of gaps that is closed under mirror symmetry w.r.t. the pivot center."
-    reflector = lambda x: reflect(x, center)
-    mirrored_gaps_mz = [np.array([reflector(peak_1), reflector(peak_2)]) for (peak_1, peak_2) in gaps_mz]
-    n = len(gaps_mz)
-    for i in range(n):
-        x = gaps_mz[i]
-        for j in range(i + 1, n):
-            z = mirrored_gaps_mz[j]
-            zb = z[::-1]
-            if abs(sum(x - z)) < threshold or abs(sum(x - zb)) < threshold:
-                yield i
-                yield j
-                break
-
-def pivot_symmetric_gaps(
+def locate_pivot_point(
     spectrum,
-    gap_indices: list[tuple[int,int]],
-    pivot: Pivot,
-    threshold = 0.01
+    gap_indices,
+    tolerance = INTERGAP_TOLERANCE,
 ):
-    gaps_mz = [np.array([spectrum[i], spectrum[j]]) for (i, j) in gap_indices]
-    pivot_center = pivot.center()
-    return [gap_indices[i] for i in _mirror_symmetric_gaps(gaps_mz, pivot_center, threshold)]
+    pivots_overlap = find_pivots(spectrum, gap_indices, PivotOverlapConstraint(tolerance))
+    if len(pivots_overlap) > 0:
+        return 'o', pivots_overlap
+    else:
+        pivots_disjoint = find_pivots(spectrum, gap_indices = PivotDisjointConstraint(tolerance))
+        target = mode(pivot.center() for pivot in pivots_disjoint)
+        return 'd', [pivot for pivot in pivots_disjoint if pivot.center() == target]
+
+def score_pivot(
+    spectrum,
+    pivot
+):
+    return (
+        count_mirror_symmetries(spectrum, pivot.center()),
+        mass_error(pivot.gap()),
+        residue_lookup(pivot.gap()))
