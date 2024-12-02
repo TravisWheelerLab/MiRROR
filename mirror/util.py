@@ -4,6 +4,9 @@ import pyopenms as oms
 import numpy as np
 from tqdm import tqdm
 
+#=============================================================================#
+# residue constants and functions
+
 AMINO_MASS = [
     71.08,
     156.2,
@@ -135,16 +138,20 @@ def residue_lookup(
     mass_table: list[float] = AMINO_MASS_MONO,
     tolerance: float = LOOKUP_TOLERANCE,
     unknown = UNKNOWN_AMINO,
+    nan = '.',
 ):
     if gap == -1:
         return unknown
-    dif = [abs(m - gap) for m in mass_table]
-    i = np.argmin(dif)
-    optimum = dif[i]
-    if optimum > tolerance: # no match
-        return unknown
+    elif gap == -2:
+        return nan
     else:
-        return mask_ambiguous_residues(letters[i])
+        dif = [abs(m - gap) for m in mass_table]
+        i = np.argmin(dif)
+        optimum = dif[i]
+        if optimum > tolerance: # no match
+            return unknown
+        else:
+            return mask_ambiguous_residues(letters[i])
     
 #=============================================================================#
 # misc utilities
@@ -202,15 +209,66 @@ def get_y_ion_series(seq: str):
 # mirror symmetry
 
 def reflect(x, center: float):
+    """Reflect about a given point.
+    :param x: the number or numeric array subject to reflection.
+    :param center: the center of reflection."""
     return 2 * center - x
 
 def count_mirror_symmetries(arr: np.array, center: float, tolerance = 0.01):
+    """Count the elements of `arr` that are symmetric under reflection around `center`.
+    
+    :param arr: a sorted one-dimensional numeric array.
+    :param center: the center of reflection.
+    :param tolerance: the proximity threshold for detecting mirror symmetry. defaults to 0.01.
+    :return: the number of elements that are symmetric under the reflection."""
     reflected_arr = reflect(arr, center)
     n_symmetric = 0
     for reflected_val in reflected_arr:
         if np.min(np.abs(arr - reflected_val)) < tolerance:
             n_symmetric += 1
     return n_symmetric
+
+def expected_num_mirror_symmetries(arr: np.array, trials: int, tolerance = 0.01):
+    """Approximate the number of mirror symmetries expected around a randomly-
+    selected center. The number of symmetries induced by the center of a well-
+    formed Pivot should be much greater than this value.
+    
+    :param arr: a sorted one-dimensional numeric array.
+    :param trials: the number of centers to sample.
+    :param tolerance: the proximity threshold for detecting mirror symmetry. defaults to 0.01.
+    :return: the total number of mirror-symmetric points in `arr` under all centers, divided by `trials`."""
+    total = 0
+    arr_min = arr[0]
+    arr_max = arr[-1]
+    for _ in range(trials):
+        center = np.random.uniform(low = arr_min, high = arr_max)
+        total += count_mirror_symmetries(arr, center, tolerance = tolerance)
+    expectation = total / trials
+    return expectation
+
+def find_initial_b_ion(
+    spectrum, 
+    lo,
+    hi,
+    center: float,
+):
+    # starting at the pivot, scan the upper half of the spectrum
+    for i in range(lo, hi):
+        corrected_mass = reflect(spectrum[i], center) - ION_OFFSET_LOOKUP['b']
+        residue = residue_lookup(corrected_mass)
+        if residue != 'X':
+            yield i, residue
+
+def find_terminal_y_ion(
+    spectrum, 
+    hi,
+):
+    # starting at the pivot, scan the lower half of the spectrum
+    for i in range(hi - 1, -1, -1):
+        corrected_mass = spectrum[i] - ION_OFFSET_LOOKUP['y']
+        residue = residue_lookup(corrected_mass)
+        if residue != 'X':
+            yield i, residue
 
 #=============================================================================#
 # disjoint pairs

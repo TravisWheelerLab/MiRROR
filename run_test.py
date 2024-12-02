@@ -22,7 +22,7 @@ class TestData:
         self.pivots = None
         self.pivot_mode = "-"
         self.viable_pivots = None
-        self.sym_spectrum = None
+        self.sym_spectrum = {}
         self.graphs = {}
         self.paths = {}
         self.candidates = {}
@@ -49,8 +49,8 @@ class TestData:
     def set_viable_pivots(self, viable_pivots):
         self.viable_pivots = viable_pivots
 
-    def set_symmetric_spectrum(self, spectrum):
-        self.sym_spectrum = spectrum
+    def set_symmetric_spectrum(self, pivot_no, spectrum):
+        self.sym_spectrum[pivot_no] = spectrum
     
     def set_graphs(self, pivot_no, asc_graph, desc_graph):
         self.graphs[pivot_no] = (asc_graph, desc_graph)
@@ -94,28 +94,15 @@ def eval_gap(data: TestData):
     data.set_gaps(gap_ind)
     return gap_ind
 
-def eval_pivot(data: TestData):
-    #pivots = mirror.pivot.find_pivots(
-    #    data.spectrum,
-    #    data.gaps, 
-    #    mirror.pivot.PivotOverlapConstraint(mirror.util.INTERGAP_TOLERANCE))
-    mode, pivots = mirror.pivot.locate_pivot_point(data.spectrum, data.gaps, mirror.util.INTERGAP_TOLERANCE)
-    data.set_pivot_mode(mode)
-    data.set_pivots(pivots)
-    return pivots
-
 def eval_viable_pivots(data: TestData):
-    pivot_residues = [mirror.util.residue_lookup(pivot.gap()) for pivot in data.pivots]
-    pivot_scores = [mirror.util.count_mirror_symmetries(data.spectrum, pivot.center()) for pivot in data.pivots]
-    pivot_errors = [mirror.util.mass_error(pivot.gap()) for pivot in data.pivots]
-    viable_pivots = [(pivot,residue,score,error) for (pivot,residue,score,error) in zip(data.pivots,pivot_residues,pivot_scores,pivot_errors) 
-                     if residue != 'X' and score > (data.expected_mirror_symmetry() / 2)]
+    symmetry_threshold = 2 * mirror.util.expected_num_mirror_symmetries(data.spectrum, 100)
+    viable_pivots = mirror.pivot.construct_viable_pivots(data.spectrum, symmetry_threshold, data.gaps)
     data.set_viable_pivots(viable_pivots)
     return viable_pivots
 
 def eval_old_graphs(data: TestData):
     graphs = []
-    for pivot_no, (pivot,residue,score,error) in enumerate(data.viable_pivots):
+    for pivot_no, pivot in enumerate(data.viable_pivots):
         asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs_from_spectrum(data.spectrum, pivot)
         data.set_graphs(pivot_no, asc_graph, desc_graph)
         graphs.append((asc_graph, desc_graph))
@@ -123,7 +110,7 @@ def eval_old_graphs(data: TestData):
         
 def eval_graphs(data: TestData):
     graphs = []
-    for pivot_no, (pivot,residue,score,error) in enumerate(data.viable_pivots):
+    for pivot_no, pivot in enumerate(data.viable_pivots):
         asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(data.spectrum, data.gaps, pivot)
         data.set_graphs(pivot_no, asc_graph, desc_graph)
         graphs.append((asc_graph, desc_graph))
@@ -131,9 +118,9 @@ def eval_graphs(data: TestData):
         
 def eval_new_graphs(data: TestData):
     graphs = []
-    for pivot_no, (pivot,residue,score,error) in enumerate(data.viable_pivots):
+    for pivot_no, pivot in enumerate(data.viable_pivots):
         sym_spectrum, pivot = mirror.boundary.create_symmetric_boundary(data.spectrum, pivot)
-        data.set_symmetric_spectrum(sym_spectrum)
+        data.set_symmetric_spectrum(pivot_no, sym_spectrum)
         gap_inds = [mirror.gap.find_gaps(sym_spectrum, mirror.gap.GapTargetConstraint(amino_mass, mirror.util.GAP_TOLERANCE))
                     for amino_mass in mirror.util.AMINO_MASS_MONO]
         gap_ind = list(itertools.chain.from_iterable(gap_inds))
@@ -192,48 +179,76 @@ def check_match(target, candidate):
 def reverse_called_sequence(sequence):
     return ' '.join(sequence.split(' ')[::-1])
 
-def run(data):
-    gaps = eval_gap(data)
-    eval_pivot(data)
-    pivots = eval_viable_pivots(data)
-    graphs = eval_new_graphs(data)
-    paths = eval_paths(data)
-    target = [mirror.util.mask_ambiguous_residues(r) for r in data.peptide[1:-1]]
+def apply_boundary_residues(candidate, initial_b, terminal_y):
+    return initial_b + ' ' + candidate + ' ' + terminal_y
+
+def construct_target(peptide):
+    target = [mirror.util.mask_ambiguous_residues(r) for r in peptide]
     target = ' '.join(target)
+    return target
+
+def time_op(op, arg, table, name):
+    t_init = time()
+    val = op(arg)
+    table[name] = time() - t_init
+    return val
+
+def run(data):
+    times = np.zeros(4)
+    gaps = time_op(eval_gap, data, times, 0)
+    pivots = time_op(eval_viable_pivots, data, times, 1)
+    graphs = time_op(eval_new_graphs, data, times, 2)
+    paths = time_op(eval_paths, data, times, 3)
+
+    target = construct_target(data.peptide)
     matches = []
+    candidates = []
     n_pivots = len(pivots)
     for idx in range(n_pivots):
-        pivot_res = pivots[idx][1]
+        pivot = pivots[idx]
+        pivot_res = mirror.util.residue_lookup(pivots[idx].gap())
         pathspace = paths[idx]
         n_paths = len(pathspace)
-        residue_sequences = [call_sequence_from_path(data.sym_spectrum, p) for p in pathspace]
+        residue_affixes = [call_sequence_from_path(data.sym_spectrum[idx], p) for p in pathspace]
         for i in range(n_paths):
             for j in range(i + 1, n_paths):
-                candidate = reverse_called_sequence(residue_sequences[i]) + f" {pivot_res} " + residue_sequences[j]
-                alt_candidate = reverse_called_sequence(candidate)
+                initial_b = pivot.initial_b_ion(data.spectrum)[1]
+                terminal_y = pivot.terminal_y_ion(data.spectrum)[1]
+                called_seq = reverse_called_sequence(residue_affixes[i]) + f" {pivot_res} " + residue_affixes[j]
+                candidate = apply_boundary_residues(called_seq, initial_b, terminal_y)
+                alt_candidate = apply_boundary_residues(reverse_called_sequence(called_seq), initial_b, terminal_y)
+                
                 if target == candidate:
                     matches.append(candidate)
                 if target == alt_candidate:
                     matches.append(alt_candidate)
-    return matches, data
+                candidates.append(candidate)
+                candidates.append(alt_candidate)
+    return candidates, matches, data, times
 
 if __name__ == '__main__':
     import sys
     N = int(sys.argv[1])
-    for k in [7, 10, 20, 30, 40, 50]:
+    times_overall = np.zeros(4)
+    peptide_lengths = [7, 10, 20, 30, 40, 50]
+    for k in peptide_lengths:
+        times_k = np.zeros(4)
         print(f"length {k}")
         misses = []
         crashes = []
         for _ in mirror.util.add_tqdm(range(N)):
             data = generate_test_data(k)
             try:
-                matches, _ = run(generate_test_data(k))
+                __, matches, _, times_individual = run(generate_test_data(k))
+                times_k += times_individual
                 if len(matches) == 0:
                     misses.append(data)
             except Exception as e:
+                raise e
                 eval_gap(data)
-                eval_pivot(data)
-                crashes.append(data)
+                eval_viable_pivots(data)
+                append(data)
+                print(e)
         miss_peptides = [data.peptide for data in misses]
         crash_peptides = [data.peptide for data in crashes]
         n_misses = len(misses)
@@ -246,4 +261,8 @@ if __name__ == '__main__':
         print("crashes:", n_crashes / N, (n_crashes, N))
         if any(crashes):
             print(f"crash pivot modes:\no {n_overlap_crashes}\nd {n_disjoint_crashes}")
-        
+        print("times", times_k, sum(times_k))
+        print("times (normalized)", times_k / sum(times_k))
+        times_overall += times_k
+    print("overall times", times_overall, sum(times_overall))
+    print("overall times (normalized)", times_overall / sum(times_overall))
