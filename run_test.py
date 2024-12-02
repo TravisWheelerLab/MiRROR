@@ -1,6 +1,7 @@
 import itertools
 from time import time
 from copy import copy
+import sys, os
 
 import numpy as np
 import networkx as nx
@@ -26,6 +27,10 @@ class TestData:
         self.graphs = {}
         self.paths = {}
         self.candidates = {}
+        self.exp_sym_time = 0.0
+
+    def set_exp_sym_time(self, time):
+        self.exp_sym_time = time
 
     def expected_mirror_symmetry(self):
         n_peaks = len(self.spectrum)
@@ -95,9 +100,12 @@ def eval_gap(data: TestData):
     return gap_ind
 
 def eval_viable_pivots(data: TestData):
-    symmetry_threshold = 2 * mirror.util.expected_num_mirror_symmetries(data.spectrum, 100)
+    t_init = time()
+    symmetry_threshold = 2 * mirror.util.expected_num_mirror_symmetries(data.spectrum, 10)
+    t_elap = time() - t_init
     viable_pivots = mirror.pivot.construct_viable_pivots(data.spectrum, symmetry_threshold, data.gaps)
     data.set_viable_pivots(viable_pivots)
+    data.set_exp_sym_time(t_elap)
     return viable_pivots
 
 def eval_old_graphs(data: TestData):
@@ -194,13 +202,16 @@ def time_op(op, arg, table, name):
     return val
 
 def run(data):
-    times = np.zeros(4)
+    times = np.zeros(5)
     gaps = time_op(eval_gap, data, times, 0)
     pivots = time_op(eval_viable_pivots, data, times, 1)
     graphs = time_op(eval_new_graphs, data, times, 2)
     paths = time_op(eval_paths, data, times, 3)
 
     target = construct_target(data.peptide)
+
+    t_init = time()
+    # construct candidates
     matches = []
     candidates = []
     n_pivots = len(pivots)
@@ -224,25 +235,44 @@ def run(data):
                     matches.append(alt_candidate)
                 candidates.append(candidate)
                 candidates.append(alt_candidate)
+    times[4] = time() - t_init
     return candidates, matches, data, times
 
 if __name__ == '__main__':
     import sys
     N = int(sys.argv[1])
-    times_overall = np.zeros(4)
+    times_overall = np.zeros(5)
+    sym_time_overall = 0
     peptide_lengths = [7, 10, 20, 30, 40, 50]
+    max_time_peptides = []
     for k in peptide_lengths:
-        times_k = np.zeros(4)
+        local_max_time = 0
+        local_max_peptide = ""
+        local_max_table = []
+        times_k = np.zeros(5)
+        sym_time = 0
         print(f"length {k}")
         misses = []
         crashes = []
         for _ in mirror.util.add_tqdm(range(N)):
             data = generate_test_data(k)
             try:
-                __, matches, _, times_individual = run(generate_test_data(k))
+                __, matches, data2, times_individual = run(generate_test_data(k))
                 times_k += times_individual
+                sym_time += data2.exp_sym_time
+                if sum(times_individual) > local_max_time:
+                    local_max_time = sum(times_individual)
+                    local_max_peptide = data2.peptide
+                    local_max_table = times_individual
                 if len(matches) == 0:
                     misses.append(data)
+            except KeyboardInterrupt:
+                print('Interrupted')
+                print(data.peptide)
+                try:
+                    sys.exit(130)
+                except SystemExit:
+                    os._exit(130)
             except Exception as e:
                 raise e
                 eval_gap(data)
@@ -262,7 +292,11 @@ if __name__ == '__main__':
         if any(crashes):
             print(f"crash pivot modes:\no {n_overlap_crashes}\nd {n_disjoint_crashes}")
         print("times", times_k, sum(times_k))
+        print("sym time", sym_time)
         print("times (normalized)", times_k / sum(times_k))
+        print("max", (local_max_time,local_max_peptide,local_max_table / sum(local_max_table)))
         times_overall += times_k
+        sym_time_overall += sym_time
     print("overall times", times_overall, sum(times_overall))
+    print("overall sym time", sym_time_overall)
     print("overall times (normalized)", times_overall / sum(times_overall))
