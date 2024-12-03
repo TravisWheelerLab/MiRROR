@@ -228,23 +228,18 @@ def count_mirror_symmetries(arr: np.array, center: float, tolerance = 0.01):
             n_symmetric += 1
     return n_symmetric
 
-def expected_num_mirror_symmetries(arr: np.array, trials: int, tolerance = 0.01):
-    """Approximate the number of mirror symmetries expected around a randomly-
-    selected center. The number of symmetries induced by the center of a well-
-    formed Pivot should be much greater than this value.
+def expected_num_mirror_symmetries(arr: np.array, tolerance = 0.01):
+    """Estimate the number of mirror-symmetric elements under a random reflection.
+
+        len(arr) * (len(arr) - 1) * tolerance / (max(arr) - min(arr))
     
     :param arr: a sorted one-dimensional numeric array.
-    :param trials: the number of centers to sample.
     :param tolerance: the proximity threshold for detecting mirror symmetry. defaults to 0.01.
-    :return: the total number of mirror-symmetric points in `arr` under all centers, divided by `trials`."""
-    total = 0
-    arr_min = arr[0]
-    arr_max = arr[-1]
-    for _ in range(trials):
-        center = np.random.uniform(low = arr_min, high = arr_max)
-        total += count_mirror_symmetries(arr, center, tolerance = tolerance)
-    expectation = total / trials
-    return expectation
+    :return: the number of elements expected to be symmetric under a random reflection."""
+    n = len(arr)
+    minv = arr[0]
+    maxv = arr[-1]
+    return n * (n - 1) * tolerance / (maxv - minv)
 
 def find_initial_b_ion(
     spectrum, 
