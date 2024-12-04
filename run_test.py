@@ -11,6 +11,8 @@ from mirror import io, util, gap, pivot, boundary, graph_util, spectrum_graph, s
 
 from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
 
+from editdistance import eval as edit_distance
+
 def all_edges(graph):
     return sorted([(i, j) for (i, j) in graph.edges if i != -1 and j != -1])
 
@@ -26,7 +28,8 @@ class TestData:
         self.sym_spectrum = {}
         self.graphs = {}
         self.paths = {}
-        self.candidates = {}
+        self.candidates = []
+        self.matches = []
         self.exp_sym_time = 0.0
 
     def set_exp_sym_time(self, time):
@@ -63,8 +66,11 @@ class TestData:
     def set_paths(self, pivot_no, paths):
         self.paths[pivot_no] = paths
     
-    def set_candidates(self, pivot_no, candidates):
-        self.candidates[pivot_no] = candidates
+    def set_candidates(self, candidates):
+        self.candidates = candidates
+    
+    def set_matches(self, matches):
+        self.matches = matches
 
     def _draw_graph(self, graph, title):
         graph.remove_node(-1)
@@ -79,7 +85,9 @@ class TestData:
         A.layout('dot')
         A.draw(title)
 
-    def draw_graphs(self, pivot_no, name_gen):
+    def draw_graphs(self, pivot_no, name_gen = None):
+        if name_gen == None:
+            name_gen = lambda x: f"drawings/{self.peptide}_p{pivot_no}_{x}.png"
         asc, desc = copy(self.graphs[pivot_no])
         self._draw_graph(asc, name_gen("asc"))
         self._draw_graph(desc, name_gen("desc"))
@@ -167,11 +175,12 @@ def eval_candidates(data: TestData):
         pathspace = paths[idx]
         n_paths = len(pathspace)
         residue_affixes = [call_sequence_from_path(data.sym_spectrum[idx], p) for p in pathspace]
-        for i in range(n_paths):
-            for j in range(i + 1, n_paths):
+        n_affixes = len(residue_affixes)
+        for i in range(n_affixes):
+            for j in range(i + 1, n_affixes):
                 initial_b = pivot.initial_b_ion(data.spectrum)[1]
                 terminal_y = pivot.terminal_y_ion(data.spectrum)[1]
-                called_seq = reverse_called_sequence(residue_affixes[i]) + f" {pivot_res} " + residue_affixes[j]
+                called_seq = residue_affixes[i] + f" {pivot_res} " + reverse_called_sequence(residue_affixes[j])
                 candidate = apply_boundary_residues(called_seq, initial_b, terminal_y)
                 alt_candidate = apply_boundary_residues(reverse_called_sequence(called_seq), initial_b, terminal_y)
                 candidates.append(candidate)
@@ -180,6 +189,8 @@ def eval_candidates(data: TestData):
                     matches.append(candidate)
                 if target == alt_candidate:
                     matches.append(alt_candidate)
+    data.set_candidates(candidates)
+    data.set_matches(matches)
     return candidates, matches
 
 def _call_sequence_from_path(spectrum, paired_path):
@@ -192,7 +203,11 @@ def call_sequence_from_path(spectrum, paired_path):
     seq1, seq2 = _call_sequence_from_path(spectrum, paired_path)
     sequence = ''
     for (res1, res2) in zip(seq1, seq2):
-        if res1 == res2 or (res1 == 'X' or res2 == 'X'):
+        if res1 == 'X' and res2 != 'X':
+            sequence += res2
+        elif res1 != 'X' and res2 == 'X':
+            sequence = res1 
+        elif res1 == res2:
             sequence += res1
         else:
             sequence += f"{res1}/{res2}"
@@ -228,59 +243,116 @@ def run(data):
     candidates, matches = time_op(eval_candidates, data, times, 4)
     return candidates, matches, data, times
 
+def measure_error(data: TestData):
+    target = construct_target(data.peptide).replace(' ', '').replace("I/L", 'J')
+    if len(data.matches) > 0:
+        return 0
+    elif len(data.candidates) > 0:
+        candidates = [x.replace(' ', '').replace("I/L", 'J') for x in data.candidates]
+        candidates.sort(key = lambda x: edit_distance(target, x))
+        return edit_distance(target, candidates[0])
+    else:
+        return len(data.peptide)
+
+def run_on_seqs(seqs, path_miss, path_crash):
+    N = len(seqs)
+    local_max_time = 0
+    local_max_peptide = ""
+    local_max_table = np.zeros(5)
+    times_k = np.zeros(5)
+    misses = []
+    crashes = []
+    for i in mirror.util.add_tqdm(range(N)):
+        pep = seqs[i]
+        data = TestData(pep)
+        try:
+            __, matches, data2, times_individual = run(data)
+            times_k += times_individual
+            if sum(times_individual) > local_max_time:
+                local_max_time = sum(times_individual)
+                local_max_peptide = pep
+                local_max_table = times_individual
+            if len(matches) == 0:
+                misses.append(data)
+        except KeyboardInterrupt:
+            print('Interrupted')
+            print(pep)
+            try:
+                sys.exit(130)
+            except SystemExit:
+                os._exit(130)
+        except Exception as e:
+            crashes.append(data)
+    miss_peptides = [data.peptide for data in misses]
+    crash_peptides = [data.peptide for data in crashes]
+    n_misses = len(misses)
+    n_crashes = len(crashes)
+    if path_miss != None and n_misses > 0:
+        mirror.io.save_strings_to_fasta(path_miss, miss_peptides, lambda i: f"miss_{i}")
+    if path_crash != None and n_crashes > 0:
+        mirror.io.save_strings_to_fasta(path_crash, crash_peptides, lambda i: f"crash_{i}")
+    print("misses:", n_misses / N, (n_misses, N))
+    print("crashes:", n_crashes / N, (n_crashes, N))
+    print("observed times\t\t", times_k, sum(times_k))
+    print("normalized times\t", times_k / sum(times_k))
+    print("max", (local_max_time,local_max_peptide,local_max_table / sum(local_max_table)))
+    return times_k, misses, crashes
+
+def plot_hist(x: list[int], width = 60):
+    left = min(x)
+    right = max(x)
+    vals = list(range(left, right + 1))
+    counts = [0 for _ in range(left, right + 1)]
+    for pt in x:
+        counts[pt - left] += 1
+    
+    lo = min(counts)
+    hi = max(counts)
+    rng = hi - lo
+    print('-' * (width + 20))
+    for i in range(len(counts)):
+        frac = (counts[i] - lo) / rng
+        bars = int(width * frac)
+        if counts[i] > 0:
+            bars = max(bars, 1)
+        print(f"{vals[i]}\t|" + "o" * bars + f"  ({counts[i]})")
+    print('-' * (width + 20))
+
 if __name__ == '__main__':
     import sys
-    N = int(sys.argv[1])
-    times_overall = np.zeros(5)
-    peptide_lengths = [7, 10, 20, 30, 40, 50]
-    max_time_peptides = []
-    for k in peptide_lengths:
-        local_max_time = 0
-        local_max_peptide = ""
-        local_max_table = []
-        times_k = np.zeros(5)
-        print(f"length {k}")
-        misses = []
-        crashes = []
-        for _ in mirror.util.add_tqdm(range(N)):
-            data = generate_test_data(k)
-            try:
-                __, matches, data2, times_individual = run(generate_test_data(k))
-                times_k += times_individual
-                if sum(times_individual) > local_max_time:
-                    local_max_time = sum(times_individual)
-                    local_max_peptide = data2.peptide
-                    local_max_table = times_individual
-                if len(matches) == 0:
-                    misses.append(data)
-            except KeyboardInterrupt:
-                print('Interrupted')
-                print(data.peptide)
-                try:
-                    sys.exit(130)
-                except SystemExit:
-                    os._exit(130)
-            except Exception as e:
-                raise e
-                eval_gap(data)
-                eval_viable_pivots(data)
-                append(data)
-                print(e)
-        miss_peptides = [data.peptide for data in misses]
-        crash_peptides = [data.peptide for data in crashes]
-        n_misses = len(misses)
-        n_crashes = len(crashes)
-        n_overlap_crashes = len([data for data in crashes if data.pivot_mode == "o"])
-        n_disjoint_crashes = len([data for data in crashes if data.pivot_mode == "d"])
-        mirror.io.save_strings_to_fasta(f"misses/misses_{k}_{N}.fasta", miss_peptides, lambda i: f"miss_{i}")
-        mirror.io.save_strings_to_fasta(f"misses/crashes_{k}_{N}.fasta", crash_peptides, lambda i: f"crash_{i}")
-        print("misses:", n_misses / N, (n_misses, N))
-        print("crashes:", n_crashes / N, (n_crashes, N))
-        if any(crashes):
-            print(f"crash pivot modes:\no {n_overlap_crashes}\nd {n_disjoint_crashes}")
-        print("observed times\t\t", times_k, sum(times_k))
-        print("normalized times\t", times_k / sum(times_k))
-        print("max", (local_max_time,local_max_peptide,local_max_table / sum(local_max_table)))
-        times_overall += times_k
-    print("overall observed times\t\t", times_overall, sum(times_overall))
-    print("overall normalized times\t", times_overall / sum(times_overall))
+    mode = sys.argv[1]
+    if mode == "random":
+        N = int(sys.argv[2])
+        peptide_lengths = list(map(int, sys.argv[3].split(',')))
+        record = sys.argv[4] == "True"
+        times_overall = np.zeros(5)
+        print(f"record {record}")
+        print(f"trials {N}")
+        for k in peptide_lengths:
+            print(f"length {k}")
+            seqs = [mirror.util.generate_random_tryptic_peptide(k) for _ in range(N)]
+            times_k, _, __ = run_on_seqs(
+                seqs, 
+                f"misses/misses_{k}_{N}.fasta" if record else None, 
+                f"misses/crashes_{k}_{N}.fasta" if record else None)
+            times_overall += times_k
+        print("overall observed times\t\t", times_overall, sum(times_overall))
+        print("overall normalized times\t", times_overall / sum(times_overall))
+    elif mode == "fasta":
+        fasta_path = sys.argv[2]
+        seqs = mirror.io.load_fasta_as_strings(fasta_path)
+        _,  misses, crashes = run_on_seqs(seqs, None, None)
+        miss_errors = [measure_error(miss) for miss in misses]
+        num_pivots = 0
+        num_virtual = 0
+        for data in misses:
+            if any(type(pivot) == mirror.pivot.VirtualPivot for pivot in data.viable_pivots):
+                num_virtual += 1
+            else:
+                num_pivots += 1
+        print("\nedit distance of errors:")
+        plot_hist(miss_errors)
+        print(f"min dist:\t{min(miss_errors)}")
+        print(f"max dist:\t{max(miss_errors)}")
+        print(f"avg dist:\t{np.mean(miss_errors)}")
+        print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}")
