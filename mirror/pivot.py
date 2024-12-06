@@ -64,10 +64,12 @@ class Pivot:
     def negative_index_pairs(self):
         """index pairs that should not be present in the gap set."""
         inds_a, inds_b = self.index_pairs()
-        return [(inds_a[0], inds_b[0]),
+        negative_pairs = [(inds_a[0], inds_b[0]),
             (inds_a[1], inds_b[1]),
             (inds_a[1], inds_b[0]),
             (inds_a[0], inds_b[1])]
+        negative_pairs = [(min(e), max(e)) for e in negative_pairs]
+        return negative_pairs
 
     def __repr__(self):
         return f"Pivot{*self.peak_pairs(), *self.index_pairs()}"
@@ -107,6 +109,10 @@ class VirtualPivot(Pivot):
     
     def gap(self):
         return -1
+    
+    def negative_index_pairs(self):
+        """index pairs that should not be present in the gap set."""
+        return []
 
     def __repr__(self):
         return f"VirtualPivot{self.indices(), self.center()}"
@@ -212,17 +218,28 @@ def _filter_viable_pivots(
     symmetry_threshold: float,
     pivots: list[Pivot],
 ):
-    pivot_symmetries = np.array([count_mirror_symmetries(spectrum, pivot.center()) for pivot in pivots])
-    pivot_initial_b_ions = np.array([pivot.initial_b_ion(spectrum) != None for pivot in pivots])
-    pivot_terminal_y_ions = np.array([pivot.terminal_y_ion(spectrum) != None for pivot in pivots])
-    pivot_residues = np.array([residue_lookup(pivot.gap()) for pivot in pivots])
-    viable = pivot_symmetries > symmetry_threshold
-    viable *= pivot_initial_b_ions
-    viable *= pivot_terminal_y_ions
-    if any(pivot_residues != 'X'):
-        viable *= pivot_residues != 'X'
-    n = len(pivots)
-    return [pivots[i] for i in range(n) if viable[i]]
+    if len(pivots) == 0:
+        return pivots
+    else:
+        pivot_symmetries = np.array([count_mirror_symmetries(spectrum, pivot.center()) for pivot in pivots])
+        pivot_initial_b_ions = np.array([pivot.initial_b_ion(spectrum) != None for pivot in pivots])
+        pivot_terminal_y_ions = np.array([pivot.terminal_y_ion(spectrum) != None for pivot in pivots])
+        pivot_residues = np.array([residue_lookup(pivot.gap()) for pivot in pivots])
+        try:
+            viable = pivot_symmetries > symmetry_threshold
+            viable *= pivot_initial_b_ions
+            viable *= pivot_terminal_y_ions
+        except Exception as e:
+            print(e)
+            print(pivots)
+            print(viable)
+            print(pivot_initial_b_ions)
+            print(pivot_terminal_y_ions)
+            raise e
+        if any(pivot_residues != 'X'):
+            viable *= pivot_residues != 'X'
+        n = len(pivots)
+        return [pivots[i] for i in range(n) if viable[i]]
 
 def _reconstruct_pivots(
     spectrum: np.ndarray,
@@ -268,6 +285,7 @@ def construct_viable_pivots(
     pivots = _construct_viable_pivots(spectrum, symmetry_threshold, gap_indices, tolerance)
     viable_pivots = _filter_viable_pivots(spectrum, symmetry_threshold, pivots)
     if len(viable_pivots) == 0:
-        print("!!! no pivots found")
+        #print("!!! no pivots found")
+        return []
     else:
         return viable_pivots

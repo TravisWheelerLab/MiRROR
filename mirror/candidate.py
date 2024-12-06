@@ -47,6 +47,10 @@ class Candidate:
         called_affix_b = call_sequence_from_path(spectrum, affix_b)
         forward_seq = called_affix_a + ([pivot_res] if pivot_res != "" else []) + reverse_called_sequence(called_affix_b)
         backward_seq = reverse_called_sequence(forward_seq)
+        self._path_affixes = (
+            affix_a,
+            affix_b
+        )
         self._boundary = boundary
         self._affixes = (
             called_affix_a,
@@ -96,14 +100,19 @@ def construct_candidates(
                 # if one of the affixes wasn't extended,
                 # or if they don't end at the same position,
                 # we want to use the pivot residue.
-                if ((-1 not in end_a) or (-1 not in end_b)) or (end_a != end_b):
-                    yield Candidate(
-                        aug_spectrum, 
-                        ext_afx_a, 
-                        ext_afx_b, 
-                        boundary,
-                        pivot_res)
-                else:
+                yield Candidate(
+                    aug_spectrum, 
+                    ext_afx_a, 
+                    ext_afx_b, 
+                    boundary,
+                    pivot_res)
+                yield Candidate(
+                    aug_spectrum, 
+                    ext_afx_a, 
+                    ext_afx_b, 
+                    boundary,
+                    '')
+                if ((-1 in end_a) and (-1 in end_b)) and (end_a == end_b):
                     # otherwise, if the extensions overlap, 
                     # they already contain the pivot residue;
                     # we don't want to repeat it.
@@ -117,11 +126,11 @@ def construct_candidates(
                             ext_afx_a, 
                             ext_afx_b, 
                             boundary,
-                            "")
+                            '')
                     else:
                         yield Candidate(
                             aug_spectrum, 
                             ext_afx_a, 
                             ext_afx_b[:-overlap + 1], 
                             boundary,
-                            "")
+                            '')

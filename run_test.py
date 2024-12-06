@@ -1,6 +1,6 @@
 import itertools
 from time import time
-from copy import copy
+from copy import copy, deepcopy
 import sys, os
 
 import numpy as np
@@ -90,7 +90,7 @@ class TestData:
     def draw_graphs(self, pivot_no, name_gen = None):
         if name_gen == None:
             name_gen = lambda x: f"drawings/{self.peptide}_p{pivot_no}_{x}.png"
-        asc, desc = copy(self.graphs[pivot_no])
+        asc, desc = deepcopy(self.graphs[pivot_no])
         self._draw_graph(asc, name_gen("asc"))
         self._draw_graph(desc, name_gen("desc"))
 
@@ -131,7 +131,10 @@ def eval_graphs(data: TestData):
         # filter out bad gaps
         negative_gaps = pivot.negative_index_pairs()
         gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in negative_gaps]
-        # 
+        # also filter out the pivot pairs, because we don't want to sequence them twice!
+        if type(pivot) == mirror.pivot.Pivot:
+            pivot_gaps = list(pivot.index_pairs())
+            gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in pivot_gaps]
         asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(sym_spectrum, gap_ind, pivot)
         data.set_graphs(pivot_no, asc_graph, desc_graph)
         graphs.append((asc_graph, desc_graph))
@@ -168,7 +171,7 @@ def eval_candidates(data: TestData):
         for cand in candidates:
             cand_seqs = cand.sequences()
             optimum, optimizer = cand.edit_distance(peptide)
-            all_candidates.append(cand)
+            all_candidates.append((idx, cand))
             if optimum == 0:
                 matches.append(cand_seqs[optimizer])    
     data.set_candidates(all_candidates)
@@ -195,7 +198,7 @@ def measure_error_distance(data: TestData):
     if len(data.matches) > 0:
         return 0
     elif len(data.candidates) > 0:
-        candidate_errs = [candidate.edit_distance(target)[0] for candidate in data.candidates]
+        candidate_errs = [candidate.edit_distance(target)[0] for (_, candidate) in data.candidates]
         return min(candidate_errs)
     else:
         return len(data.peptide)
@@ -206,7 +209,7 @@ def measure_error_distribution(data: TestData):
     if overall_err == n:
         return [np.ones(n)]
     else:
-        results = [(cand,cand.edit_distance(data.peptide)) for cand in data.candidates]
+        results = [(cand,cand.edit_distance(data.peptide)) for (_, cand) in data.candidates]
         best_seqs = [cand.sequences()[minimizer].replace("I/L", 'J').replace(' ', '')
             for (cand,(min_err, minimizer)) in results if min_err == overall_err]
         aligner = Align.PairwiseAligner()
@@ -242,6 +245,9 @@ def run_on_seqs(seqs, path_miss, path_crash):
             except SystemExit:
                 os._exit(130)
         except Exception as e:
+            print("Crash")
+            print(pep)
+            print(e)
             raise e
             crashes.append(data)
     miss_peptides = [data.peptide for data in misses]
@@ -269,7 +275,7 @@ def plot_hist(x: list[int], width = 60):
     
     lo = min(counts)
     hi = max(counts)
-    rng = hi - lo
+    rng = hi - lo + 1
     print('-' * (width + 20))
     for i in range(len(counts)):
         frac = (counts[i] - lo) / rng
@@ -316,19 +322,24 @@ if __name__ == '__main__':
         print(f"min dist:\t{min(miss_distances)}")
         print(f"max dist:\t{max(miss_distances)}")
         print(f"avg dist:\t{np.mean(miss_distances)}")
-        print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}")
+        print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")
         for data in misses:
-            input()
             target_str = ' '.join(candidate.construct_target(data.peptide))
-            error_description = []
-            error_description.append(target_str)
-            error_description.append('-' * len(target_str))
             if len(data.candidates) == 0:
-                error_description.append("no match!")
-            for pivot_no, cand in enumerate(data.candidates):
+                print(target_str, "- no match")
+                continue
+            input()
+            print(target_str)
+            print('-' * len(target_str))
+            if len(data.candidates) == 0:
+                print("no match!")
+            data_candidates = [(pivot_no, cand, *cand.edit_distance(data.peptide)) for (pivot_no, cand) in data.candidates]
+            data_candidates.sort(key = lambda x: x[2])
+            for pivot_no, cand, optimum, optimizer in data_candidates:
                 data.draw_graphs(pivot_no, name_gen = lambda x: f"current_{x}.png")
-                best_query = cand.sequences()[cand.edit_distance(data.peptide)[1]]
-                error_description.append(best_query)
+                optimum, optimizer = cand.edit_distance(data.peptide)
+                best_query = cand.sequences()[optimizer]
+                print(best_query)
                 pivot = data.viable_pivots[pivot_no]
                 pivot_res = util.residue_lookup(pivot.gap())
                 def offset_gaps(pivot, spectrum):
@@ -339,16 +350,17 @@ if __name__ == '__main__':
                         (inds_a[1], inds_b[1]),
                         (inds_a[1], inds_b[0]),
                         (inds_a[0], inds_b[1])]
-                    offset_gaps = [spectrum[max(e)] - spectrum[min(e)] for e in offset_pairs]
+                    offset_gaps = [spectrum[i] - spectrum[j] for (i,j) in offset_pairs]
                     offset_res = [util.residue_lookup(g) for g in offset_gaps]
                     return offset_gaps, offset_res
                 off_gaps, off_res = offset_gaps(pivot, data.sym_spectrum[pivot_no])
                 offsets = list(zip(off_res, off_gaps))
                 pivot_type = str(type(pivot))
                 boundary = cand._boundary
+                path_affixes = cand._path_affixes
                 affixes = cand._affixes
-                error_description.append(f"\tboundary: {boundary}\n\taffixes: {affixes}\n\tpivot: {pivot_res} {pivot_type}\n\toffset: {offsets}")
-                if len(data.candidates) > 1:
-                    input("(next candidate)")
-            error_desc_str = '\n'.join(error_description)
-            print(error_desc_str)
+                print(f"\tdistance: {optimum}\n\tboundary: {boundary}\n\tpaths: {path_affixes}\n\taffixes: {affixes}\n\tpivot: {pivot_res} {pivot} {pivot_type}\n\toffset: {offsets}")
+                try:
+                    input()
+                except KeyboardInterrupt:
+                    break
