@@ -7,11 +7,13 @@ import numpy as np
 import networkx as nx
 
 import mirror
-from mirror import io, util, gap, pivot, boundary, graph_util, spectrum_graph, sequence
+from mirror import io, util, gap, pivot, boundary, graph_util, spectrum_graph, candidate
 
 from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
 
 from editdistance import eval as edit_distance
+
+from Bio import Align
 
 def all_edges(graph):
     return sorted([(i, j) for (i, j) in graph.edges if i != -1 and j != -1])
@@ -115,31 +117,21 @@ def eval_viable_pivots(data: TestData):
     data.set_viable_pivots(viable_pivots)
     data.set_exp_sym_time(t_elap)
     return viable_pivots
-
-def eval_old_graphs(data: TestData):
-    graphs = []
-    for pivot_no, pivot in enumerate(data.viable_pivots):
-        asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs_from_spectrum(data.spectrum, pivot)
-        data.set_graphs(pivot_no, asc_graph, desc_graph)
-        graphs.append((asc_graph, desc_graph))
-    return graphs
         
 def eval_graphs(data: TestData):
     graphs = []
     for pivot_no, pivot in enumerate(data.viable_pivots):
-        asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(data.spectrum, data.gaps, pivot)
-        data.set_graphs(pivot_no, asc_graph, desc_graph)
-        graphs.append((asc_graph, desc_graph))
-    return graphs
-        
-def eval_new_graphs(data: TestData):
-    graphs = []
-    for pivot_no, pivot in enumerate(data.viable_pivots):
+        # identify boundary y and b ions, augment spectrum to include mirrored boundaries.
         sym_spectrum, pivot = mirror.boundary.create_symmetric_boundary(data.spectrum, pivot)
         data.set_symmetric_spectrum(pivot_no, sym_spectrum)
+        # reconstruct gap set over the augmented spectrum
         gap_inds = [mirror.gap.find_gaps(sym_spectrum, mirror.gap.GapTargetConstraint(amino_mass, mirror.util.GAP_TOLERANCE))
                     for amino_mass in mirror.util.AMINO_MASS_MONO]
         gap_ind = list(itertools.chain.from_iterable(gap_inds))
+        # filter out bad gaps
+        negative_gaps = pivot.negative_index_pairs()
+        gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in negative_gaps]
+        # 
         asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(sym_spectrum, gap_ind, pivot)
         data.set_graphs(pivot_no, asc_graph, desc_graph)
         graphs.append((asc_graph, desc_graph))
@@ -150,83 +142,38 @@ def eval_paths(data: TestData):
     for i in range(data.num_pivots()):
         asc_graph, desc_graph = data.graphs[i]
 
-        paired_paths = mirror.graph_util.all_weighted_paired_simple_paths(
+        paired_paths = list(mirror.graph_util.all_weighted_paired_simple_paths(
             asc_graph, 
             desc_graph, 
             mirror.spectrum_graph.GAP_KEY, 
-            mirror.spectrum_graph.GAP_COMPARATOR)
+            mirror.spectrum_graph.GAP_COMPARATOR))
         
-        extended_paired_paths = list(mirror.graph_util.extend_truncated_paths(paired_paths, asc_graph, desc_graph))
-
-        data.set_paths(i, extended_paired_paths)
-        paths.append(extended_paired_paths)
+        data.set_paths(i, paired_paths)
+        paths.append(paired_paths)
     return paths
 
 def eval_candidates(data: TestData):
+    peptide = data.peptide
+    spectrum = data.spectrum
     pivots = data.viable_pivots
-    paths = data.paths
-    target = construct_target(data.peptide)
     matches = []
-    candidates = []
+    all_candidates = []
     n_pivots = len(pivots)
     for idx in range(n_pivots):
         pivot = pivots[idx]
-        pivot_res = mirror.util.residue_lookup(pivots[idx].gap())
-        pathspace = paths[idx]
-        n_paths = len(pathspace)
-        residue_affixes = [call_sequence_from_path(data.sym_spectrum[idx], p) for p in pathspace]
-        n_affixes = len(residue_affixes)
-        for i in range(n_affixes):
-            for j in range(i + 1, n_affixes):
-                initial_b = pivot.initial_b_ion(data.spectrum)[1]
-                terminal_y = pivot.terminal_y_ion(data.spectrum)[1]
-                called_seq = residue_affixes[i] + f" {pivot_res} " + reverse_called_sequence(residue_affixes[j])
-                candidate = apply_boundary_residues(called_seq, initial_b, terminal_y)
-                alt_candidate = apply_boundary_residues(reverse_called_sequence(called_seq), initial_b, terminal_y)
-                candidates.append(candidate)
-                candidates.append(alt_candidate)
-                if target == candidate:
-                    matches.append(candidate)
-                if target == alt_candidate:
-                    matches.append(alt_candidate)
-    data.set_candidates(candidates)
+        affixes = data.paths[idx]
+        augmented_spectrum = data.sym_spectrum[idx]
+        graphs = data.graphs[idx]
+        candidates = mirror.candidate.construct_candidates(spectrum, augmented_spectrum, pivot, graphs, affixes)
+        for cand in candidates:
+            cand_seqs = cand.sequences()
+            optimum, optimizer = cand.edit_distance(peptide)
+            all_candidates.append(cand)
+            if optimum == 0:
+                matches.append(cand_seqs[optimizer])    
+    data.set_candidates(all_candidates)
     data.set_matches(matches)
-    return candidates, matches
-
-def _call_sequence_from_path(spectrum, paired_path):
-    for half_path in mirror.graph_util.unzip_paired_path(paired_path):
-        edges = mirror.graph_util.path_to_edges(half_path)
-        get_res = lambda e: mirror.util.residue_lookup(spectrum[max(e)] - spectrum[min(e)])
-        yield list(map(get_res, edges))
-
-def call_sequence_from_path(spectrum, paired_path):
-    seq1, seq2 = _call_sequence_from_path(spectrum, paired_path)
-    sequence = ''
-    for (res1, res2) in zip(seq1, seq2):
-        if res1 == 'X' and res2 != 'X':
-            sequence += res2
-        elif res1 != 'X' and res2 == 'X':
-            sequence = res1 
-        elif res1 == res2:
-            sequence += res1
-        else:
-            sequence += f"{res1}/{res2}"
-        sequence += ' '
-    return sequence.replace('X', 'x').strip()
-
-def check_match(target, candidate):
-    return "\t[ ✔️ ]" if candidate == target else ""
-
-def reverse_called_sequence(sequence):
-    return ' '.join(sequence.split(' ')[::-1])
-
-def apply_boundary_residues(candidate, initial_b, terminal_y):
-    return initial_b + ' ' + candidate + ' ' + terminal_y
-
-def construct_target(peptide):
-    target = [mirror.util.mask_ambiguous_residues(r) for r in peptide]
-    target = ' '.join(target)
-    return target
+    return all_candidates, matches
 
 def time_op(op, arg, table, name):
     t_init = time()
@@ -238,21 +185,34 @@ def run(data):
     times = np.zeros(5)
     gaps = time_op(eval_gap, data, times, 0)
     pivots = time_op(eval_viable_pivots, data, times, 1)
-    graphs = time_op(eval_new_graphs, data, times, 2)
+    graphs = time_op(eval_graphs, data, times, 2)
     paths = time_op(eval_paths, data, times, 3)
     candidates, matches = time_op(eval_candidates, data, times, 4)
     return candidates, matches, data, times
 
-def measure_error(data: TestData):
-    target = construct_target(data.peptide).replace(' ', '').replace("I/L", 'J')
+def measure_error_distance(data: TestData):
+    target = data.peptide
     if len(data.matches) > 0:
         return 0
     elif len(data.candidates) > 0:
-        candidates = [x.replace(' ', '').replace("I/L", 'J') for x in data.candidates]
-        candidates.sort(key = lambda x: edit_distance(target, x))
-        return edit_distance(target, candidates[0])
+        candidate_errs = [candidate.edit_distance(target)[0] for candidate in data.candidates]
+        return min(candidate_errs)
     else:
         return len(data.peptide)
+
+def measure_error_distribution(data: TestData):
+    overall_err = measure_error_distance(data)
+    n = len(data.peptide)
+    if overall_err == n:
+        return [np.ones(n)]
+    else:
+        results = [(cand,cand.edit_distance(data.peptide)) for cand in data.candidates]
+        best_seqs = [cand.sequences()[minimizer].replace("I/L", 'J').replace(' ', '')
+            for (cand,(min_err, minimizer)) in results if min_err == overall_err]
+        aligner = Align.PairwiseAligner()
+        alignment_indices = [aligner.align(data.peptide, seq)[0].indices[0,:] for seq in best_seqs]
+        error_vectors = [np.array([1 if v == -1 else 0 for v in ind]) for ind in alignment_indices]
+        return error_vectors
 
 def run_on_seqs(seqs, path_miss, path_crash):
     N = len(seqs)
@@ -282,6 +242,7 @@ def run_on_seqs(seqs, path_miss, path_crash):
             except SystemExit:
                 os._exit(130)
         except Exception as e:
+            raise e
             crashes.append(data)
     miss_peptides = [data.peptide for data in misses]
     crash_peptides = [data.peptide for data in crashes]
@@ -291,11 +252,11 @@ def run_on_seqs(seqs, path_miss, path_crash):
         mirror.io.save_strings_to_fasta(path_miss, miss_peptides, lambda i: f"miss_{i}")
     if path_crash != None and n_crashes > 0:
         mirror.io.save_strings_to_fasta(path_crash, crash_peptides, lambda i: f"crash_{i}")
-    print("misses:", n_misses / N, (n_misses, N))
-    print("crashes:", n_crashes / N, (n_crashes, N))
-    print("observed times\t\t", times_k, sum(times_k))
-    print("normalized times\t", times_k / sum(times_k))
-    print("max", (local_max_time,local_max_peptide,local_max_table / sum(local_max_table)))
+    print("| misses:", n_misses / N, (n_misses, N))
+    print("| crashes:", n_crashes / N, (n_crashes, N))
+    print(f"| observed times\t{times_k} {sum(times_k)}")
+    print(f"| normalized times\t{times_k / sum(times_k)}")
+    print(f"| max individual time:\n\t| elapsed:\t{local_max_time}\n\t| normalized:\t{local_max_table / sum(local_max_table)}\n\t| peptide:\t{local_max_peptide}")
     return times_k, misses, crashes
 
 def plot_hist(x: list[int], width = 60):
@@ -329,7 +290,7 @@ if __name__ == '__main__':
         print(f"record {record}")
         print(f"trials {N}")
         for k in peptide_lengths:
-            print(f"length {k}")
+            print(f"\nlength {k}")
             seqs = [mirror.util.generate_random_tryptic_peptide(k) for _ in range(N)]
             times_k, _, __ = run_on_seqs(
                 seqs, 
@@ -342,7 +303,7 @@ if __name__ == '__main__':
         fasta_path = sys.argv[2]
         seqs = mirror.io.load_fasta_as_strings(fasta_path)
         _,  misses, crashes = run_on_seqs(seqs, None, None)
-        miss_errors = [measure_error(miss) for miss in misses]
+        miss_distances = [measure_error_distance(data) for data in misses]
         num_pivots = 0
         num_virtual = 0
         for data in misses:
@@ -351,8 +312,43 @@ if __name__ == '__main__':
             else:
                 num_pivots += 1
         print("\nedit distance of errors:")
-        plot_hist(miss_errors)
-        print(f"min dist:\t{min(miss_errors)}")
-        print(f"max dist:\t{max(miss_errors)}")
-        print(f"avg dist:\t{np.mean(miss_errors)}")
+        plot_hist(miss_distances)
+        print(f"min dist:\t{min(miss_distances)}")
+        print(f"max dist:\t{max(miss_distances)}")
+        print(f"avg dist:\t{np.mean(miss_distances)}")
         print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}")
+        for data in misses:
+            input()
+            target_str = ' '.join(candidate.construct_target(data.peptide))
+            error_description = []
+            error_description.append(target_str)
+            error_description.append('-' * len(target_str))
+            if len(data.candidates) == 0:
+                error_description.append("no match!")
+            for pivot_no, cand in enumerate(data.candidates):
+                data.draw_graphs(pivot_no, name_gen = lambda x: f"current_{x}.png")
+                best_query = cand.sequences()[cand.edit_distance(data.peptide)[1]]
+                error_description.append(best_query)
+                pivot = data.viable_pivots[pivot_no]
+                pivot_res = util.residue_lookup(pivot.gap())
+                def offset_gaps(pivot, spectrum):
+                    true_gap = pivot.gap()
+                    inds_a, inds_b = pivot.index_pairs()
+                    offset_pairs = [
+                        (inds_a[0], inds_b[0]),
+                        (inds_a[1], inds_b[1]),
+                        (inds_a[1], inds_b[0]),
+                        (inds_a[0], inds_b[1])]
+                    offset_gaps = [spectrum[max(e)] - spectrum[min(e)] for e in offset_pairs]
+                    offset_res = [util.residue_lookup(g) for g in offset_gaps]
+                    return offset_gaps, offset_res
+                off_gaps, off_res = offset_gaps(pivot, data.sym_spectrum[pivot_no])
+                offsets = list(zip(off_res, off_gaps))
+                pivot_type = str(type(pivot))
+                boundary = cand._boundary
+                affixes = cand._affixes
+                error_description.append(f"\tboundary: {boundary}\n\taffixes: {affixes}\n\tpivot: {pivot_res} {pivot_type}\n\toffset: {offsets}")
+                if len(data.candidates) > 1:
+                    input("(next candidate)")
+            error_desc_str = '\n'.join(error_description)
+            print(error_desc_str)

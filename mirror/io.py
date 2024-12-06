@@ -12,6 +12,9 @@ def load_fasta_records(path_to_fasta: str):
         records = list(SeqIO.parse(handle, "fasta"))
     return records
 
+def load_fasta_as_strings(path_to_fasta: str):
+    return list(map(lambda x: str(x.seq), load_fasta_records(path_to_fasta)))
+
 def save_strings_to_fasta(path_to_fasta: str, seqs: list[str], get_id: lambda i: str(i)):
     n = len(seqs)
     records = [SeqRecord.SeqRecord(Seq.Seq(seqs[i]), id=get_id(i), name="", description="") for i in range(n)]

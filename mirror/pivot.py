@@ -60,6 +60,14 @@ class Pivot:
     ):
         y = list(find_terminal_y_ion(spectrum, self.outer_left()))
         return y[-1] if len(y) > 0 else None
+    
+    def negative_index_pairs(self):
+        """index pairs that should not be present in the gap set."""
+        inds_a, inds_b = self.index_pairs()
+        return [(inds_a[0], inds_b[0]),
+            (inds_a[1], inds_b[1]),
+            (inds_a[1], inds_b[0]),
+            (inds_a[0], inds_b[1])]
 
     def __repr__(self):
         return f"Pivot{*self.peak_pairs(), *self.index_pairs()}"
@@ -68,13 +76,13 @@ class VirtualPivot(Pivot):
 
     def __init__(self, index_data, virtual_center):
         self.index_data = index_data
-        self.center = virtual_center
+        self._center = virtual_center
     
     def peaks(self):
         raise NotImplementedError("Virtual pivots are not associated to peaks.")
 
     def indices(self):
-        return self.indices
+        return self.index_data
 
     def peak_pairs(self):
         raise NotImplementedError("Virtual pivots are not associated to peaks.")
@@ -95,13 +103,13 @@ class VirtualPivot(Pivot):
         return self.index_data[1]
 
     def center(self):
-        return self.center
+        return self._center
     
     def gap(self):
         return -1
 
     def __repr__(self):
-        return f"VirtualPivot{self.peaks(), self.indices()}"
+        return f"VirtualPivot{self.indices(), self.center()}"
         
 
 #=============================================================================#
@@ -230,16 +238,15 @@ def _reconstruct_pivots(
                 all_indices = pivots[i].indices + pivots[j].indices
                 yield _construct_virtual_pivot(spectrum, min(all_indices), max(all_indices), reconstructed_center)
 
-def construct_viable_pivots(
+def _construct_viable_pivots(
     spectrum: np.ndarray,
     symmetry_threshold: float,
     gap_indices: list[tuple[int,int]],
-    tolerance = INTERGAP_TOLERANCE,
+    tolerance: float,
 ):
     # look for overlapping pivots; if none are found, fall back on disjoint pivots.
     pivots = find_overlapping_pivots(spectrum, gap_indices, INTERGAP_TOLERANCE)
     if len(pivots) == 0:
-        print("using disjoint pivots")
         disjoint_pivots = find_disjoint_pivots(spectrum, gap_indices, INTERGAP_TOLERANCE)
         mode_center = mode(pivot.center() for pivot in disjoint_pivots)
         pivot = _construct_virtual_pivot(spectrum, 0, len(spectrum), mode_center)
@@ -248,7 +255,19 @@ def construct_viable_pivots(
     # discard low-scoring pivots. if there are no viable pivots, reconstruct.
     viable_pivots = _filter_viable_pivots(spectrum, symmetry_threshold, pivots)
     if len(viable_pivots) == 0:
-        print("using reconstructed pivots")
         return list(_reconstruct_pivots(spectrum, symmetry_threshold, pivots))
+    else:
+        return viable_pivots
+
+def construct_viable_pivots(
+    spectrum: np.ndarray,
+    symmetry_threshold: float,
+    gap_indices: list[tuple[int,int]],
+    tolerance: float = INTERGAP_TOLERANCE,
+):
+    pivots = _construct_viable_pivots(spectrum, symmetry_threshold, gap_indices, tolerance)
+    viable_pivots = _filter_viable_pivots(spectrum, symmetry_threshold, pivots)
+    if len(viable_pivots) == 0:
+        print("!!! no pivots found")
     else:
         return viable_pivots

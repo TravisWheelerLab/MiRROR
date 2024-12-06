@@ -26,11 +26,11 @@ def _half_graph_edges(
 ):
     n_gaps = len(gaps)
     if orientation == SpectrumGraphOrientation.ASCENDING:
-        reverse_edges = False
+        reverse_edges = True
         gap_range = range(n_gaps - 1, -1, -1)
         gap_constraint = lambda i: i >= pivot.inner_right()
     elif orientation == SpectrumGraphOrientation.DESCENDING:
-        reverse_edges = True
+        reverse_edges = False
         gap_range = range(0, n_gaps)
         gap_constraint = lambda i: i <= pivot.inner_left()
     else:
@@ -186,6 +186,6 @@ def find_mirrored_paths(
     
     mirrored_paths = all_weighted_paired_simple_paths(ascending_graph, descending_graph, gap_key, gap_comparator)
     
-    extended_paths = extend_truncated_paths(mirrored_paths, ascending_graph, descending_graph)
+    #extended_paths = extend_truncated_paths(mirrored_paths, ascending_graph, descending_graph)
 
-    return list(extended_paths)
+    return list(mirrored_paths)

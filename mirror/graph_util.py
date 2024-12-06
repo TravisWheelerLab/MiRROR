@@ -165,11 +165,11 @@ def extend_truncated_paths(
         if G_terminated and H_terminated:
             yield paired_path
         elif not G_terminated:
-            extensions = nx.algorithms.simple_paths.all_simple_paths(G, G_target, G_sinks)
+            extensions = list(nx.algorithms.simple_paths.all_simple_paths(G, G_target, G_sinks))
             for path_extension in extensions:
                 yield paired_path + [(node, -1) for node in path_extension[1:]]
         elif not H_terminated:
-            extensions = nx.algorithms.simple_paths.all_simple_paths(H, H_target, H_sinks)
+            extensions = list(nx.algorithms.simple_paths.all_simple_paths(H, H_target, H_sinks))
             for path_extension in extensions:
                 yield paired_path + [(-1, node) for node in path_extension[1:]]
         else:
@@ -202,8 +202,8 @@ def paired_path_to_edge_set(
 
 def find_edge_disjoint_paired_paths(
     paired_paths,
-    pair_mode = "table",
+    mode = "table",
 ):
     "associates between paths that do not share any edges."
     path_edge_sets = list(map(paired_path_to_edge_set, paired_paths))
-    return disjoint_pairs(path_edge_sets, pair_mode)
+    return disjoint_pairs(path_edge_sets, mode)
