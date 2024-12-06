@@ -91,8 +91,8 @@ def construct_candidates(
     for (i, j) in disjoint_afx_ind:
         afx_a = path_affixes[i]
         afx_b = path_affixes[j]
-        extension_a = list(extend_truncated_paths([afx_a], *spectrum_graphs))
-        extension_b = list(extend_truncated_paths([afx_b], *spectrum_graphs))
+        extension_a = [afx_a] + list(extend_truncated_paths([afx_a], *spectrum_graphs))
+        extension_b = [afx_b] + list(extend_truncated_paths([afx_b], *spectrum_graphs))
         for ext_afx_a in extension_a:
             for ext_afx_b in extension_b:
                 end_a = ext_afx_a[-1]
@@ -120,17 +120,36 @@ def construct_candidates(
                         if ext_afx_a[-overlap] != ext_afx_b[-overlap]:
                             overlap -= 1
                             break
-                    if overlap == 1:
+                    if overlap > 0:
                         yield Candidate(
                             aug_spectrum, 
-                            ext_afx_a, 
+                            ext_afx_a[:-overlap], 
                             ext_afx_b, 
                             boundary,
                             '')
-                    else:
                         yield Candidate(
                             aug_spectrum, 
                             ext_afx_a, 
-                            ext_afx_b[:-overlap + 1], 
+                            ext_afx_b[:-overlap], 
                             boundary,
                             '')
+                    #if overlap == 1:
+                    #    yield Candidate(
+                    #        aug_spectrum, 
+                    #        ext_afx_a, 
+                    #        ext_afx_b, 
+                    #        boundary,
+                    #        '')
+                    #else:
+                    #    yield Candidate(
+                    #        aug_spectrum, 
+                    #        ext_afx_a[:-overlap], 
+                    #        ext_afx_b, 
+                    #        boundary,
+                    #        '')
+                    #    yield Candidate(
+                    #        aug_spectrum, 
+                    #        ext_afx_a, 
+                    #        ext_afx_b[:-overlap], 
+                    #        boundary,
+                    #        '')

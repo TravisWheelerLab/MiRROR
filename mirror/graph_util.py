@@ -163,8 +163,9 @@ def extend_truncated_paths(
         G_terminated = (G_target in G_sinks)
         H_terminated = (H_target in H_sinks)
         if G_terminated and H_terminated:
-            yield paired_path
-        elif not G_terminated:
+            continue
+            #yield paired_path
+        if not G_terminated:
             extensions = list(nx.algorithms.simple_paths.all_simple_paths(G, G_target, G_sinks))
             for path_extension in extensions:
                 yield paired_path + [(node, -1) for node in path_extension[1:]]

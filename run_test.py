@@ -284,6 +284,18 @@ def plot_hist(x: list[int], width = 60):
             bars = max(bars, 1)
         print(f"{vals[i]}\t|" + "o" * bars + f"  ({counts[i]})")
     print('-' * (width + 20))
+    
+def offset_gaps(pivot, spectrum):
+    true_gap = pivot.gap()
+    inds_a, inds_b = pivot.index_pairs()
+    offset_pairs = [
+        (inds_a[0], inds_b[0]),
+        (inds_a[1], inds_b[1]),
+        (inds_a[1], inds_b[0]),
+        (inds_a[0], inds_b[1])]
+    offset_gaps = [spectrum[i] - spectrum[j] for (i,j) in offset_pairs]
+    offset_res = [util.residue_lookup(g) for g in offset_gaps]
+    return offset_gaps, offset_res
 
 if __name__ == '__main__':
     import sys
@@ -342,24 +354,15 @@ if __name__ == '__main__':
                 print(best_query)
                 pivot = data.viable_pivots[pivot_no]
                 pivot_res = util.residue_lookup(pivot.gap())
-                def offset_gaps(pivot, spectrum):
-                    true_gap = pivot.gap()
-                    inds_a, inds_b = pivot.index_pairs()
-                    offset_pairs = [
-                        (inds_a[0], inds_b[0]),
-                        (inds_a[1], inds_b[1]),
-                        (inds_a[1], inds_b[0]),
-                        (inds_a[0], inds_b[1])]
-                    offset_gaps = [spectrum[i] - spectrum[j] for (i,j) in offset_pairs]
-                    offset_res = [util.residue_lookup(g) for g in offset_gaps]
-                    return offset_gaps, offset_res
-                off_gaps, off_res = offset_gaps(pivot, data.sym_spectrum[pivot_no])
-                offsets = list(zip(off_res, off_gaps))
                 pivot_type = str(type(pivot))
                 boundary = cand._boundary
                 path_affixes = cand._path_affixes
                 affixes = cand._affixes
-                print(f"\tdistance: {optimum}\n\tboundary: {boundary}\n\tpaths: {path_affixes}\n\taffixes: {affixes}\n\tpivot: {pivot_res} {pivot} {pivot_type}\n\toffset: {offsets}")
+                print(f"\tdistance: {optimum}\n\tboundary: {boundary}\n\tpaths: {path_affixes}\n\taffixes: {affixes}\n\tpivot: {pivot_res} {pivot} {pivot_type}")
+                if pivot_type == mirror.pivot.Pivot:
+                    off_gaps, off_res = offset_gaps(pivot, data.sym_spectrum[pivot_no])
+                    offsets = list(zip(off_res, off_gaps))
+                    print(f"\toffset: {offsets}")
                 try:
                     input()
                 except KeyboardInterrupt:
