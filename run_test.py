@@ -33,6 +33,17 @@ class TestData:
         self.candidates = []
         self.matches = []
         self.exp_sym_time = 0.0
+    
+    def add_noise(self, noise: float):
+        spectrum = list(self.spectrum)
+        max_peak = max(spectrum)
+        min_peak = min(spectrum)
+        n_peaks = len(spectrum)
+        n_noise = int(noise * n_peaks)
+        noise = list(np.random.uniform(low = min_peak / 2, high = max_peak + min_peak, size = n_noise))
+        noisy_spectrum = spectrum + noise
+        noisy_spectrum.sort()
+        self.spectrum = np.array(noisy_spectrum)
 
     def set_exp_sym_time(self, time):
         self.exp_sym_time = time
@@ -184,8 +195,10 @@ def time_op(op, arg, table, name):
     table[name] = time() - t_init
     return val
 
-def run(data):
+def run(data, noise = False):
     times = np.zeros(5)
+    if noise:
+        data.add_noise(noise)
     gaps = time_op(eval_gap, data, times, 0)
     pivots = time_op(eval_viable_pivots, data, times, 1)
     graphs = time_op(eval_graphs, data, times, 2)
@@ -217,7 +230,7 @@ def measure_error_distribution(data: TestData):
         error_vectors = [np.array([1 if v == -1 else 0 for v in ind]) for ind in alignment_indices]
         return error_vectors
 
-def run_on_seqs(seqs, path_miss, path_crash):
+def run_on_seqs(seqs, path_miss, path_crash, noise = False):
     N = len(seqs)
     local_max_time = 0
     local_max_peptide = ""
@@ -229,7 +242,7 @@ def run_on_seqs(seqs, path_miss, path_crash):
         pep = seqs[i]
         data = TestData(pep)
         try:
-            __, matches, data2, times_individual = run(data)
+            __, matches, data2, times_individual = run(data, noise = noise)
             times_k += times_individual
             if sum(times_individual) > local_max_time:
                 local_max_time = sum(times_individual)
@@ -317,7 +330,7 @@ if __name__ == '__main__':
             times_overall += times_k
         print("overall observed times\t\t", times_overall, sum(times_overall))
         print("overall normalized times\t", times_overall / sum(times_overall))
-    elif mode == "fasta":
+    if mode == "fasta":
         fasta_path = sys.argv[2]
         seqs = mirror.io.load_fasta_as_strings(fasta_path)
         _,  misses, crashes = run_on_seqs(seqs, None, None)
@@ -367,3 +380,32 @@ if __name__ == '__main__':
                     input()
                 except KeyboardInterrupt:
                     break
+    if mode == "random+noise":
+        N = int(sys.argv[2])
+        peptide_lengths = list(map(int, sys.argv[3].split(',')))
+        noise = float(sys.argv[4])
+        times_overall = np.zeros(5)
+        print(f"trials {N}")
+        for k in peptide_lengths:
+            print(f"\nlength {k}")
+            seqs = [mirror.util.generate_random_tryptic_peptide(k) for _ in range(N)]
+            times_k, misses, crashes = run_on_seqs(
+                seqs, 
+                None, 
+                None,
+                noise = noise)
+            times_overall += times_k
+            miss_distances = [measure_error_distance(data) for data in misses]
+            num_pivots = 0
+            num_virtual = 0
+            for data in misses:
+                if any(type(pivot) == mirror.pivot.VirtualPivot for pivot in data.viable_pivots):
+                    num_virtual += 1
+                else:
+                    num_pivots += 1
+            print("\nedit distance of errors:")
+            plot_hist(miss_distances)
+            print(f"min dist:\t{min(miss_distances)}")
+            print(f"max dist:\t{max(miss_distances)}")
+            print(f"avg dist:\t{np.mean(miss_distances)}")
+            print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")

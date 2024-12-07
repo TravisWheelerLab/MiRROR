@@ -73,6 +73,9 @@ class Pivot:
 
     def __repr__(self):
         return f"Pivot{*self.peak_pairs(), *self.index_pairs()}"
+    
+    def __eq__(self, other):
+        return self.peaks() == other.peaks()
 
 class VirtualPivot(Pivot):
 
