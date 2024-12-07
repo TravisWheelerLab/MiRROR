@@ -133,23 +133,3 @@ def construct_candidates(
                             ext_afx_b[:-overlap], 
                             boundary,
                             '')
-                    #if overlap == 1:
-                    #    yield Candidate(
-                    #        aug_spectrum, 
-                    #        ext_afx_a, 
-                    #        ext_afx_b, 
-                    #        boundary,
-                    #        '')
-                    #else:
-                    #    yield Candidate(
-                    #        aug_spectrum, 
-                    #        ext_afx_a[:-overlap], 
-                    #        ext_afx_b, 
-                    #        boundary,
-                    #        '')
-                    #    yield Candidate(
-                    #        aug_spectrum, 
-                    #        ext_afx_a, 
-                    #        ext_afx_b[:-overlap], 
-                    #        boundary,
-                    #        '')
