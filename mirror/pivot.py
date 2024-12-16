@@ -182,19 +182,57 @@ def find_pivots(
             raise ValueError(f"malformed pivot! {p, q}")
     return pivots
 
-def find_overlapping_pivots(
-    spectrum,
-    gap_indices,
-    tolerance,
-):
-    return find_pivots(spectrum, gap_indices, PivotOverlapConstraint(tolerance))
-
 def find_disjoint_pivots(
     spectrum,
     gap_indices,
     tolerance,
 ):
     return find_pivots(spectrum, gap_indices, PivotDisjointConstraint(tolerance))
+
+def _find_overlapping_pivots(
+    spectrum,
+    gap_indices,
+    tolerance,
+):
+    n = len(spectrum)
+    for (i, i2) in gap_indices:
+        i_gap = spectrum[i2] - spectrum[i]
+        for j in range(i, i2):
+            for j2 in range(i2 + 1, n):
+                j_gap = spectrum[j2] - spectrum[j]
+                gap_dif = abs(i_gap - j_gap)
+                if gap_dif < tolerance:
+                    yield Pivot((spectrum[i], spectrum[i2]), (spectrum[j], spectrum[j2]), (i, i2), (j, j2))
+                elif j_gap > i_gap:
+                    break
+
+def find_overlapping_pivots(
+    spectrum,
+    gap_indices,
+    tolerance,
+):
+    return list(_find_overlapping_pivots(spectrum, gap_indices, tolerance))
+
+def _find_adjacent_pivots(
+    spectrum,
+    tolerance,
+):
+    n = len(spectrum)
+    for i in range(n - 4):
+        i2 = i + 1
+        i_gap = spectrum[i2] - spectrum[i]
+        j = i + 2
+        j2 = j + 1
+        j_gap = spectrum[j2] - spectrum[j]
+        if abs(i_gap - j_gap) < tolerance:
+            yield Pivot((spectrum[i], spectrum[i2]), (spectrum[j], spectrum[j2]), (i, i2), (j, j2))
+
+def find_adjacent_pivots(
+    spectrum,
+    tolerance,
+):
+    return list(_find_adjacent_pivots(spectrum, tolerance))
+
 
 #=============================================================================#
 # discerning (or otherwise constructing) good pivots.
@@ -277,16 +315,23 @@ def _construct_viable_pivots(
     else:
         return viable_pivots
 
+def _construct_all_pivots(
+    spectrum: np.ndarray,
+    gap_indices: list[tuple[int,int]],
+    tolerance: float,
+):
+
+    o_pivots = find_overlapping_pivots(spectrum, gap_indices, tolerance)
+    a_pivots = find_adjacent_pivots(spectrum, tolerance)
+    return o_pivots + a_pivots
+
 def construct_viable_pivots(
     spectrum: np.ndarray,
     symmetry_threshold: float,
     gap_indices: list[tuple[int,int]],
     tolerance: float = INTERGAP_TOLERANCE,
 ):
-    pivots = _construct_viable_pivots(spectrum, symmetry_threshold, gap_indices, tolerance)
+    pivots = _construct_all_pivots(spectrum, gap_indices, tolerance)
     viable_pivots = _filter_viable_pivots(spectrum, symmetry_threshold, pivots)
-    if len(viable_pivots) == 0:
-        #print("!!! no pivots found")
-        return []
-    else:
-        return viable_pivots
+    #print(len(viable_pivots), len(pivots))
+    return viable_pivots
