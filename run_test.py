@@ -27,6 +27,7 @@ class TestData:
         self.pivots = None
         self.pivot_mode = "-"
         self.viable_pivots = None
+        self.augmented_pivots = {}
         self.sym_spectrum = {}
         self.graphs = {}
         self.paths = {}
@@ -73,9 +74,13 @@ class TestData:
         self.viable_pivots = viable_pivots
         for pivot_no in range(len(viable_pivots)):
             self.sym_spectrum[pivot_no] = {}
+            self.augmented_pivots[pivot_no] = {}
             self.graphs[pivot_no] = {}
             self.paths[pivot_no] = {}
             self.boundary[pivot_no] = {}
+
+    def set_aug_pivot(self, pivot_no, augment_no, augmented_pivot):
+        self.augmented_pivots[pivot_no][augment_no] = augmented_pivot
 
     def set_symmetric_spectrum(self, pivot_no, augment_no, spectrum):
         self.sym_spectrum[pivot_no][augment_no] = spectrum
@@ -146,6 +151,7 @@ def eval_graphs(data: TestData):
         augments = mirror.boundary.create_symmetric_augmented_spectra(data.spectrum, pivot)
         for augment_no, (b_res, y_res, sym_spectrum, aug_pivot) in enumerate(augments):
             data.set_symmetric_spectrum(pivot_no, augment_no, sym_spectrum)
+            data.set_aug_pivot(pivot_no, augment_no, aug_pivot)
             # reconstruct gap set over the augmented spectrum
             gap_inds = [mirror.gap.find_gaps(sym_spectrum, mirror.gap.GapTargetConstraint(amino_mass, mirror.util.GAP_TOLERANCE))
                         for amino_mass in mirror.util.AMINO_MASS_MONO]
@@ -153,6 +159,7 @@ def eval_graphs(data: TestData):
             # filter out bad gaps
             negative_gaps = aug_pivot.negative_index_pairs()
             gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in negative_gaps]
+            gap_ind = [(i,j) for (i,j) in gap_ind if (j,i) not in negative_gaps]
             # also filter out the pivot pairs, because we don't want to sequence them twice!
             if type(aug_pivot) == mirror.pivot.Pivot:
                 pivot_gaps = list(aug_pivot.index_pairs())
@@ -345,56 +352,6 @@ if __name__ == '__main__':
             times_overall += times_k
         print("overall observed times\t\t", times_overall, sum(times_overall))
         print("overall normalized times\t", times_overall / sum(times_overall))
-    if mode == "fasta":
-        fasta_path = sys.argv[2]
-        seqs = mirror.io.load_fasta_as_strings(fasta_path)
-        _,  misses, crashes = run_on_seqs(seqs, None, None)
-        miss_distances = [measure_error_distance(data) for data in misses]
-        num_pivots = 0
-        num_virtual = 0
-        for data in misses:
-            if any(type(pivot) == mirror.pivot.VirtualPivot for pivot in data.viable_pivots):
-                num_virtual += 1
-            else:
-                num_pivots += 1
-        print("\nedit distance of errors:")
-        plot_hist(miss_distances)
-        print(f"min dist:\t{min(miss_distances)}")
-        print(f"max dist:\t{max(miss_distances)}")
-        print(f"avg dist:\t{np.mean(miss_distances)}")
-        print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")
-        for data in misses:
-            target_str = ' '.join(candidate.construct_target(data.peptide))
-            if len(data.candidates) == 0:
-                print(target_str, "- no match")
-                continue
-            input()
-            print(target_str)
-            print('-' * len(target_str))
-            if len(data.candidates) == 0:
-                print("no match!")
-            data_candidates = [(pivot_no, aug_no, cand, *cand.edit_distance(data.peptide)) for (pivot_no, aug_no, cand) in data.candidates]
-            data_candidates.sort(key = lambda x: x[3])
-            for pivot_no, aug_no, cand, optimum, optimizer in data_candidates:
-                data.draw_graphs(pivot_no, aug_no, name_gen = lambda x: f"current_{x}.png")
-                optimum, optimizer = cand.edit_distance(data.peptide)
-                best_query = cand.sequences()[optimizer]
-                print(best_query)
-                pivot = data.viable_pivots[pivot_no]
-                pivot_res = util.residue_lookup(pivot.gap())
-                pivot_type = str(type(pivot))
-                boundary = cand._boundary
-                path_affixes = cand._path_affixes
-                affixes = cand._affixes
-                print(f"\tdistance: {optimum}\n\tboundary: {boundary}\n\tpaths: {path_affixes}\n\taffixes: {affixes}\n\tpivot: {pivot_res} {pivot} {pivot_type}")
-                if pivot_type == mirror.pivot.Pivot:
-                    off_gaps, off_res = offset_gaps(pivot, data.sym_spectrum[pivot_no])
-                    offsets = list(zip(off_res, off_gaps))
-                    print(f"\toffset: {offsets}")
-                try:
-                    input()
-                except KeyboardInterrupt:
-                    break
     if mode == "random+noise":
         N = int(sys.argv[2])
         peptide_lengths = list(map(int, sys.argv[3].split(',')))
@@ -424,3 +381,67 @@ if __name__ == '__main__':
             print(f"max dist:\t{max(miss_distances)}")
             print(f"avg dist:\t{np.mean(miss_distances)}")
             print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")
+    if mode == "fasta":
+        fasta_path = sys.argv[2]
+        seqs = mirror.io.load_fasta_as_strings(fasta_path)
+        _,  misses, crashes = run_on_seqs(seqs, None, None)
+        miss_distances = [measure_error_distance(data) for data in misses]
+        num_pivots = 0
+        num_virtual = 0
+        for data in misses:
+            if any(type(pivot) == mirror.pivot.VirtualPivot for pivot in data.viable_pivots):
+                num_virtual += 1
+            else:
+                num_pivots += 1
+        print("\nedit distance of errors:")
+        plot_hist(miss_distances)
+        print(f"min dist:\t{min(miss_distances)}")
+        print(f"max dist:\t{max(miss_distances)}")
+        print(f"avg dist:\t{np.mean(miss_distances)}")
+        print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")
+        misses.sort(key = lambda x: -len(x.candidates))
+        for data in misses:
+            target_str = ' '.join(candidate.construct_target(data.peptide))
+            input()
+            if len(data.candidates) == 0:
+                print(target_str, "- no candidates")
+                print(f"\tgaps:\t{data.gaps}")
+                print(f"\tpivots:\t{len(data.viable_pivots)}")
+                for pivot_no, pivot in enumerate(data.viable_pivots):
+                    gap = pivot.gap()
+                    res = util.residue_lookup(gap)
+                    print(f"\tpvt[{pivot_no}]:\t{res} {pivot}")
+                    for aug_no, (asc, desc) in data.graphs[pivot_no].items():
+                        data.draw_graphs(pivot_no, aug_no, name_gen = lambda x: f"current_{x}.png")
+                        aug_pivot = data.augmented_pivots[pivot_no][aug_no]
+                        aug_spectrum = data.sym_spectrum[pivot_no][aug_no]
+                        paths = data.paths[pivot_no][aug_no]
+                        affixes = [candidate.call_sequence_from_path(aug_spectrum, path) for path in paths]
+                        print(f"\taugment: {aug_no}\n\t\tpivot:\t{aug_pivot}\n\t\tgraphs:\t{asc}, {desc}\n\t\tpaths:\t{paths}\n\t\taffixes:\t{affixes}")
+                continue
+            print(target_str)
+            print('-' * len(target_str))
+            data_candidates = [(pivot_no, aug_no, cand, *cand.edit_distance(data.peptide)) for (pivot_no, aug_no, cand) in data.candidates]
+            data_candidates.sort(key = lambda x: x[3])
+            num_candidates = len(data_candidates)
+            for candidate_no, (pivot_no, aug_no, cand, optimum, optimizer) in enumerate(data_candidates):
+                data.draw_graphs(pivot_no, aug_no, name_gen = lambda x: f"current_{x}.png")
+                optimum, optimizer = cand.edit_distance(data.peptide)
+                best_query = cand.sequences()[optimizer]
+                print(f"{best_query}\t({candidate_no + 1} / {num_candidates})")
+                pivot = data.viable_pivots[pivot_no]
+                pivot_res = util.residue_lookup(pivot.gap())
+                pivot_type = str(type(pivot))
+                boundary = cand._boundary
+                path_affixes = cand._path_affixes
+                affixes = cand._affixes
+                print(f"\tdistance: {optimum}\n\tboundary: {boundary}\n\tpaths: {path_affixes}\n\taffixes: {affixes}\n\tpivot: {pivot_res} {pivot} {pivot_type}")
+                if pivot_type == mirror.pivot.Pivot:
+                    off_gaps, off_res = offset_gaps(pivot, data.sym_spectrum[pivot_no])
+                    offsets = list(zip(off_res, off_gaps))
+                    print(f"\toffset: {offsets}")
+                try:
+                    if candidate_no < num_candidates - 1:
+                        input()
+                except KeyboardInterrupt:
+                    break
