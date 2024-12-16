@@ -108,10 +108,10 @@ class TestData:
         A.layout('dot')
         A.draw(title)
 
-    def draw_graphs(self, pivot_no, name_gen = None):
+    def draw_graphs(self, pivot_no, augment_no, name_gen = None):
         if name_gen == None:
             name_gen = lambda x: f"drawings/{self.peptide}_p{pivot_no}_{x}.png"
-        asc, desc = deepcopy(self.graphs[pivot_no])
+        asc, desc = deepcopy(self.graphs[pivot_no][augment_no])
         self._draw_graph(asc, name_gen("asc"))
         self._draw_graph(desc, name_gen("desc"))
 
@@ -144,21 +144,21 @@ def eval_graphs(data: TestData):
     for pivot_no, pivot in enumerate(data.viable_pivots):
         # identify boundary y and b ions, augment spectrum to include mirrored boundaries.
         augments = mirror.boundary.create_symmetric_augmented_spectra(data.spectrum, pivot)
-        for augment_no, (b_res, y_res, sym_spectrum, pivot) in enumerate(augments):
+        for augment_no, (b_res, y_res, sym_spectrum, aug_pivot) in enumerate(augments):
             data.set_symmetric_spectrum(pivot_no, augment_no, sym_spectrum)
             # reconstruct gap set over the augmented spectrum
             gap_inds = [mirror.gap.find_gaps(sym_spectrum, mirror.gap.GapTargetConstraint(amino_mass, mirror.util.GAP_TOLERANCE))
                         for amino_mass in mirror.util.AMINO_MASS_MONO]
             gap_ind = list(itertools.chain.from_iterable(gap_inds))
             # filter out bad gaps
-            negative_gaps = pivot.negative_index_pairs()
+            negative_gaps = aug_pivot.negative_index_pairs()
             gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in negative_gaps]
             # also filter out the pivot pairs, because we don't want to sequence them twice!
-            if type(pivot) == mirror.pivot.Pivot:
-                pivot_gaps = list(pivot.index_pairs())
+            if type(aug_pivot) == mirror.pivot.Pivot:
+                pivot_gaps = list(aug_pivot.index_pairs())
                 gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in pivot_gaps]
             # create the graphs
-            asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(sym_spectrum, gap_ind, pivot)
+            asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(sym_spectrum, gap_ind, aug_pivot)
             data.set_graphs(pivot_no, augment_no, asc_graph, desc_graph)
             boundary_chrs = (b_res, y_res)
             data.set_boundary(pivot_no, augment_no, boundary_chrs)
@@ -198,7 +198,7 @@ def eval_candidates(data: TestData):
             for cand in candidates:
                 cand_seqs = cand.sequences()
                 optimum, optimizer = cand.edit_distance(peptide)
-                all_candidates.append((idx, cand))
+                all_candidates.append((idx, aug_idx, cand))
                 if optimum == 0:
                     matches.append(cand_seqs[optimizer])    
     data.set_candidates(all_candidates)
@@ -227,7 +227,7 @@ def measure_error_distance(data: TestData):
     if len(data.matches) > 0:
         return 0
     elif len(data.candidates) > 0:
-        candidate_errs = [candidate.edit_distance(target)[0] for (_, candidate) in data.candidates]
+        candidate_errs = [candidate.edit_distance(target)[0] for (_, __, candidate) in data.candidates]
         return min(candidate_errs)
     else:
         return len(data.peptide)
@@ -238,7 +238,7 @@ def measure_error_distribution(data: TestData):
     if overall_err == n:
         return [np.ones(n)]
     else:
-        results = [(cand,cand.edit_distance(data.peptide)) for (_, cand) in data.candidates]
+        results = [(cand,cand.edit_distance(data.peptide)) for (_, __, cand) in data.candidates]
         best_seqs = [cand.sequences()[minimizer].replace("I/L", 'J').replace(' ', '')
             for (cand,(min_err, minimizer)) in results if min_err == overall_err]
         aligner = Align.PairwiseAligner()
@@ -277,7 +277,6 @@ def run_on_seqs(seqs, path_miss, path_crash, noise = False):
             print("Crash")
             print(pep)
             print(e)
-            raise e
             crashes.append(data)
     miss_peptides = [data.peptide for data in misses]
     crash_peptides = [data.peptide for data in crashes]
@@ -374,10 +373,10 @@ if __name__ == '__main__':
             print('-' * len(target_str))
             if len(data.candidates) == 0:
                 print("no match!")
-            data_candidates = [(pivot_no, cand, *cand.edit_distance(data.peptide)) for (pivot_no, cand) in data.candidates]
-            data_candidates.sort(key = lambda x: x[2])
-            for pivot_no, cand, optimum, optimizer in data_candidates:
-                data.draw_graphs(pivot_no, name_gen = lambda x: f"current_{x}.png")
+            data_candidates = [(pivot_no, aug_no, cand, *cand.edit_distance(data.peptide)) for (pivot_no, aug_no, cand) in data.candidates]
+            data_candidates.sort(key = lambda x: x[3])
+            for pivot_no, aug_no, cand, optimum, optimizer in data_candidates:
+                data.draw_graphs(pivot_no, aug_no, name_gen = lambda x: f"current_{x}.png")
                 optimum, optimizer = cand.edit_distance(data.peptide)
                 best_query = cand.sequences()[optimizer]
                 print(best_query)

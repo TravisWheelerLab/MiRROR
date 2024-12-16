@@ -20,7 +20,7 @@ def _create_symmetric_augmented_spectra(
                 
                 # augment the spectrum
                 n = len(spectrum)
-                subspectrum = spectrum[max(0,y_idx - 1):min(n - 1,b_idx + 2)]
+                subspectrum = spectrum[max(0,y_idx - 3):min(n - 1,b_idx + 4)]
                 augmented_spectrum = SortedList(subspectrum)
                 augments = []
                 for val in [b_mz, y_mz]:
