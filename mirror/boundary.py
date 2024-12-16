@@ -1,5 +1,5 @@
 from .pivot import Pivot, VirtualPivot
-from .util import reflect, residue_lookup, ION_OFFSET_LOOKUP, TERMINAL_RESIDUES
+from .util import reflect, residue_lookup, ION_OFFSET_LOOKUP, TERMINAL_RESIDUES, GAP_TOLERANCE
 
 import numpy as np
 from sortedcontainers import SortedList
@@ -11,7 +11,7 @@ def _create_symmetric_augmented_spectra(
 ):
     # find and reflect boundary ions
     for (y_idx, y_res) in pivot.terminal_y(spectrum):
-        if y_res in TERMINAL_RESIDUES:
+        if y_res in valid_terminal_residues:
             for (b_idx, b_res) in pivot.initial_b(spectrum):
                 # reflect the boundaries
                 center = pivot.center()
@@ -19,25 +19,33 @@ def _create_symmetric_augmented_spectra(
                 y_mz = spectrum[y_idx]
                 
                 # augment the spectrum
-                subspectrum = SortedList(spectrum[y_idx:b_idx + 1])
+                n = len(spectrum)
+                subspectrum = spectrum[max(0,y_idx - 1):min(n - 1,b_idx + 2)]
+                augmented_spectrum = SortedList(subspectrum)
                 augments = []
                 for val in [b_mz, y_mz]:
                     reflected_val = reflect(val, center)
-                    if not(val in subspectrum):
-                        subspectrum.add(val)
-                        augments.append(val)
-                    if not(reflected_val in subspectrum):
-                        subspectrum.add(reflected_val)
-                        augments.append(reflected_val)
-                augmented_spectrum = np.array(subspectrum)
+                    for aug_peak in [val, reflected_val]:
+                        min_dif = np.inf
+                        for peak in subspectrum:  
+                            dif = abs(peak - aug_peak)
+                            if dif < min_dif:
+                                min_dif = dif
+                        if min_dif > GAP_TOLERANCE:
+                            augmented_spectrum.add(aug_peak)
+                            augments.append(aug_peak)
+                augmented_spectrum = np.array(augmented_spectrum)
 
                 # shift the pivot
-                pivot_left = pivot.peaks()[0]
-                offset = len([val for val in augments if val < pivot_left])
+                pivot_left = pivot.outer_left()
+                pivot_left_mz = spectrum[pivot_left]
+                new_left = len([val for val in augmented_spectrum if val < pivot_left_mz])
+                offset = new_left - pivot_left
                 if type(pivot) == Pivot:
                     index_pairs = pivot.index_pairs()
                     new_index_pairs = [(i + offset, j + offset) for (i, j) in index_pairs]
-                    index_shifted_pivot = Pivot(*pivot.peak_pairs(), *new_index_pairs)
+                    new_peak_pairs = [(augmented_spectrum[i], augmented_spectrum[j]) for (i,j) in new_index_pairs]
+                    index_shifted_pivot = Pivot(*new_peak_pairs, *new_index_pairs)
                     assert index_shifted_pivot.peaks() == pivot.peaks()
                 elif type(pivot) == VirtualPivot:
                     indices = pivot.indices()
@@ -45,10 +53,41 @@ def _create_symmetric_augmented_spectra(
                     index_shifted_pivot = VirtualPivot(new_indices, pivot.center())
                 else:
                     raise ValueError(f"Unrecognized pivot type {type(pivot)}")
+                
                 yield b_res, y_res, augmented_spectrum, index_shifted_pivot
 
 def create_symmetric_augmented_spectra(
     spectrum: np.ndarray,
     pivot: Pivot
 ):
-    return list(_create_symmetric_augmented_spectra(spectrum, pivot))
+    return list(_create_symmetric_augmented_spectra(spectrum, pivot))# + [create_symmetric_boundary(spectrum, pivot)]
+
+def create_symmetric_boundary(
+    spectrum,
+    pivot: Pivot
+):
+    # find and reflect boundary ions
+    init_b, b_res = pivot.initial_b(spectrum)[-1]
+    term_y, y_res = pivot.terminal_y(spectrum)[-1]
+    center = pivot.center()
+    reflected_b_mz = reflect(spectrum[init_b], center)
+    reflected_y_mz = reflect(spectrum[term_y], center)
+
+    # TODO - create the symmetric spectrum more efficiently.
+    spectrum_list = list(spectrum)
+    boundary_symmetric_spectrum = np.array(sorted(set(list(map(lambda x: round(x, 6), spectrum_list + [reflected_b_mz, reflected_y_mz])))))
+    
+    # shift the pivot
+    n_peaks = len(spectrum)
+    n_sym_peaks = len(boundary_symmetric_spectrum)
+    if type(pivot) == Pivot:
+        index_pairs = pivot.index_pairs()
+        new_index_pairs = [(i + 1, j + 1) for (i, j) in index_pairs]
+        index_shifted_pivot = Pivot(*pivot.peak_pairs(), *new_index_pairs)
+    elif type(pivot) == VirtualPivot:
+        indices = pivot.indices()
+        new_indices = (indices[0] + 1, indices[1] + 1)
+        index_shifted_pivot = VirtualPivot(new_indices, pivot.center())
+    else:
+        raise ValueError(f"Unrecognized pivot type {type(pivot)}")
+    return b_res, y_res, boundary_symmetric_spectrum, index_shifted_pivot
