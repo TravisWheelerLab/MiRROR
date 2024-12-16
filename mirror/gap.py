@@ -1,4 +1,5 @@
 from .scan import ScanConstraint, constrained_pair_scan
+import itertools
 
 class GapTargetConstraint(ScanConstraint):
     # match to a single gap
@@ -31,10 +32,6 @@ class GapRangeConstraint(ScanConstraint):
         return gap > self.max_gap + self.tolerance
     
     def match(self, gap):
-        # under the assumption that `stop` has already returned false if 
-        # `match` is being called, only the first half of the inequality needs 
-        # to be checked. the second half is unnecessary, but is still included 
-        # for the sake of legibility.
         return self.min_gap - self.tolerance <= gap <= self.max_gap + self.tolerance
 
 def find_gaps(
@@ -49,3 +46,40 @@ def find_gaps(
     if type(gap_constraint) == GapRangeConstraint:
         gap_indices = sorted(gap_indices, key = lambda idx: spectrum[idx[1]] - spectrum[idx[0]])
     return gap_indices
+
+def find_all_gaps(
+    spectrum,
+    gap_constraints,
+):
+    return list(itertools.chain.from_iterable(find_gaps(spectrum, constraint) for constraint in gap_constraints))
+
+def _fast_find_gaps(
+    arr,
+    target,
+    tolerance
+):
+    n = len(arr)
+    for i in range(n):
+        x = arr[i]
+        for j in range(i + 1, n):
+            y = arr[j]
+            dif = y - x
+            if dif > target + tolerance:
+                break
+            elif dif >= target - tolerance:
+                yield (i, j)
+
+def fast_find_gaps(
+    arr,
+    target,
+    tolerance
+):
+    return list(_fast_find_gaps(arr, target, tolerance))
+
+# about 2x faster. but still weirdly slow?
+def fast_find_all_gaps(
+    arr,
+    targets,
+    tolerance
+):
+    return list(itertools.chain.from_iterable(_fast_find_gaps(arr, target, tolerance) for target in targets))

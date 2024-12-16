@@ -40,7 +40,7 @@ class Candidate:
         spectrum: np.ndarray,
         affix_a: list[tuple[int,int]],
         affix_b: list[tuple[int,int]],
-        boundary: tuple[chr, chr],
+        boundary_chrs: tuple[chr, chr],
         pivot_res: chr,
     ):
         called_affix_a = call_sequence_from_path(spectrum, affix_a)
@@ -51,14 +51,14 @@ class Candidate:
             affix_a,
             affix_b
         )
-        self._boundary = boundary
+        self._boundary = boundary_chrs
         self._affixes = (
             called_affix_a,
             called_affix_b
         )
         self._sequences = (
-            apply_boundary_residues(forward_seq, *boundary), 
-            apply_boundary_residues(backward_seq, *boundary))
+            apply_boundary_residues(forward_seq, *boundary_chrs), 
+            apply_boundary_residues(backward_seq, *boundary_chrs))
 
     def edit_distance(self, peptide):
         target = construct_target(peptide)
@@ -79,13 +79,14 @@ class Candidate:
 def construct_candidates(
     spectrum: np.ndarray,
     aug_spectrum: np.ndarray,
+    boundary_chrs: tuple[chr,chr],
     pivot: Pivot,
     spectrum_graphs: tuple[nx.DiGraph, nx.DiGraph],
     path_affixes: list[list[tuple[int,int]]],
     disjoint_pairing_mode = "table",
     verbose = False,
 ):
-    boundary = (pivot.initial_b_ion(spectrum)[1], pivot.terminal_y_ion(spectrum)[1])
+    #boundary = (pivot.initial_b_ion(spectrum)[1], pivot.terminal_y_ion(spectrum)[1])
     pivot_res = residue_lookup(pivot.gap())
     disjoint_afx_ind = list(find_edge_disjoint_paired_paths(path_affixes, mode=disjoint_pairing_mode))
     for (i, j) in disjoint_afx_ind:
@@ -104,13 +105,13 @@ def construct_candidates(
                     aug_spectrum, 
                     ext_afx_a, 
                     ext_afx_b, 
-                    boundary,
+                    boundary_chrs,
                     pivot_res)
                 yield Candidate(
                     aug_spectrum, 
                     ext_afx_a, 
                     ext_afx_b, 
-                    boundary,
+                    boundary_chrs,
                     '')
                 if ((-1 in end_a) and (-1 in end_b)) and (end_a == end_b):
                     # otherwise, if the extensions overlap, 
@@ -125,11 +126,11 @@ def construct_candidates(
                             aug_spectrum, 
                             ext_afx_a[:-overlap], 
                             ext_afx_b, 
-                            boundary,
+                            boundary_chrs,
                             '')
                         yield Candidate(
                             aug_spectrum, 
                             ext_afx_a, 
                             ext_afx_b[:-overlap], 
-                            boundary,
+                            boundary_chrs,
                             '')

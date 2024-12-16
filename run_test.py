@@ -30,12 +30,14 @@ class TestData:
         self.sym_spectrum = {}
         self.graphs = {}
         self.paths = {}
+        self.boundary = {}
         self.candidates = []
         self.matches = []
         self.exp_sym_time = 0.0
     
     def add_noise(self, noise: float):
         spectrum = list(self.spectrum)
+        self.denoised_spectrum = np.array(spectrum)
         max_peak = max(spectrum)
         min_peak = min(spectrum)
         n_peaks = len(spectrum)
@@ -69,15 +71,23 @@ class TestData:
     
     def set_viable_pivots(self, viable_pivots):
         self.viable_pivots = viable_pivots
+        for pivot_no in range(len(viable_pivots)):
+            self.sym_spectrum[pivot_no] = {}
+            self.graphs[pivot_no] = {}
+            self.paths[pivot_no] = {}
+            self.boundary[pivot_no] = {}
 
-    def set_symmetric_spectrum(self, pivot_no, spectrum):
-        self.sym_spectrum[pivot_no] = spectrum
+    def set_symmetric_spectrum(self, pivot_no, augment_no, spectrum):
+        self.sym_spectrum[pivot_no][augment_no] = spectrum
     
-    def set_graphs(self, pivot_no, asc_graph, desc_graph):
-        self.graphs[pivot_no] = (asc_graph, desc_graph)
+    def set_graphs(self, pivot_no, augment_no, asc_graph, desc_graph):
+        self.graphs[pivot_no][augment_no] = (asc_graph, desc_graph)
     
-    def set_paths(self, pivot_no, paths):
-        self.paths[pivot_no] = paths
+    def set_boundary(self, pivot_no, augment_no, boundary):
+        self.boundary[pivot_no][augment_no] = boundary
+
+    def set_paths(self, pivot_no, augment_no, paths):
+        self.paths[pivot_no][augment_no] = paths
     
     def set_candidates(self, candidates):
         self.candidates = candidates
@@ -133,37 +143,41 @@ def eval_graphs(data: TestData):
     graphs = []
     for pivot_no, pivot in enumerate(data.viable_pivots):
         # identify boundary y and b ions, augment spectrum to include mirrored boundaries.
-        sym_spectrum, pivot = mirror.boundary.create_symmetric_boundary(data.spectrum, pivot)
-        data.set_symmetric_spectrum(pivot_no, sym_spectrum)
-        # reconstruct gap set over the augmented spectrum
-        gap_inds = [mirror.gap.find_gaps(sym_spectrum, mirror.gap.GapTargetConstraint(amino_mass, mirror.util.GAP_TOLERANCE))
-                    for amino_mass in mirror.util.AMINO_MASS_MONO]
-        gap_ind = list(itertools.chain.from_iterable(gap_inds))
-        # filter out bad gaps
-        negative_gaps = pivot.negative_index_pairs()
-        gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in negative_gaps]
-        # also filter out the pivot pairs, because we don't want to sequence them twice!
-        if type(pivot) == mirror.pivot.Pivot:
-            pivot_gaps = list(pivot.index_pairs())
-            gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in pivot_gaps]
-        asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(sym_spectrum, gap_ind, pivot)
-        data.set_graphs(pivot_no, asc_graph, desc_graph)
-        graphs.append((asc_graph, desc_graph))
+        augments = mirror.boundary.create_symmetric_augmented_spectra(data.spectrum, pivot)
+        for augment_no, (b_res, y_res, sym_spectrum, pivot) in enumerate(augments):
+            data.set_symmetric_spectrum(pivot_no, augment_no, sym_spectrum)
+            # reconstruct gap set over the augmented spectrum
+            gap_inds = [mirror.gap.find_gaps(sym_spectrum, mirror.gap.GapTargetConstraint(amino_mass, mirror.util.GAP_TOLERANCE))
+                        for amino_mass in mirror.util.AMINO_MASS_MONO]
+            gap_ind = list(itertools.chain.from_iterable(gap_inds))
+            # filter out bad gaps
+            negative_gaps = pivot.negative_index_pairs()
+            gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in negative_gaps]
+            # also filter out the pivot pairs, because we don't want to sequence them twice!
+            if type(pivot) == mirror.pivot.Pivot:
+                pivot_gaps = list(pivot.index_pairs())
+                gap_ind = [(i,j) for (i,j) in gap_ind if (i,j) not in pivot_gaps]
+            # create the graphs
+            asc_graph, desc_graph = mirror.spectrum_graph.construct_spectrum_graphs(sym_spectrum, gap_ind, pivot)
+            data.set_graphs(pivot_no, augment_no, asc_graph, desc_graph)
+            boundary_chrs = (b_res, y_res)
+            data.set_boundary(pivot_no, augment_no, boundary_chrs)
+            graphs.append((asc_graph, desc_graph))
     return graphs
 
 def eval_paths(data: TestData):
     paths = []
-    for i in range(data.num_pivots()):
-        asc_graph, desc_graph = data.graphs[i]
+    for pivot_no in range(data.num_pivots()):
+        for augment_no, (asc_graph, desc_graph) in data.graphs[pivot_no].items():
 
-        paired_paths = list(mirror.graph_util.all_weighted_paired_simple_paths(
-            asc_graph, 
-            desc_graph, 
-            mirror.spectrum_graph.GAP_KEY, 
-            mirror.spectrum_graph.GAP_COMPARATOR))
-        
-        data.set_paths(i, paired_paths)
-        paths.append(paired_paths)
+            paired_paths = list(mirror.graph_util.all_weighted_paired_simple_paths(
+                asc_graph, 
+                desc_graph, 
+                mirror.spectrum_graph.GAP_KEY, 
+                mirror.spectrum_graph.GAP_COMPARATOR))
+            
+            data.set_paths(pivot_no, augment_no, paired_paths)
+            paths.append(paired_paths)
     return paths
 
 def eval_candidates(data: TestData):
@@ -174,17 +188,19 @@ def eval_candidates(data: TestData):
     all_candidates = []
     n_pivots = len(pivots)
     for idx in range(n_pivots):
-        pivot = pivots[idx]
-        affixes = data.paths[idx]
-        augmented_spectrum = data.sym_spectrum[idx]
-        graphs = data.graphs[idx]
-        candidates = mirror.candidate.construct_candidates(spectrum, augmented_spectrum, pivot, graphs, affixes)
-        for cand in candidates:
-            cand_seqs = cand.sequences()
-            optimum, optimizer = cand.edit_distance(peptide)
-            all_candidates.append((idx, cand))
-            if optimum == 0:
-                matches.append(cand_seqs[optimizer])    
+        for aug_idx in range(len(data.graphs[idx])):
+            pivot = pivots[idx]
+            affixes = data.paths[idx][aug_idx]
+            augmented_spectrum = data.sym_spectrum[idx][aug_idx]
+            graphs = data.graphs[idx][aug_idx]
+            boundary_chrs = data.boundary[idx][aug_idx]
+            candidates = mirror.candidate.construct_candidates(spectrum, augmented_spectrum, boundary_chrs, pivot, graphs, affixes)
+            for cand in candidates:
+                cand_seqs = cand.sequences()
+                optimum, optimizer = cand.edit_distance(peptide)
+                all_candidates.append((idx, cand))
+                if optimum == 0:
+                    matches.append(cand_seqs[optimizer])    
     data.set_candidates(all_candidates)
     data.set_matches(matches)
     return all_candidates, matches

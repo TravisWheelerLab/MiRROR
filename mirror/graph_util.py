@@ -10,6 +10,11 @@ def get_sources(D: nx.DiGraph):
 def get_sinks(D: nx.DiGraph):
     return [i for i in D.nodes if D.out_degree(i) == 1 if i != -1]
 
+def get_nontrivial_sinks_and_sources(D: nx.DiGraph):
+    sinks = set(get_sinks(D))
+    sources = set(get_sources(D))
+    return sinks.difference(sources), sources.difference(sinks)
+
 def get_edges(graph,node):
     return [i for i in graph.edges(node) if i != -1]
 
@@ -17,6 +22,28 @@ def get_edges(graph,node):
 # methods for iterating the mutual path space of a pair of graphs.
 # based on the implementation in networkx.algorithms.simple_paths
 # https://github.com/networkx/networkx/blob/main/networkx/algorithms/simple_paths.py
+
+def all_nontrivial_weighted_paired_simple_paths(
+    G: nx.DiGraph,
+    H: nx.DiGraph,
+    weight_key,
+    weight_comparator
+):
+    G_sinks, G_sources = get_nontrivial_sinks_and_sources(G)
+    H_sinks, H_sources = get_nontrivial_sinks_and_sources(H)
+    return itertools.chain.from_iterable(
+            weighted_paired_simple_paths(
+                G, 
+                g_source, 
+                G_sinks,
+                H, 
+                h_source, 
+                H_sinks,
+                weight_key,
+                weight_comparator
+            ) 
+            for h_source in H_sources 
+            for g_source in G_sources)
 
 def all_weighted_paired_simple_paths(
     G: nx.DiGraph,

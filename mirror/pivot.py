@@ -47,19 +47,17 @@ class Pivot:
         gap_b = peak_pairs[1][1] - peak_pairs[1][0]
         return (gap_a + gap_b) / 2
 
-    def initial_b_ion(
+    def initial_b(
         self,
         spectrum,
     ):
-        b = list(find_initial_b_ion(spectrum, self.outer_right(), len(spectrum), self.center()))
-        return b[-1] if len(b) > 0 else None
+        return list(find_initial_b_ion(spectrum, self.outer_right(), len(spectrum), self.center()))
 
-    def terminal_y_ion(
+    def terminal_y(
         self,
         spectrum,
     ):
-        y = list(find_terminal_y_ion(spectrum, self.outer_left()))
-        return y[-1] if len(y) > 0 else None
+        return list(find_terminal_y_ion(spectrum, self.outer_left()))
     
     def negative_index_pairs(self):
         """index pairs that should not be present in the gap set."""
@@ -225,8 +223,8 @@ def _filter_viable_pivots(
         return pivots
     else:
         pivot_symmetries = np.array([count_mirror_symmetries(spectrum, pivot.center()) for pivot in pivots])
-        pivot_initial_b_ions = np.array([pivot.initial_b_ion(spectrum) != None for pivot in pivots])
-        pivot_terminal_y_ions = np.array([pivot.terminal_y_ion(spectrum) != None for pivot in pivots])
+        pivot_initial_b_ions = np.array([pivot.initial_b(spectrum) != [] for pivot in pivots])
+        pivot_terminal_y_ions = np.array([pivot.terminal_y(spectrum) != [] for pivot in pivots])
         pivot_residues = np.array([residue_lookup(pivot.gap()) for pivot in pivots])
         try:
             viable = pivot_symmetries > symmetry_threshold
@@ -265,9 +263,9 @@ def _construct_viable_pivots(
     tolerance: float,
 ):
     # look for overlapping pivots; if none are found, fall back on disjoint pivots.
-    pivots = find_overlapping_pivots(spectrum, gap_indices, INTERGAP_TOLERANCE)
+    pivots = find_overlapping_pivots(spectrum, gap_indices, tolerance)
     if len(pivots) == 0:
-        disjoint_pivots = find_disjoint_pivots(spectrum, gap_indices, INTERGAP_TOLERANCE)
+        disjoint_pivots = find_disjoint_pivots(spectrum, gap_indices, tolerance)
         mode_center = mode(pivot.center() for pivot in disjoint_pivots)
         pivot = _construct_virtual_pivot(spectrum, 0, len(spectrum), mode_center)
         return [pivot]
