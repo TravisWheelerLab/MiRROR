@@ -137,7 +137,7 @@ def eval_gap(data: TestData):
 
 def eval_viable_pivots(data: TestData):
     t_init = time()
-    symmetry_threshold = 2 * mirror.util.expected_num_mirror_symmetries(data.spectrum)
+    symmetry_threshold = 10 * mirror.util.expected_num_mirror_symmetries(data.spectrum)
     t_elap = time() - t_init
     viable_pivots = mirror.pivot.construct_viable_pivots(data.spectrum, symmetry_threshold, data.gaps)
     data.set_viable_pivots(viable_pivots)
@@ -253,7 +253,7 @@ def measure_error_distribution(data: TestData):
         error_vectors = [np.array([1 if v == -1 else 0 for v in ind]) for ind in alignment_indices]
         return error_vectors
 
-def run_on_seqs(seqs, path_miss, path_crash, noise = False):
+def run_on_seqs(seqs, path_miss, path_crash, noise = False, verbose = True):
     N = len(seqs)
     local_max_time = 0
     local_max_peptide = ""
@@ -293,11 +293,12 @@ def run_on_seqs(seqs, path_miss, path_crash, noise = False):
         mirror.io.save_strings_to_fasta(path_miss, miss_peptides, lambda i: f"miss_{i}")
     if path_crash != None and n_crashes > 0:
         mirror.io.save_strings_to_fasta(path_crash, crash_peptides, lambda i: f"crash_{i}")
-    print("| misses:", n_misses / N, (n_misses, N))
-    print("| crashes:", n_crashes / N, (n_crashes, N))
-    print(f"| observed times\t{times_k} {sum(times_k)}")
-    print(f"| normalized times\t{times_k / sum(times_k)}")
-    print(f"| max individual time:\n\t| elapsed:\t{local_max_time}\n\t| normalized:\t{local_max_table / sum(local_max_table)}\n\t| peptide:\t{local_max_peptide}")
+    if verbose:
+        print("| misses:", n_misses / N, (n_misses, N))
+        print("| crashes:", n_crashes / N, (n_crashes, N))
+        print(f"| observed times\t{times_k} {sum(times_k)}")
+        print(f"| normalized times\t{times_k / sum(times_k)}")
+        print(f"| max individual time:\n\t| elapsed:\t{local_max_time}\n\t| normalized:\t{local_max_table / sum(local_max_table)}\n\t| peptide:\t{local_max_peptide}")
     return times_k, misses, crashes
 
 def plot_hist(x: list[int], width = 60):
@@ -399,7 +400,7 @@ if __name__ == '__main__':
         print(f"max dist:\t{max(miss_distances)}")
         print(f"avg dist:\t{np.mean(miss_distances)}")
         print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")
-        misses.sort(key = lambda x: -len(x.candidates))
+        misses.sort(key = lambda x: len(x.candidates))
         for data in misses:
             target_str = ' '.join(candidate.construct_target(data.peptide))
             input()
