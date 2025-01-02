@@ -356,32 +356,34 @@ if __name__ == '__main__':
     if mode == "random+noise":
         N = int(sys.argv[2])
         peptide_lengths = list(map(int, sys.argv[3].split(',')))
-        noise = float(sys.argv[4])
+        noises = list(map(int, sys.argv[4].split(',')))
         times_overall = np.zeros(5)
         print(f"trials {N}")
-        for k in peptide_lengths:
-            print(f"\nlength {k}")
-            seqs = [mirror.util.generate_random_tryptic_peptide(k) for _ in range(N)]
-            times_k, misses, crashes = run_on_seqs(
-                seqs, 
-                None, 
-                None,
-                noise = noise)
-            times_overall += times_k
-            miss_distances = [measure_error_distance(data) for data in misses]
-            num_pivots = 0
-            num_virtual = 0
-            for data in misses:
-                if any(type(pivot) == mirror.pivot.VirtualPivot for pivot in data.viable_pivots):
-                    num_virtual += 1
-                else:
-                    num_pivots += 1
-            print("\nedit distance of errors:")
-            plot_hist(miss_distances)
-            print(f"min dist:\t{min(miss_distances)}")
-            print(f"max dist:\t{max(miss_distances)}")
-            print(f"avg dist:\t{np.mean(miss_distances)}")
-            print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")
+        for noise in noises:
+            print(f"noise: {noise}x num synthetic peaks")
+            for k in peptide_lengths:
+                print(f"\nlength {k}")
+                seqs = [mirror.util.generate_random_tryptic_peptide(k) for _ in range(N)]
+                times_k, misses, crashes = run_on_seqs(
+                    seqs, 
+                    None, 
+                    None,
+                    noise = noise)
+                times_overall += times_k
+                miss_distances = [measure_error_distance(data) for data in misses]
+                num_pivots = 0
+                num_virtual = 0
+                for data in misses:
+                    if any(type(pivot) == mirror.pivot.VirtualPivot for pivot in data.viable_pivots):
+                        num_virtual += 1
+                    else:
+                        num_pivots += 1
+                print("\nedit distance of errors:")
+                plot_hist(miss_distances)
+                print(f"min dist:\t{min(miss_distances)}")
+                print(f"max dist:\t{max(miss_distances)}")
+                print(f"avg dist:\t{np.mean(miss_distances)}")
+                print(f"pivot types\nPivot:\t\t{num_pivots}\nVirtualPivot:\t{num_virtual}\n")
     if mode == "fasta":
         fasta_path = sys.argv[2]
         seqs = mirror.io.load_fasta_as_strings(fasta_path)

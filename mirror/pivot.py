@@ -315,7 +315,7 @@ def _construct_viable_pivots(
     else:
         return viable_pivots
 
-def _construct_all_pivots(
+def construct_all_pivots(
     spectrum: np.ndarray,
     gap_indices: list[tuple[int,int]],
     tolerance: float,
@@ -331,7 +331,7 @@ def construct_viable_pivots(
     gap_indices: list[tuple[int,int]],
     tolerance: float = INTERGAP_TOLERANCE,
 ):
-    pivots = _construct_all_pivots(spectrum, gap_indices, tolerance)
+    pivots = construct_all_pivots(spectrum, gap_indices, tolerance)
     viable_pivots = _filter_viable_pivots(spectrum, symmetry_threshold, pivots)
     #print(len(viable_pivots), len(pivots))
     return viable_pivots
