@@ -235,22 +235,6 @@ def find_adjacent_pivots(
 
 
 #=============================================================================#
-# discerning (or otherwise constructing) good pivots.
-
-def _construct_virtual_pivot(
-    spectrum: np.ndarray,
-    low: int,
-    high: int,
-    center: float,
-):
-    for i in range(low, high - 1):
-        left_peak = spectrum[i]
-        right_peak = spectrum[i + 1]
-        if left_peak < center < right_peak:
-            return VirtualPivot(
-                [i, i + 1],
-                center
-            )
 
 def _filter_viable_pivots(
     spectrum: np.ndarray,
@@ -279,41 +263,6 @@ def _filter_viable_pivots(
             viable *= pivot_residues != 'X'
         n = len(pivots)
         return [pivots[i] for i in range(n) if viable[i]]
-
-def _reconstruct_pivots(
-    spectrum: np.ndarray,
-    symmetry_threshold: float,
-    pivots: list[Pivot],
-):
-    n = len(pivots)
-    pivot_center = [pivot.center() for pivot in pivots]
-    for i in range(n):
-        for j in range(i + 1, n):
-            reconstructed_center = pivot_center[i] + pivot_center[j]
-            if count_mirror_symmetries(spectrum, reconstructed_center) > symmetry_threshold:
-                all_indices = pivots[i].indices + pivots[j].indices
-                yield _construct_virtual_pivot(spectrum, min(all_indices), max(all_indices), reconstructed_center)
-
-def _construct_viable_pivots(
-    spectrum: np.ndarray,
-    symmetry_threshold: float,
-    gap_indices: list[tuple[int,int]],
-    tolerance: float,
-):
-    # look for overlapping pivots; if none are found, fall back on disjoint pivots.
-    pivots = find_overlapping_pivots(spectrum, gap_indices, tolerance)
-    if len(pivots) == 0:
-        disjoint_pivots = find_disjoint_pivots(spectrum, gap_indices, tolerance)
-        mode_center = mode(pivot.center() for pivot in disjoint_pivots)
-        pivot = _construct_virtual_pivot(spectrum, 0, len(spectrum), mode_center)
-        return [pivot]
-    
-    # discard low-scoring pivots. if there are no viable pivots, reconstruct.
-    viable_pivots = _filter_viable_pivots(spectrum, symmetry_threshold, pivots)
-    if len(viable_pivots) == 0:
-        return list(_reconstruct_pivots(spectrum, symmetry_threshold, pivots))
-    else:
-        return viable_pivots
 
 def construct_all_pivots(
     spectrum: np.ndarray,
