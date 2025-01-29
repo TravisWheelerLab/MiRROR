@@ -6,6 +6,8 @@ import numpy as np
 from .util import add_tqdm
 from .io import oms
 
+#=============================================================================#
+
 def accumulate_bins(data: list[float], hist_arr: np.array, n_bins: int, max_val: int):
     hist_arr += np.histogram(data, bins = n_bins, range = (0, max_val))[0]
 

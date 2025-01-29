@@ -1,10 +1,85 @@
 from .util import mask_ambiguous_residues, residue_lookup, disjoint_pairs
-from .pivot import Pivot
-from .graph_util import path_to_edges, unzip_paired_path, extend_truncated_paths, find_edge_disjoint_paired_paths
+from .pivots import Pivot
+from .graph_utils import path_to_edges, unzip_paired_path, extend_truncated_paths, find_edge_disjoint_paired_paths
 
-import numpy as np
 import networkx as nx
+import numpy as np
 from editdistance import eval as edit_distance
+
+from .affixes import Affix, AffixPair
+from .spectral_alignment import score_sequence_to_spectrum
+
+#=============================================================================#
+
+def create_candidates(
+    augmented_spectrum: np.ndarray,
+    affix_pair: AffixPair,
+) -> list[Candidate]:
+    # enumerates the candidates that can be constructed from a pair of affixes
+    return list(_enumerate_candidates)
+
+def _enumerate_candidates(
+    augmented_spectrum: np.ndarray,
+    affix_pair: AffixPair,
+) -> list[Candidate]:
+    afx_a, afx_b = affix_pair
+    extension_a = [afx_a] + list(extend_truncated_paths([afx_a], *spectrum_graphs))
+    extension_b = [afx_b] + list(extend_truncated_paths([afx_b], *spectrum_graphs))
+    for ext_afx_a in extension_a:
+        for ext_afx_b in extension_b:
+            end_a = ext_afx_a[-1]
+            end_b = ext_afx_b[-1]
+            # if one of the affixes wasn't extended,
+            # or if they don't end at the same position,
+            # we want to use the pivot residue.
+            yield Candidate(
+                aug_spectrum, 
+                ext_afx_a, 
+                ext_afx_b, 
+                boundary_chrs,
+                pivot_res)
+            yield Candidate(
+                aug_spectrum, 
+                ext_afx_a, 
+                ext_afx_b, 
+                boundary_chrs,
+                '')
+            if ((-1 in end_a) and (-1 in end_b)) and (end_a == end_b):
+                # otherwise, if the extensions overlap, 
+                # they already contain the pivot residue;
+                # we don't want to repeat it.
+                for overlap in range(1, min(len(ext_afx_a),len(ext_afx_b))):
+                    if ext_afx_a[-overlap] != ext_afx_b[-overlap]:
+                        overlap -= 1
+                        break
+                if overlap > 0:
+                    yield Candidate(
+                        aug_spectrum, 
+                        ext_afx_a[:-overlap], 
+                        ext_afx_b, 
+                        boundary_chrs,
+                        '')
+                    yield Candidate(
+                        aug_spectrum, 
+                        ext_afx_a, 
+                        ext_afx_b[:-overlap], 
+                        boundary_chrs,
+                        '')
+
+#=============================================================================#
+
+def filter_candidate_sequences(
+    original_spectrum: np.ndarray,
+    candidate_sequences: np.ndarray,
+    alignment_threshold: float,
+    alignment_parameters = None
+) -> np.ndarray:
+    # admits a candidate sequence if its synthetic spectrum aligns to the original spectrum.
+    aligner = lambda seq: score_sequence_to_spectrum(seq, original_spectrum, *alignment_parameters)
+    candidate_scores = np.vectorize(aligner)(candidate_sequences)
+    return candidate_sequences[candidate_scores > alignment_threshold]
+
+#=============================================================================#
 
 def _call_sequence_from_path(spectrum, paired_path):
     for half_path in unzip_paired_path(paired_path):
@@ -34,6 +109,8 @@ def apply_boundary_residues(seq, initial_b, terminal_y):
 
 def construct_target(peptide):
     return [mask_ambiguous_residues(r) for r in peptide]
+
+"""
 
 class Candidate:
     def __init__(self,
@@ -134,3 +211,5 @@ def construct_candidates(
                             ext_afx_b[:-overlap], 
                             boundary_chrs,
                             '')
+
+"""

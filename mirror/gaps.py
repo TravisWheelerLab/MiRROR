@@ -1,6 +1,8 @@
 from .scan import ScanConstraint, constrained_pair_scan
 import itertools
 
+#=============================================================================#
+
 class GapTargetConstraint(ScanConstraint):
     # match to a single gap
 
