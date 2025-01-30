@@ -1,61 +1,11 @@
-from .scan import ScanConstraint, constrained_pair_scan
-import itertools
+#from .scan import ScanConstraint, constrained_pair_scan
+from .util import collapse_second_order_list
+from bisect import bisect_left, bisect_right
+import numpy as np
 
 #=============================================================================#
 
-class GapTargetConstraint(ScanConstraint):
-    # match to a single gap
-
-    def __init__(self, gap, tolerance):
-        self.target_gap = gap
-        self.tolerance = tolerance
-
-    def evaluate(self, state):
-        return state[1] - state[0]
-    
-    def stop(self, gap):
-        return gap > self.target_gap + self.tolerance
-
-    def match(self, gap):
-        return self.target_gap - self.tolerance <= gap <= self.target_gap + self.tolerance 
-
-class GapRangeConstraint(ScanConstraint):
-    # match to a range of gap values
-
-    def __init__(self, gaps, tolerance):
-        self.min_gap = min(gaps)
-        self.max_gap = max(gaps)
-        self.tolerance = tolerance
-
-    def evaluate(self, state):
-        return state[1] - state[0]
-    
-    def stop(self, gap):
-        return gap > self.max_gap + self.tolerance
-    
-    def match(self, gap):
-        return self.min_gap - self.tolerance <= gap <= self.max_gap + self.tolerance
-
-def find_gaps(
-    spectrum,
-    gap_constraint
-):
-    gap_indices = constrained_pair_scan(
-        spectrum,
-        gap_constraint
-    )
-
-    if type(gap_constraint) == GapRangeConstraint:
-        gap_indices = sorted(gap_indices, key = lambda idx: spectrum[idx[1]] - spectrum[idx[0]])
-    return gap_indices
-
-def find_all_gaps(
-    spectrum,
-    gap_constraints,
-):
-    return list(itertools.chain.from_iterable(find_gaps(spectrum, constraint) for constraint in gap_constraints))
-
-def _fast_find_gaps(
+"""def _fast_find_gaps(
     arr,
     target,
     tolerance
@@ -71,7 +21,7 @@ def _fast_find_gaps(
             elif dif >= target - tolerance:
                 yield (i, j)
 
-def fast_find_gaps(
+def find_gaps(
     arr,
     target,
     tolerance
@@ -79,9 +29,48 @@ def fast_find_gaps(
     return list(_fast_find_gaps(arr, target, tolerance))
 
 # about 2x faster. but still weirdly slow?
-def fast_find_all_gaps(
+def find_all_gaps(
     arr,
     targets,
     tolerance
 ):
-    return list(itertools.chain.from_iterable(_fast_find_gaps(arr, target, tolerance) for target in targets))
+    return [find_gaps(arr, target, tolerance) for target in target]
+"""
+
+def find_all_gaps(
+    spectrum: np.ndarray,
+    target_groups: list[list[float]],
+    tolerance: float,
+):
+    # create the target space
+    all_targets = collapse_second_order_list(
+        [[(target, group_idx, local_idx) for (local_idx, target) in enumerate(group)] for (group_idx, group) in enumerate(target_groups)])
+    all_targets.sort(key = lambda x: x[0])
+    target_values, target_group_idx, target_local_idx = zip(*all_targets)
+    min_target = min(target_values) - tolerance
+    max_target = max(target_values) + tolerance
+
+    # locate gaps and index them to the target space
+    gap_candidates = []
+    for (i, x) in enumerate(spectrum):
+        for (j, y) in enumerate(spectrum[i + 1:]):
+            dif = y - x
+            if min_target <= dif <= max_target:
+                l = bisect_left(target_values, dif)
+                r = bisect_right(target_values, dif)
+                gap_candidates.append((dif, (i, i + j + 1), (l, r)))
+            elif dif > max_target:
+                break
+
+    # binsort gaps and discard low quality matches
+    n_groups = len(target_groups)
+    gaps_by_group = [[] for _ in range(n_groups)]
+    for (dif, gap, target_range) in gap_candidates:
+        for target_match_idx in range(target_range[0], target_range[1] + 1):
+            target_val = target_values[target_match_idx]
+            if abs(dif - target_val) <= tolerance:
+                target_grp_idx = target_group_idx[target_match_idx]
+                target_lcl_idx = target_local_idx[target_match_idx]
+                gaps_by_group[target_grp_idx].append((dif, gap, target_lcl_idx))
+    
+    return gaps_by_group
