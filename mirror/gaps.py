@@ -41,24 +41,33 @@ def find_all_gaps(
     spectrum: np.ndarray,
     target_groups: list[list[float]],
     tolerance: float,
+    verbose = False,
 ):
     # create the target space
     all_targets = collapse_second_order_list(
         [[(target, group_idx, local_idx) for (local_idx, target) in enumerate(group)] for (group_idx, group) in enumerate(target_groups)])
     all_targets.sort(key = lambda x: x[0])
+    n_targets = len(all_targets)
     target_values, target_group_idx, target_local_idx = zip(*all_targets)
     min_target = min(target_values) - tolerance
     max_target = max(target_values) + tolerance
-
+    if verbose:
+        print(f"target space:\n\t{target_values}\n\t{target_group_idx}\n\t{target_local_idx}\n\tmax: {max_target}\n\tmin: {min_target}")
+    
     # locate gaps and index them to the target space
     gap_candidates = []
+    def bound_bisection(v):
+        return max(0, min(n_targets - 1, v))
     for (i, x) in enumerate(spectrum):
         for (j, y) in enumerate(spectrum[i + 1:]):
             dif = y - x
             if min_target <= dif <= max_target:
-                l = bisect_left(target_values, dif)
-                r = bisect_right(target_values, dif)
-                gap_candidates.append((dif, (i, i + j + 1), (l, r)))
+                l = bound_bisection(bisect_left(target_values, dif - tolerance))
+                r = bound_bisection(bisect_right(target_values, dif + tolerance))
+                candidate = (dif, (i, i + j + 1), (l, r))
+                gap_candidates.append(candidate)
+                if verbose > 1:
+                    print(f"candidate: {candidate}")
             elif dif > max_target:
                 break
 

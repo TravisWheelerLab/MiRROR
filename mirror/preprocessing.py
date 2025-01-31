@@ -16,15 +16,9 @@ def generate_bins(data_iterable, n_bins: int, max_val: int):
     hist_arr = np.zeros(n_bins)
     for data in add_tqdm(data_iterable):
         hist_arr += np.histogram(data, bins = n_bins, range = (0, max_val))[0]
-        #accumulate_bins(
-        #    data,
-        #    hist_arr,
-        #    n_bins,
-        #    max_val
-        #)
     return hist_arr
 
-def create_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, parallelize = False, n_processes = 4, verbose = False):
+def create_spectrum_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, parallelize = False, n_processes = 4, verbose = False):
     n_bins = int(max_mz / resolution)
     n_spectra = exp.getNrSpectra()
     spectrum_bins = np.zeros(n_bins)
@@ -54,3 +48,17 @@ def create_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, paralleli
     if verbose:
         print(sum(spectrum_bins == 0), '/', len(spectrum_bins))
     return spectrum_bins
+
+#=============================================================================#
+
+def filter_spectrum_bins(
+    spectrum_bins: np.ndarray,
+    max_mz: int,
+    resolution: float,
+    binned_frequency_threshold: int,
+):
+    bin_mask = spectrum_bins > binned_frequency_threshold
+    n_reduced_peaks = sum(bin_mask)
+    reduced_frequencies = spectrum_bins[bin_mask]
+    reduced_mz = np.arange(int(max_mz / resolution))[bin_mask] * resolution
+    return reduced_frequencies, reduced_mz

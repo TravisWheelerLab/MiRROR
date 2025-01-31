@@ -156,6 +156,12 @@ def residue_lookup(
 #=============================================================================#
 # misc utilities
 
+def comma_separated(items):
+    return ','.join(map(str, items))
+
+def split_commas(commastr, target_type):
+    return list(map(target_type, commastr.split(',')))
+
 def collapse_second_order_list(llist: list[list]):
     return list(itertools.chain.from_iterable(llist))
 
