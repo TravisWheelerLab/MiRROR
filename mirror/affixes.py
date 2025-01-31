@@ -41,7 +41,7 @@ def _translate_dual_path(
 
 def _translate_singular_path(
     singular_path: SingularPath,
-    spectrum_graph: nx.Digraph,
+    spectrum_graph: nx.DiGraph,
     weight_key = GAP_KEY,
 ) -> str:
     path_edges = path_to_edges(singular_path)

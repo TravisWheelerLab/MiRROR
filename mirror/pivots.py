@@ -1,8 +1,8 @@
 import numpy as np
 from statistics import mode
 
-from .util import mass_error, count_mirror_symmetries, residue_lookup, reflect, INTERGAP_TOLERANCE, find_initial_b_ion, find_terminal_y_ion
-from .scan import ScanConstraint, constrained_pair_scan
+from .util import mass_error, count_mirror_symmetries, residue_lookup, reflect, find_initial_b_ion, find_terminal_y_ion
+#from .scan import ScanConstraint, constrained_pair_scan
 
 #=============================================================================#
 
@@ -225,7 +225,7 @@ def find_pivots(
     spectrum: np.ndarray,
     symmetry_threshold: float,
     gap_indices: list[tuple[int,int]],
-    tolerance: float = INTERGAP_TOLERANCE,
+    tolerance: float,
 ):
     pivots = construct_all_pivots(spectrum, gap_indices, tolerance)
     viable_pivots = filter_viable_pivots(spectrum, symmetry_threshold, pivots)

@@ -1,6 +1,6 @@
 from .util import mask_ambiguous_residues, residue_lookup, disjoint_pairs
 from .pivots import Pivot
-from .graph_utils import path_to_edges, unzip_paired_path, extend_truncated_paths, find_edge_disjoint_paired_paths
+from .graph_utils import path_to_edges, extend_truncated_paths
 
 import networkx as nx
 import numpy as np
@@ -8,6 +8,49 @@ from editdistance import eval as edit_distance
 
 from .affixes import Affix, AffixPair
 from .spectral_alignment import score_sequence_to_spectrum
+
+#=============================================================================#
+
+class Candidate:
+    def __init__(self,
+        spectrum: np.ndarray,
+        affix_a: list[tuple[int,int]],
+        affix_b: list[tuple[int,int]],
+        boundary_chrs: tuple[chr, chr],
+        pivot_res: chr,
+    ):
+        called_affix_a = call_sequence_from_path(spectrum, affix_a)
+        called_affix_b = call_sequence_from_path(spectrum, affix_b)
+        forward_seq = called_affix_a + ([pivot_res] if pivot_res != "" else []) + reverse_called_sequence(called_affix_b)
+        backward_seq = reverse_called_sequence(forward_seq)
+        self._path_affixes = (
+            affix_a,
+            affix_b
+        )
+        self._boundary = boundary_chrs
+        self._affixes = (
+            called_affix_a,
+            called_affix_b
+        )
+        self._sequences = (
+            apply_boundary_residues(forward_seq, *boundary_chrs), 
+            apply_boundary_residues(backward_seq, *boundary_chrs))
+
+    def edit_distance(self, peptide):
+        target = construct_target(peptide)
+        dist = [edit_distance(query, target) for query in self._sequences]
+        optimizer = np.argmin(dist)
+        optimum = dist[optimizer]
+        return optimum, optimizer
+    
+    def sequences(self):
+        return (
+            ' '.join(self._sequences[0]),
+            ' '.join(self._sequences[1])
+        )
+    
+    def __repr__(self):
+        return '\n'.join(self.sequences())
 
 #=============================================================================#
 
@@ -19,7 +62,6 @@ def create_candidates(
     return list(_enumerate_candidates)
 
 def _enumerate_candidates(
-    augmented_spectrum: np.ndarray,
     affix_pair: AffixPair,
 ) -> list[Candidate]:
     afx_a, afx_b = affix_pair
@@ -111,48 +153,6 @@ def construct_target(peptide):
     return [mask_ambiguous_residues(r) for r in peptide]
 
 """
-
-class Candidate:
-    def __init__(self,
-        spectrum: np.ndarray,
-        affix_a: list[tuple[int,int]],
-        affix_b: list[tuple[int,int]],
-        boundary_chrs: tuple[chr, chr],
-        pivot_res: chr,
-    ):
-        called_affix_a = call_sequence_from_path(spectrum, affix_a)
-        called_affix_b = call_sequence_from_path(spectrum, affix_b)
-        forward_seq = called_affix_a + ([pivot_res] if pivot_res != "" else []) + reverse_called_sequence(called_affix_b)
-        backward_seq = reverse_called_sequence(forward_seq)
-        self._path_affixes = (
-            affix_a,
-            affix_b
-        )
-        self._boundary = boundary_chrs
-        self._affixes = (
-            called_affix_a,
-            called_affix_b
-        )
-        self._sequences = (
-            apply_boundary_residues(forward_seq, *boundary_chrs), 
-            apply_boundary_residues(backward_seq, *boundary_chrs))
-
-    def edit_distance(self, peptide):
-        target = construct_target(peptide)
-        dist = [edit_distance(query, target) for query in self._sequences]
-        optimizer = np.argmin(dist)
-        optimum = dist[optimizer]
-        return optimum, optimizer
-    
-    def sequences(self):
-        return (
-            ' '.join(self._sequences[0]),
-            ' '.join(self._sequences[1])
-        )
-    
-    def __repr__(self):
-        return '\n'.join(self.sequences())
-
 def construct_candidates(
     spectrum: np.ndarray,
     aug_spectrum: np.ndarray,

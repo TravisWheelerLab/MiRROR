@@ -1,6 +1,7 @@
 import itertools
 
 import networkx as nx
+import numpy as np
 
 from .util import disjoint_pairs
 
@@ -9,7 +10,7 @@ from .util import disjoint_pairs
 Edge = tuple[int,int]
 SingularPath = list[int]
 DualPath = list[tuple[int,int]]
-GraphPair = tuple[nx.Digraph, nx.Digraph]
+GraphPair = tuple[nx.DiGraph, nx.DiGraph]
 
 def get_sources(D: nx.DiGraph):
     return [i for i in D.nodes if D.in_degree(i) == 0 if i != -1]

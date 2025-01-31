@@ -5,7 +5,7 @@ import networkx as nx
 
 from .graph_utils import GraphPair
 from .util import AMINO_MASS_MONO, GAP_TOLERANCE, INTERGAP_TOLERANCE
-from .scan import ScanConstraint, constrained_pair_scan
+#from .scan import ScanConstraint, constrained_pair_scan
 from .pivots import Pivot
 from .graph_utils import *
 
@@ -53,7 +53,7 @@ def _create_half_graph_from_gaps(
     pivot,
     gap_key,
     orientation,
-) -> nx.Digraph:
+) -> nx.DiGraph:
     edges = list(_half_graph_edges(gaps, pivot, orientation))
     half_graph = nx.DiGraph()
     for (i, j) in edges:
@@ -71,7 +71,7 @@ def _half_graph_edges(
     gaps,
     pivot,
     orientation,
-) -> nx.Digraph:
+) -> nx.DiGraph:
     n_gaps = len(gaps)
     if orientation == SpectrumGraphOrientation.ASCENDING:
         reverse_edges = True

@@ -1,6 +1,5 @@
 from .pivots import Pivot, VirtualPivot
-from .util import reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion, ION_OFFSET_LOOKUP, TERMINAL_RESIDUES, GAP_TOLERANCE
-
+from .util import reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
 import numpy as np
 from sortedcontainers import SortedList
 
@@ -9,7 +8,7 @@ from sortedcontainers import SortedList
 def find_boundary_peaks(
     spectrum: np.ndarray,
     pivot: Pivot,
-    valid_terminal_residues = TERMINAL_RESIDUES,
+    valid_terminal_residues,
 ):
     putative_b_ions = find_initial_b_ion(spectrum, pivot.outer_right(), len(spectrum), pivot.center())
     putative_y_ions = filter(lambda res: res in valid_terminal_residues, find_terminal_y_ion(spectrum, pivot.outer_left()))
@@ -22,6 +21,7 @@ def create_augmented_spectrum(
     pivot: Pivot,
     b_idx: tuple[int, str],
     y_idx: tuple[int, str],
+    tolerance: float,
 ):
     # reflect the boundaries
     center = pivot.center()
@@ -41,7 +41,7 @@ def create_augmented_spectrum(
                 dif = abs(peak - aug_peak)
                 if dif < min_dif:
                     min_dif = dif
-            if min_dif > GAP_TOLERANCE:
+            if min_dif > tolerance:
                 augmented_spectrum.add(aug_peak)
                 augments.append(aug_peak)
     augmented_spectrum = np.array(augmented_spectrum)
@@ -65,3 +65,14 @@ def create_augmented_spectrum(
         raise ValueError(f"Unrecognized pivot type {type(pivot)}")
     
     return augmented_spectrum, index_shifted_pivot
+
+#=============================================================================#
+
+def find_augmented_gaps(
+    augmented_spectrum,
+    augmented_pivot,
+    target_groups,
+    tolerance,
+):
+    # TODO: this is just a wrapper for the method in gaps with a filter tacked on which removes gaps that intersect the pivot
+    pass
