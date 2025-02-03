@@ -13,7 +13,7 @@ find_<X>    | returns a list or numpy array of objects of type X that may be emp
 create_<X>  | returns a single object of type X.                                    |
 filter_<X>  | returns a subset from a list or numpy array of type X.                |"""             
 
-from .io import load_spectrum_from_mzML, read_fasta_records, load_fasta_records, load_fasta_as_strings, write_strings_to_fasta, save_strings_as_fasta, write_peaks_to_csv, save_peaks_as_csv
+from .io import *
 from .preprocessing import create_spectrum_bins, filter_spectrum_bins
 
 from .gaps import find_all_gaps
