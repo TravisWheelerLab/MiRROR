@@ -10,20 +10,22 @@ import mirror
 _KEYS = [
 # primary input/output types
     ('-o', '--output', argparse.FileType('w')),
-    ('-z', '--mzML', str),
-    ('-k', '--peaks', pathlib.Path),
+    ('-i', '--input', str),
+    ('-p', '--peaks', pathlib.Path),
     ('-g', '--gaps', pathlib.Path),
-    ('-p', '--pivots', pathlib.Path),
+    ('-v', '--pivots', pathlib.Path),
     ('-a', '--augmented_triplet', str),
     ('-s', '--spectrum_graph_pair', pathlib.Path),
     ('-x', '--affixes', pathlib.Path),
     ('-c', '--candidates', pathlib.Path),
 # parameters
     ('-N', '--num_processes', int),
+    ('-V', '--verbosity', int),
 #   preprocessing
     ('-M', '--max_mz', int),
     ('-R', '--resolution', float),
     ('-F', '--binned_frequency_threshold', int),
+    ('-I', '--spectrum_index', int),
 #   gap search
     ('-A', '--target_alphabet', pathlib.Path),
     ('-O', '--target_modifiers', str),

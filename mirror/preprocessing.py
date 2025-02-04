@@ -2,11 +2,50 @@ import multiprocessing
 from math import ceil
 
 import numpy as np
+import mzspeclib as mzlib
+import pyopenms as oms
 
+from .types import Iterator, Any
 from .util import add_tqdm
-from .io import oms
 
 #=============================================================================#
+# preprocessing for mzSpecLib spectra
+
+class MzSpecLib:
+
+    def __init__(self, lib: mzlib.SpectrumLibrary):
+        self._spectrum_library = lib
+    
+    def __len__(self):
+        return len(self._spectrum_library)
+    
+    def _get_spectrum(self,
+        idx: int
+    ) -> mzlib.Spectrum:
+        if idx >= len(self):
+            raise ValueError(f"{idx} exceeds library size {len(self)}")
+        return self._spectrum_library.get_spectrum(idx)
+
+    def get_peaks(self,
+        idx: int
+    ) -> np.ndarray:
+        peaks = self._get_spectrum(idx).peak_list
+        mz, intensity, metadata, etc = zip(*peaks)
+        return np.array(list(intensity)), np.array(list(mz)), list(metadata), list(etc)
+    
+    def _get_peptides(self,
+        idx: int
+    ) -> Iterator[list[tuple[str, Any]]]:
+        for analyte in self._get_spectrum(idx).analytes.values():
+            yield analyte.peptide.sequence
+    
+    def get_peptides(self,
+        idx: int
+    ) -> list[str]:
+        return [''.join(res[0] for res in pep_list) for pep_list in self._get_peptides(idx)]
+
+#=============================================================================#
+# preprocessing for oms.MSExperiment interface to mzML spectra
 
 def accumulate_bins(data: list[float], hist_arr: np.array, n_bins: int, max_val: int):
     hist_arr += np.histogram(data, bins = n_bins, range = (0, max_val))[0]
@@ -60,5 +99,5 @@ def filter_spectrum_bins(
     bin_mask = spectrum_bins > binned_frequency_threshold
     n_reduced_peaks = sum(bin_mask)
     reduced_frequencies = spectrum_bins[bin_mask]
-    reduced_mz = np.arange(int(max_mz / resolution))[bin_mask] * resolution
+    reduced_mz = np.arange(np.ceil(max_mz / resolution, int))[bin_mask] * resolution
     return reduced_frequencies, reduced_mz

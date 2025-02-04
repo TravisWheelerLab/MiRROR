@@ -2,6 +2,9 @@ from numpy import ndarray
 from pyopenms import MSExperiment
 from networkx import DiGraph
 
+from collections.abc import Iterator
+from typing import Any
+
 TargetGroup = list[float]
 Gap = tuple[float, tuple[int,int], int]
 

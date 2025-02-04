@@ -1,6 +1,6 @@
 __version__ = "0.0.1"      
 
-#from .io import *
+from .io import *
 from .preprocessing import create_spectrum_bins, filter_spectrum_bins
 
 from .gaps import find_all_gaps, TargetSpace, GapResult
