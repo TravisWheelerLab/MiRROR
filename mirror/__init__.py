@@ -1,22 +1,9 @@
-__version__ = "0.0.1"
+__version__ = "0.0.1"      
 
-"""FUNCTION NAMING CONVENTION
-prefix      | meaning                                                               |
-------------+-----------------------------------------------------------------------+
-load_<X>    | open, read, and format data from storage into memory.                 |
-read_<X>    | read and format data from an open file into memory.                   |
-            | (generally wrapped y a load_<X> function.)                            |
-save_<X>    | open, format, and write data from memory into storage.                |
-write_<X>   | format and write data from memory into an opened file.                |
-            | (generally wrapped by a save_<X> function.)                           |
-find_<X>    | returns a list or numpy array of objects of type X that may be empty. |
-create_<X>  | returns a single object of type X.                                    |
-filter_<X>  | returns a subset from a list or numpy array of type X.                |"""             
-
-from .io import *
+#from .io import *
 from .preprocessing import create_spectrum_bins, filter_spectrum_bins
 
-from .gaps import find_all_gaps
+from .gaps import find_all_gaps, TargetSpace, GapResult
 from .pivots import find_pivots
 from .boundaries import find_boundary_peaks, create_augmented_spectrum
 

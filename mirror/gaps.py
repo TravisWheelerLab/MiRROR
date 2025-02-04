@@ -13,7 +13,7 @@ class GapResult:
     def __init__(self,
         group_id: int,
         target_group: TargetGroup,
-        gaps: list[tuple[int, int]],
+        gaps: list[Gap],
     ):
         self.group_id = group_idx
         self.group_values = target_group
@@ -51,9 +51,6 @@ class TargetSpace:
         self.min_target = min(target_values) - tolerance
         self.max_target = max(target_values) + tolerance
     
-    def __repr__(self):
-        return f"TargetSpace"
-
     def _bound_bisection(self,
         idx: int
     ) -> int:
@@ -87,10 +84,11 @@ class TargetSpace:
     
     def find_gaps(self,
         peaks: np.ndarray
-    ) -> list[list[Gap]]:
+    ) -> list[GapResult]:
         unassigned_gaps = self._bisect_gaps(peaks)
         gaps_by_group = self._assign_target_groups(unassigned_gaps)
-        return [GapResult(group_id, result) for group_id, result in enumerate(gaps_by_group)]
+        return [GapResult(group_id, self.target_groups[group_id], result) 
+            for group_id, result in enumerate(gaps_by_group)]
 
 #=============================================================================#
 

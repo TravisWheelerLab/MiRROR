@@ -2,6 +2,7 @@ import pyopenms as oms
 from Bio import Seq, SeqRecord, SeqIO
 
 from .types import *
+from .gaps import GapResult
 from .util import comma_separated
 
 #=============================================================================#
@@ -72,18 +73,65 @@ def write_target_groups(handle, target_groups: list[TargetGroup]):
 #=============================================================================#
 # gaps input
 
-def read_gaps(handle) -> list[list[Gap]]:
-    pass
+def read_gap_results(handle) -> list[GapResult]:
+    results = []
+    counter = -1
+    group_id = -1
+    group_vals = []
+    gap_vals = []
+    gap_left_indices = []
+    gap_right_indices = []
+    local_ids = []
+    for line in handle.readlines():
+        counter += 1
+        if counter == 0:
+            group_id = int(line)
+        elif counter == 1:
+            group_vals = split_commas(line, float)
+        elif counter == 2:
+            gap_vals = split_commas(line, float)
+        elif counter == 3:
+            gap_left_indices = split_commas(line, int)
+        elif counter == 4:
+            gap_right_indices = split_commas(line, int)
+        elif counter == 5:
+            local_ids = split_commas(line, int)
+        elif line == "":
+            gap_list = list(zip(gap_vals, zip(gap_left_indices, gap_right_indices), local_ids))
+            results.append(GapResult(group_id, target_group, gap_list))
+            counter = -1
+            group_id = -1
+            group_vals = []
+            gap_vals = []
+            gap_left_indices = []
+            gap_right_indices = []
+            local_ids = []
+    if counter != -1:
+        raise Exception("malformed gap result file, at least one record could not be read.")
+    result.sort(key = lambda x: x.group_id)
+    return results
 
-def load_gaps(path_to_csv: str):
+def load_gap_results(path_to_csv: str):
     with open(path_to_csv, 'r') as handle:
         return read_gaps_from_csv(handle)
 
 # gaps output
 
-def write_gaps(handle, gap_structure: list[list[Gap]]):
-    pass
+def _write_gap_result(handle, result: GapResult):
+    group_id = str(result.group_id)
+    group_vals = comma_separated(result.group_values)
+    gap_vals = comma_separated(result.values())
+    index_arr = result.indices()
+    gap_left_indices = comma_separated(index_arr[:, 1])
+    gap_right_indices = comma_separated(index_arr[:, 2])
+    local_ids = comma_separated(result.local_ids())
+    for x in [group_id, group_vals, gap_vals, gap_left_indices, gap_right_indices, local_ids, ""]:
+        handle.writeline(x)
 
-def save_gaps(path_to_csv: str, gap_structure: list[list[Gap]]):
+def write_gap_results(handle, gap_structure: list[GapResult]):
+    for result in gap_structure:
+        _write_gap_result(handle, result)
+
+def save_gap_results(path_to_csv: str, gap_structure: list[GapResult]):
     with open(path_to_csv, 'w') as handle:
         write_gaps_to_csv(handle, gap_structure)

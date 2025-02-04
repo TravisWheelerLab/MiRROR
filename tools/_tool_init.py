@@ -19,6 +19,7 @@ _KEYS = [
     ('-x', '--affixes', pathlib.Path),
     ('-c', '--candidates', pathlib.Path),
 # parameters
+    ('-N', '--num_processes', int),
 #   preprocessing
     ('-M', '--max_mz', int),
     ('-R', '--resolution', float),
