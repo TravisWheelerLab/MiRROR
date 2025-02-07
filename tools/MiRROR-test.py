@@ -122,17 +122,34 @@ def main(args):
             for (b_bound, b_res) in b_boundaries:
                 for (y_bound, y_res) in y_boundaries:
                     if args.verbosity > 1:
-                        print(f"boundaries:\n\t{peaks[b_bound]}, {b_bound}, {b_res}\n\t{peaks[y_bound]}, {y_bound}, {y_res}")
-                    # create augmented peaks, pivots, gaps
-                    augmented_peaks, augmented_pivot = mirror.create_augmented_spectrum(
+                        print(f"\tboundaries:\n\t\t{peaks[b_bound]}, {b_bound}, {b_res}\n\t\t{peaks[y_bound]}, {y_bound}, {y_res}")
+                    
+                    # create augmented peaks
+                    augmented_peaks, offset = mirror.create_augmented_spectrum(
                         peaks, 
                         pivot,
                         b_bound,
                         y_bound,
                         args.gap_tolerance)
-                    augmented_gaps = [r.index_tuples() for r in target_space.find_gaps(augmented_peaks)]
-                    augmented_gaps = mirror.collapse_second_order_list(augmented_gaps)
+                    
+                    # create augmented pivot
+                    augmented_pivot = mirror.create_augmented_pivot(
+                        augmented_peaks,
+                        offset,
+                        pivot)
+                    
+                    # create augmented gaps
+                    original_gaps = mirror.util.collapse_second_order_list(r.index_tuples() for r in gap_results)
+                    augmented_gaps = mirror.create_augmented_gaps(
+                        augmented_peaks,
+                        augmented_pivot,
+                        offset,
+                        original_gaps)
 
+                    print(f"\t\taugmented peaks: {augmented_peaks}")
+                    print(f"\t\taugmented pivot: {augmented_pivot}")
+                    print(f"\t\taugmented gaps: {augmented_gaps}")
+                    
                     # create topologies
                     graph_pair = mirror.create_spectrum_graph_pair(
                         augmented_peaks, 
@@ -148,7 +165,7 @@ def main(args):
                         gap_comparator)
                     
                     if args.verbosity > 1:
-                        print("paths",dual_paths)
+                        print("\t\tpaths",dual_paths)
 
                     # find viable path pairings
                     pair_indices = mirror.find_edge_disjoint_dual_path_pairs(dual_paths)
@@ -161,7 +178,7 @@ def main(args):
                         occurrence_threshold = args.occurrence_threshold)
 
                     if args.verbosity > 1:
-                        print("affixes",affixes)
+                        print("\t\taffixes",affixes)
 
                     # create candidates
                     for (i, j) in pair_indices:
@@ -178,6 +195,7 @@ def main(args):
                         #    args.alignment_parameters)
                         for candidate in candidates:
                             score, idx = candidate.edit_distance(true_sequence)
+                            print("\t\tcandidate:", candidate.sequences()[idx])
                             if score < best_score:
                                 best_score = score
                                 best_cand = (candidate,idx)

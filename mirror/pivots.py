@@ -53,7 +53,8 @@ class Pivot:
     def negative_index_pairs(self):
         """index pairs that should not be present in the gap set."""
         inds_a, inds_b = self.index_pairs()
-        negative_pairs = [(inds_a[0], inds_b[0]),
+        negative_pairs = [
+            (inds_a[0], inds_b[0]),
             (inds_a[1], inds_b[1]),
             (inds_a[1], inds_b[0]),
             (inds_a[0], inds_b[1])]

@@ -4,6 +4,7 @@ from sortedcontainers import SortedList
 import numpy as np
 
 from .util import reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
+from .types import Gap
 from .pivots import Pivot
 
 #=============================================================================#
@@ -25,6 +26,7 @@ def create_augmented_spectrum(
     b_idx: tuple[int, str],
     y_idx: tuple[int, str],
     tolerance: float,
+    padding: int = 3
 ):
     # reflect the boundaries
     center = pivot.center()
@@ -33,7 +35,7 @@ def create_augmented_spectrum(
     
     # augment the spectrum
     n = len(spectrum)
-    subspectrum = spectrum[max(0,y_idx - 3):min(n - 1,b_idx + 4)]
+    subspectrum = spectrum[max(0, y_idx - padding):min(n - 1, b_idx + padding + 1)]
     augmented_spectrum = SortedList(subspectrum)
     augments = []
     for val in [b_mz, y_mz]:
@@ -54,6 +56,16 @@ def create_augmented_spectrum(
     pivot_left_mz = spectrum[pivot_left]
     new_left = len([val for val in augmented_spectrum if val < pivot_left_mz])
     offset = new_left - pivot_left
+    
+    return augmented_spectrum, offset
+
+#=============================================================================#
+
+def create_augmented_pivot(
+    augmented_spectrum: np.ndarray,
+    offset: int,
+    pivot: Pivot,
+):
     if type(pivot) == Pivot:
         index_pairs = pivot.index_pairs()
         new_index_pairs = [(i + offset, j + offset) for (i, j) in index_pairs]
@@ -64,22 +76,33 @@ def create_augmented_spectrum(
         except AssertionError as e:
             print(index_shifted_pivot.peaks(), pivot.peaks())
             raise e
-    #elif type(pivot) == VirtualPivot:
-    #    indices = pivot.indices()
-    #    new_indices = (indices[0] + offset, indices[1] + offset)
-    #    index_shifted_pivot = VirtualPivot(new_indices, pivot.center())
+        return index_shifted_pivot
     else:
         raise ValueError(f"Unrecognized pivot type {type(pivot)}")
-    
-    return augmented_spectrum, index_shifted_pivot
 
-#=============================================================================#
-
-def find_augmented_gaps(
-    augmented_spectrum,
-    augmented_pivot,
-    target_groups,
-    tolerance,
+def create_augmented_gaps(
+    augmented_spectrum: np.ndarray,
+    augmented_pivot: Pivot,
+    offset: int,
+    original_gaps: list[Gap]
 ):
-    # TODO: this is just a wrapper for the method in gaps with a filter tacked on which removes gaps that intersect the pivot
-    pass
+    return list(_enumerate_augmented_gaps(
+        len(augmented_spectrum), 
+        offset, 
+        augmented_pivot.negative_index_pairs(),
+        original_gaps))
+
+def _enumerate_augmented_gaps(
+    size: int,
+    offset: int,
+    nonviable_gaps: list[Gap],
+    original_gaps: list[Gap],
+):
+    for (original_i, original_j) in original_gaps:
+        i = original_i + offset
+        j = original_j + offset
+        inbounds = (0 <= i <= j < size)
+        viable = ((i, j) not in nonviable_gaps)
+        if inbounds and viable:
+            yield (i,j)
+    
