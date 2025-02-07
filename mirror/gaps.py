@@ -1,4 +1,3 @@
-#from .scan import ScanConstraint, constrained_pair_scan
 from bisect import bisect_left, bisect_right
 
 import numpy as np
@@ -26,18 +25,22 @@ class GapResult:
             self._gap_values[i] = val
             self._gap_data[i, :] = [l_idx, r_idx, local_id]
     
-    def __len__(self):
+    def __len__(self) -> int:
         return self.n_gaps
     
-    def values(self):
+    def values(self) -> np.ndarray:
         return self._gap_values 
 
-    def indices(self):
+    def indices(self) -> np.ndarray:
         return self._gap_data[:, :2]
     
-    def local_ids(self):
+    def index_tuples(self) -> list[tuple[int,int]]:
+        return [(i, j) for i, j in self.indices()]
+    
+    def local_ids(self) -> np.ndarray:
         return self._gap_data[:, 2]
 
+#=============================================================================#
 
 class TargetSpace:
 
@@ -46,17 +49,20 @@ class TargetSpace:
         residues: list[chr],
         tolerance: float
     ):
+        # store initialization data
         self.target_groups = target_groups
-        self.n_groups = len(target_groups)
         self.residues = residues
         self.tolerance = tolerance
+        # restructure data to support searching across all targets while recovering the group and local identities of a match.
         all_targets = collapse_second_order_list(
             [[(target, group_idx, local_idx) for (local_idx, target) in enumerate(group)] for (group_idx, group) in enumerate(target_groups)])
         all_targets.sort(key = lambda x: x[0])
-        self.n_targets = len(all_targets)
         self.target_values, self.target_group_idx, self.target_local_idx = zip(*all_targets)
         self.min_target = min(self.target_values) - tolerance
         self.max_target = max(self.target_values) + tolerance
+        # object size
+        self.n_groups = len(target_groups)
+        self.n_targets = len(all_targets)
     
     def _bound_bisection(self,
         idx: int
@@ -80,6 +86,7 @@ class TargetSpace:
         unassigned_gaps
     ) -> list[list[Gap]]:
         gaps_by_group = [[] for _ in range(self.n_groups)]
+        uncategorized = []
         for (dif, gap, target_range) in unassigned_gaps:
             for target_match_idx in range(target_range[0], target_range[1] + 1):
                 target_val = self.target_values[target_match_idx]
@@ -87,13 +94,15 @@ class TargetSpace:
                     target_grp_idx = self.target_group_idx[target_match_idx]
                     target_lcl_idx = self.target_local_idx[target_match_idx]
                     gaps_by_group[target_grp_idx].append((dif, gap, target_lcl_idx))
-        return gaps_by_group
+                else:
+                    uncategorized.append((dif, gap, -1))
+        return gaps_by_group, uncategorized
     
     def find_gaps(self,
         peaks: np.ndarray
     ) -> list[GapResult]:
         unassigned_gaps = self._bisect_gaps(peaks)
-        gaps_by_group = self._assign_target_groups(unassigned_gaps)
+        gaps_by_group, _ = self._assign_target_groups(unassigned_gaps)
         return [GapResult(group_id, self.residues[group_id], self.target_groups[group_id], result) 
             for group_id, result in enumerate(gaps_by_group)]
     

@@ -1,6 +1,4 @@
-from .util import mask_ambiguous_residues, residue_lookup, disjoint_pairs
-from .pivots import Pivot
-from .graph_utils import path_to_edges, extend_truncated_paths
+#
 
 import networkx as nx
 import numpy as np
@@ -8,6 +6,9 @@ from editdistance import eval as edit_distance
 
 from .affixes import Affix, AffixPair
 from .spectral_alignment import score_sequence_to_spectrum
+from .util import mask_ambiguous_residues, residue_lookup, disjoint_pairs
+from .pivots import Pivot
+from .graph_utils import path_to_edges, unzip_dual_path, extend_truncated_paths, GraphPair
 
 #=============================================================================#
 
@@ -50,23 +51,32 @@ class Candidate:
         )
     
     def __repr__(self):
-        return '\n'.join(self.sequences())
+        return ' | '.join(self.sequences())
 
 #=============================================================================#
 
 def create_candidates(
     augmented_spectrum: np.ndarray,
+    spectrum_graphs,
     affix_pair: AffixPair,
+    boundary_chrs,
+    pivot_res,
 ) -> list[Candidate]:
     # enumerates the candidates that can be constructed from a pair of affixes
-    return list(_enumerate_candidates)
+    return list(_enumerate_candidates(augmented_spectrum, affix_pair, spectrum_graphs, boundary_chrs, pivot_res))
 
 def _enumerate_candidates(
+    aug_spectrum,
     affix_pair: AffixPair,
+    spectrum_graphs: GraphPair,
+    boundary_chrs,
+    pivot_res,
 ) -> list[Candidate]:
     afx_a, afx_b = affix_pair
-    extension_a = [afx_a] + list(extend_truncated_paths([afx_a], *spectrum_graphs))
-    extension_b = [afx_b] + list(extend_truncated_paths([afx_b], *spectrum_graphs))
+    path_a = afx_a.path()
+    path_b = afx_b.path()
+    extension_a = [path_a] + list(extend_truncated_paths([path_a], *spectrum_graphs))
+    extension_b = [path_b] + list(extend_truncated_paths([path_b], *spectrum_graphs))
     for ext_afx_a in extension_a:
         for ext_afx_b in extension_b:
             end_a = ext_afx_a[-1]
@@ -123,14 +133,14 @@ def filter_candidate_sequences(
 
 #=============================================================================#
 
-def _call_sequence_from_path(spectrum, paired_path):
-    for half_path in unzip_paired_path(paired_path):
+def _call_sequence_from_path(spectrum, dual_path):
+    for half_path in unzip_dual_path(dual_path):
         edges = path_to_edges(half_path)
         get_res = lambda e: residue_lookup(spectrum[max(e)] - spectrum[min(e)])
         yield list(map(get_res, edges))
 
-def call_sequence_from_path(spectrum, paired_path):
-    seq1, seq2 = _call_sequence_from_path(spectrum, paired_path)
+def call_sequence_from_path(spectrum, dual_path):
+    seq1, seq2 = _call_sequence_from_path(spectrum, dual_path)
     sequence = []
     for (res1, res2) in zip(seq1, seq2):
         if res1 == 'X' and res2 != 'X':

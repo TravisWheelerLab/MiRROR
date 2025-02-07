@@ -59,7 +59,8 @@ def _build_parser(prog: str, description: str, epilog: str, keys: list):
 
 _DEFAULT_PARSER = _build_parser("MiRROR", "prototype", "", _KEYS)
 
-args = _DEFAULT_PARSER.parse_args()
+#args = _DEFAULT_PARSER.parse_args()
+#print(args)
 
 def timed_op(msg, op, *args, **kwargs):
     print(msg)

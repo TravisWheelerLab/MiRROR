@@ -3,9 +3,7 @@ from enum import Enum
 
 import networkx as nx
 
-from .graph_utils import GraphPair
 from .util import AMINO_MASS_MONO, GAP_TOLERANCE, INTERGAP_TOLERANCE
-#from .scan import ScanConstraint, constrained_pair_scan
 from .pivots import Pivot
 from .graph_utils import *
 

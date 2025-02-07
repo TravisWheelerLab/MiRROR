@@ -6,6 +6,7 @@ from Bio import Seq, SeqRecord, SeqIO
 import warnings
 warnings.filterwarnings(action="ignore", category = ValidationWarning)
 
+# the io module is a terminal object; it cannot be imported by any other local module.
 from .types import *
 from .gaps import GapResult
 from .util import collapse_second_order_list, comma_separated, split_commas, AMINOS, AMINO_MASS, AMINO_MASS_MONO
@@ -123,16 +124,6 @@ def save_combined_target_groups(path_to_dlm):
         target_groups,
         residues)
 
-def save_complete_target_groups(path_to_dlm):
-    target_groups = [[m, m_mono] for (m, m_mono) in zip(AMINO_MASS, AMINO_MASS_MONO)]
-    target_groups = [collapse_second_order_list([v, v - 17, v - 18, v + 17, v + 18] for v in x) for x in target_groups]
-    residues = AMINOS
-    save_target_groups(
-        path_to_dlm, 
-        target_groups,
-        residues)
-
-
 #=============================================================================#
 # gaps input
 
@@ -148,35 +139,45 @@ def read_gap_results(handle) -> list[GapResult]:
     local_ids = []
     for line in handle.readlines():
         counter += 1
+        #print(f"counter: {counter}, line:\n{line[:-1]}")
         if counter == 0:
             group_id += 1
             group_res = line
+            #print(f"group_id: {group_id}, group_res: {group_res}")
         elif counter == 1:
             group_vals = split_commas(line, float)
+            #print(f"group_vals: {group_vals}")
         elif counter == 2:
             gap_vals = split_commas(line, float)
+            #print(f"gap_vals: {gap_vals}")
         elif counter == 3:
             gap_left_indices = split_commas(line, int)
+            #print(f"gap_left_indices: {gap_left_indices}")
         elif counter == 4:
             gap_right_indices = split_commas(line, int)
+            #print(f"gap_right_indices: {gap_right_indices}")
         elif counter == 5:
             local_ids = split_commas(line, int)
-        elif line == "":
+            #print(f"local_ids: {local_ids}")
+        elif line == "\n":
             gap_list = list(zip(gap_vals, zip(gap_left_indices, gap_right_indices), local_ids))
-            results.append(GapResult(group_id, group_res, target_group, gap_list))
+            results.append(GapResult(group_id, group_res, group_vals, gap_list))
+            #print(f"results: {results[-1]}")
             counter = -1
             group_vals = []
             gap_vals = []
             gap_left_indices = []
             gap_right_indices = []
             local_ids = []
+        else:
+            print(f"unrecognized line: {line}")
     if counter != -1:
         raise Exception("malformed gap result file, at least one record could not be read.")
     return results
 
-def load_gap_results(path_to_csv: str):
-    with open(path_to_csv, 'r') as handle:
-        return read_gaps_from_csv(handle)
+def load_gap_results(path_to_gaps: str):
+    with open(path_to_gaps, 'r') as handle:
+        return read_gap_results(handle)
 
 # gaps output
 
@@ -195,11 +196,12 @@ def _write_gap_result(handle, result: GapResult):
             handle.write(x+'\n')
         else:
             handle.write(',\n')
+
 def write_gap_results(handle, gap_structure: list[GapResult]):
     gap_structure.sort(key = lambda result: result.group_id)
     for result in gap_structure:
         _write_gap_result(handle, result)
 
-def save_gap_results(path_to_csv: str, gap_structure: list[GapResult]):
-    with open(path_to_csv, 'w') as handle:
-        write_gaps_to_csv(handle, gap_structure)
+def save_gap_results(path_to_gaps: str, gap_structure: list[GapResult]):
+    with open(path_to_gaps, 'w') as handle:
+        write_gap_results(handle, gap_structure)

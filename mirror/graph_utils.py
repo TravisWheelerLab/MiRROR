@@ -3,14 +3,10 @@ import itertools
 import networkx as nx
 import numpy as np
 
+from .types import Edge, SingularPath, DualPath, GraphPair
 from .util import disjoint_pairs
 
 #=============================================================================#
-
-Edge = tuple[int,int]
-SingularPath = list[int]
-DualPath = list[tuple[int,int]]
-GraphPair = tuple[nx.DiGraph, nx.DiGraph]
 
 def get_sources(D: nx.DiGraph):
     return [i for i in D.nodes if D.in_degree(i) == 0 if i != -1]
@@ -234,6 +230,7 @@ def extend_truncated_paths(
 
 def find_edge_disjoint_dual_path_pairs(
     dual_paths: list[DualPath],
+    mode = "table"
 ) -> list[tuple[int,int]]:
     "associates between paths that do not share any edges."
     path_edge_sets = list(map(dual_path_to_edge_set, dual_paths))

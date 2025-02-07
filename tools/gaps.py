@@ -1,4 +1,5 @@
-from _tool_init import mirror, pathlib, args, timed_op
+from _tool_init import mirror, pathlib, _DEFAULT_PARSER, timed_op
+args = default_parser.parse_args()
 
 def main(
     out,

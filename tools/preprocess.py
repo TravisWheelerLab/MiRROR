@@ -1,4 +1,5 @@
-from _tool_init import mirror, pathlib, args, timed_op
+from _tool_init import mirror, pathlib, _DEFAULT_PARSER, timed_op
+args = default_parser.parse_args()
 
 def main(
     out,
@@ -50,6 +51,8 @@ def main(
 
         def getdata():
             intensity, mz, metadata, etc = mzspeclib.get_peaks(spectrum_index)
+            for (i,z,d,e) in zip(intensity,mz,metadata,etc):
+                print(i,z,d,e)
             peptides = mzspeclib.get_peptides(spectrum_index)
             return intensity, mz, peptides
         
@@ -74,7 +77,6 @@ def main(
         out.close()
     except Exception as e:
         print(f"failed to close output file:\n\t{repr(e)}")
-
 
 if __name__ == "__main__":
     main(args.output, 

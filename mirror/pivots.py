@@ -1,8 +1,8 @@
-import numpy as np
 from statistics import mode
 
+import numpy as np
+
 from .util import mass_error, count_mirror_symmetries, residue_lookup, reflect, find_initial_b_ion, find_terminal_y_ion
-#from .scan import ScanConstraint, constrained_pair_scan
 
 #=============================================================================#
 
@@ -64,51 +64,7 @@ class Pivot:
     
     def __eq__(self, other):
         return self.peaks() == other.peaks()
-
-class VirtualPivot(Pivot):
-
-    def __init__(self, index_data, virtual_center):
-        self.index_data = index_data
-        self._center = virtual_center
-    
-    def peaks(self):
-        raise NotImplementedError("Virtual pivots are not associated to peaks.")
-
-    def indices(self):
-        return self.index_data
-
-    def peak_pairs(self):
-        raise NotImplementedError("Virtual pivots are not associated to peaks.")
-    
-    def index_pairs(self):
-        raise NotImplementedError("Virtual pivots are not composed of pairs.")
-    
-    def outer_left(self):
-        return self.index_data[0]
-    
-    def inner_left(self):
-        return self.index_data[0]
-    
-    def inner_right(self):
-        return self.index_data[1]
-    
-    def outer_right(self):
-        return self.index_data[1]
-
-    def center(self):
-        return self._center
-    
-    def gap(self):
-        return -1
-    
-    def negative_index_pairs(self):
-        """index pairs that should not be present in the gap set."""
-        return []
-
-    def __repr__(self):
-        return f"VirtualPivot{self.indices(), self.center()}"
         
-
 #=============================================================================#
 # utility functions for finding pivots in the gap structure of a spectrum
 
@@ -180,7 +136,6 @@ def find_adjacent_pivots(
 ):
     return list(_find_adjacent_pivots(spectrum, tolerance))
 
-
 #=============================================================================#
 
 def filter_viable_pivots(
@@ -192,19 +147,19 @@ def filter_viable_pivots(
         return pivots
     else:
         pivot_symmetries = np.array([count_mirror_symmetries(spectrum, pivot.center()) for pivot in pivots])
-        pivot_initial_b_ions = np.array([pivot.initial_b(spectrum) != [] for pivot in pivots])
-        pivot_terminal_y_ions = np.array([pivot.terminal_y(spectrum) != [] for pivot in pivots])
+        #pivot_initial_b_ions = np.array([pivot.initial_b(spectrum) != [] for pivot in pivots])
+        #pivot_terminal_y_ions = np.array([pivot.terminal_y(spectrum) != [] for pivot in pivots])
         pivot_residues = np.array([residue_lookup(pivot.gap()) for pivot in pivots])
         try:
             viable = pivot_symmetries > symmetry_threshold
-            viable *= pivot_initial_b_ions
-            viable *= pivot_terminal_y_ions
+            #viable *= pivot_initial_b_ions
+            #viable *= pivot_terminal_y_ions
         except Exception as e:
             print(e)
             print(pivots)
             print(viable)
-            print(pivot_initial_b_ions)
-            print(pivot_terminal_y_ions)
+            #print(pivot_initial_b_ions)
+            #print(pivot_terminal_y_ions)
             raise e
         if any(pivot_residues != 'X'):
             viable *= pivot_residues != 'X'
@@ -216,7 +171,6 @@ def construct_all_pivots(
     gap_indices: list[tuple[int,int]],
     tolerance: float,
 ):
-
     o_pivots = find_overlapping_pivots(spectrum, gap_indices, tolerance)
     a_pivots = find_adjacent_pivots(spectrum, tolerance)
     return o_pivots + a_pivots

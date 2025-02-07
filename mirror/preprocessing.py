@@ -28,11 +28,11 @@ class MzSpecLib:
 
     def get_peaks(self,
         idx: int
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray, list, list]:
         peaks = self._get_spectrum(idx).peak_list
         mz, intensity, metadata, etc = zip(*peaks)
         return np.array(list(intensity)), np.array(list(mz)), list(metadata), list(etc)
-    
+
     def _get_peptides(self,
         idx: int
     ) -> Iterator[list[tuple[str, Any]]]:
@@ -57,7 +57,14 @@ def generate_bins(data_iterable, n_bins: int, max_val: int):
         hist_arr += np.histogram(data, bins = n_bins, range = (0, max_val))[0]
     return hist_arr
 
-def create_spectrum_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, parallelize = False, n_processes = 4, verbose = False):
+def create_spectrum_bins(
+    exp: oms.MSExperiment, 
+    max_mz: int, 
+    resolution: float, 
+    parallelize = False, 
+    n_processes = 4, 
+    verbose = False
+) -> np.ndarray:
     n_bins = int(max_mz / resolution)
     n_spectra = exp.getNrSpectra()
     spectrum_bins = np.zeros(n_bins)
@@ -88,16 +95,20 @@ def create_spectrum_bins(exp: oms.MSExperiment, max_mz: int, resolution: float, 
         print(sum(spectrum_bins == 0), '/', len(spectrum_bins))
     return spectrum_bins
 
-#=============================================================================#
+# reducing raw bin data into a set of peaks
 
 def filter_spectrum_bins(
     spectrum_bins: np.ndarray,
     max_mz: int,
     resolution: float,
     binned_frequency_threshold: int,
-):
+) -> tuple[np.ndarray, np.ndarray]:
     bin_mask = spectrum_bins > binned_frequency_threshold
     n_reduced_peaks = sum(bin_mask)
     reduced_frequencies = spectrum_bins[bin_mask]
     reduced_mz = np.arange(np.ceil(max_mz / resolution, int))[bin_mask] * resolution
     return reduced_frequencies, reduced_mz
+
+#=============================================================================#
+# clustering for PTMs - optional, but without this step 
+# the candidate set may be too large to enumerate.

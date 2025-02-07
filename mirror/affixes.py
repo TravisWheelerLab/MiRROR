@@ -1,4 +1,7 @@
+#
+
 import numpy as np
+
 from .graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges, find_edge_disjoint_dual_path_pairs
 from .spectrum_graphs import GAP_KEY
 
@@ -37,7 +40,7 @@ def _translate_dual_path(
     asc_path, desc_path = unzip_dual_path(dual_path)
     return (
         _translate_singular_path(asc_path, asc_graph), 
-        _translate_dual_path(desc_path, desc_graph))
+        _translate_singular_path(desc_path, desc_graph))
 
 def _translate_singular_path(
     singular_path: SingularPath,
@@ -58,7 +61,8 @@ def filter_affixes(
     translations = np.array([afx.translate() for afx in affixes])
     asc_occurrences = _count_occurrences(translations[:, 0], path_to_suffix_array)
     desc_occurrences = _count_occurrences(translations[:, 1], path_to_suffix_array)
-    return affixes[asc_occurrences + desc_occurrences > 0]
+    occurrence_mask = asc_occurrences + desc_occurrences > 0
+    return affixes[occurrence_mask]
 
 def _count_occurrences(
     biosequences: np.ndarray,
@@ -66,7 +70,7 @@ def _count_occurrences(
 ) -> list[int]:
     # associates strings, assumed to be biosequence, to their occurrence in a suffix array.
     # TODO: these will be calls to pylibsufr 
-    pass
+    return np.ones_like(biosequences)
 
 #=============================================================================#
 

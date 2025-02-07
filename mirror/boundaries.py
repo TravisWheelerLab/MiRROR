@@ -1,7 +1,10 @@
-from .pivots import Pivot, VirtualPivot
-from .util import reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
-import numpy as np
+#
+
 from sortedcontainers import SortedList
+import numpy as np
+
+from .util import reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
+from .pivots import Pivot
 
 #=============================================================================#
 
@@ -11,7 +14,7 @@ def find_boundary_peaks(
     valid_terminal_residues,
 ):
     putative_b_ions = find_initial_b_ion(spectrum, pivot.outer_right(), len(spectrum), pivot.center())
-    putative_y_ions = filter(lambda res: res in valid_terminal_residues, find_terminal_y_ion(spectrum, pivot.outer_left()))
+    putative_y_ions = filter(lambda y: y[1] in valid_terminal_residues, find_terminal_y_ion(spectrum, pivot.outer_left()))
     return list(putative_b_ions), list(putative_y_ions)
 
 #=============================================================================#
@@ -57,10 +60,10 @@ def create_augmented_spectrum(
         new_peak_pairs = [(augmented_spectrum[i], augmented_spectrum[j]) for (i,j) in new_index_pairs]
         index_shifted_pivot = Pivot(*new_peak_pairs, *new_index_pairs)
         assert index_shifted_pivot.peaks() == pivot.peaks()
-    elif type(pivot) == VirtualPivot:
-        indices = pivot.indices()
-        new_indices = (indices[0] + offset, indices[1] + offset)
-        index_shifted_pivot = VirtualPivot(new_indices, pivot.center())
+    #elif type(pivot) == VirtualPivot:
+    #    indices = pivot.indices()
+    #    new_indices = (indices[0] + offset, indices[1] + offset)
+    #    index_shifted_pivot = VirtualPivot(new_indices, pivot.center())
     else:
         raise ValueError(f"Unrecognized pivot type {type(pivot)}")
     

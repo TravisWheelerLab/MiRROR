@@ -4,6 +4,8 @@ import pyopenms as oms
 import numpy as np
 from tqdm import tqdm
 
+# the util module is an initial object; it cannot have any local dependencies.
+
 #=============================================================================#
 # residue constants and functions
 
@@ -160,7 +162,13 @@ def comma_separated(items):
     return ','.join(map(str, items))
 
 def split_commas(commastr, target_type):
-    return list(map(target_type, commastr.split(',')))
+    parts = commastr.split(',')
+    try:
+        return list(map(target_type, parts))
+    except ValueError:
+        return []
+    except Exception as e:
+        raise e
 
 def collapse_second_order_list(llist: list[list]):
     return list(itertools.chain.from_iterable(llist))
@@ -176,12 +184,21 @@ def add_tqdm(inputs, total=None, description=None):
 #=============================================================================#
 # simulation via pyOpenMS
 
-def digest_trypsin(seq: str, minimum_length: int = 7, maximum_length: int = 40):
-    dig = oms.ProteaseDigestion()
-    result = []
-    oms_seq = oms.AASequence.fromString(seq)
-    dig.digest(oms_seq, result, minimum_length, maximum_length)
-    return [r.toString() for r in result]
+def default_param():
+    param = oms.Param()
+    param.setValue("add_b_ions", "true")
+    param.setValue("add_y_ions", "true")
+    param.setValue("add_metainfo", "true")
+    return param
+
+def advanced_param():
+    param = oms.Param()
+    param.setValue("add_b_ions", "true")
+    param.setValue("add_y_ions", "true")
+    param.setValue("add_all_precursor_charges", "true")
+    param.setValue("add_losses", "true")
+    param.setValue("add_metainfo", "true")
+    return param
 
 def generate_fragment_spectrum(seq: str, param: oms.Param):
     tsg = oms.TheoreticalSpectrumGenerator()
@@ -190,14 +207,6 @@ def generate_fragment_spectrum(seq: str, param: oms.Param):
     tsg.setParameters(param)
     tsg.getSpectrum(spec, peptide, 1, 1)
     return spec
-
-def generate_default_fragment_spectrum(seq: str):
-    param = oms.Param()
-    param.setValue("add_metainfo", "true")
-    return generate_fragment_spectrum(seq, param)
-
-def list_mz(spec: oms.MSSpectrum):
-    return np.array([peak.getMZ() for peak in spec])
 
 def get_b_ion_series(seq: str):
     param = oms.Param()
@@ -210,6 +219,39 @@ def get_y_ion_series(seq: str):
     param.setValue("add_b_ions", "false")
     param.setValue("add_y_ions", "true")
     return list_mz(generate_fragment_spectrum(seq,param))
+
+def generate_default_fragment_spectrum(seq: str):
+    return generate_fragment_spectrum(
+        seq, param = default_param())
+
+def list_mz(spec: oms.MSSpectrum):
+    return np.array([peak.getMZ() for peak in spec])
+
+def list_intensity(spec: oms.MSSpectrum):
+    "TODO"
+    pass
+
+def simulate_peaks(seq: str, param = default_param()):
+    "Associate a sequence to an array of its b and y ions."
+    return list_mz(generate_fragment_spectrum(seq, param))
+
+def digest_trypsin(seq: str, minimum_length: int = 7, maximum_length: int = 50):
+    "Uses OpenMS ProteaseDigestion interface to generate tryptic peptides from a sequence."
+    dig = oms.ProteaseDigestion()
+    result = []
+    oms_seq = oms.AASequence.fromString(seq)
+    dig.digest(oms_seq, result, minimum_length, maximum_length)
+    return [r.toString() for r in result]
+
+def enumerate_tryptic_peptides(sequences: list[str], minimum_length: int = 7, maximum_length: int = 50):
+    "Lazily iterates the tryptic peptides of a list of sequences."
+    dig = oms.ProteaseDigestion()
+    for seq in sequences:
+        for pep in digest_trypsin(seq, minimum_length, maximum_length):
+            yield pep
+
+def enumerate_tryptic_spectra(sequences: list[str], minimum_length: int = 7, maximum_length: int = 50):
+    return map(simulate_peaks, enumerate_tryptic_peptides(sequences, minimum_length, maximum_length))
 
 #=============================================================================#
 # mirror symmetry
