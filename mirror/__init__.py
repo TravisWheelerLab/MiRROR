@@ -4,7 +4,7 @@ from .io import *
 from .preprocessing import create_spectrum_bins, filter_spectrum_bins
 
 from .gaps import find_all_gaps, TargetSpace, GapResult
-from .pivots import find_pivots
+from .pivots import find_all_pivots
 from .boundaries import find_boundary_peaks, create_augmented_spectrum
 
 from .spectrum_graphs import create_spectrum_graph_pair

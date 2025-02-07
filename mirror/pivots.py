@@ -2,7 +2,8 @@ from statistics import mode
 
 import numpy as np
 
-from .util import mass_error, count_mirror_symmetries, residue_lookup, reflect, find_initial_b_ion, find_terminal_y_ion
+from .gaps import GapResult
+from .util import collapse_second_order_list, mass_error, count_mirror_symmetries, residue_lookup, reflect, find_initial_b_ion, find_terminal_y_ion
 
 #=============================================================================#
 
@@ -168,19 +169,21 @@ def filter_viable_pivots(
 
 def construct_all_pivots(
     spectrum: np.ndarray,
-    gap_indices: list[tuple[int,int]],
+    gap_results: list[GapResult],
     tolerance: float,
 ):
-    o_pivots = find_overlapping_pivots(spectrum, gap_indices, tolerance)
+    o_pivots = collapse_second_order_list(
+        [find_overlapping_pivots(spectrum, r.index_tuples(), tolerance) for r in gap_results]
+    )
     a_pivots = find_adjacent_pivots(spectrum, tolerance)
     return o_pivots + a_pivots
 
-def find_pivots(
+def find_all_pivots(
     spectrum: np.ndarray,
     symmetry_threshold: float,
-    gap_indices: list[tuple[int,int]],
+    gap_results: list[GapResult],
     tolerance: float,
 ):
-    pivots = construct_all_pivots(spectrum, gap_indices, tolerance)
+    pivots = construct_all_pivots(spectrum, gap_results, tolerance)
     viable_pivots = filter_viable_pivots(spectrum, symmetry_threshold, pivots)
     return viable_pivots

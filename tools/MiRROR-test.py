@@ -106,90 +106,91 @@ def main(args):
         if symmetry_threshold == None:
             symmetry_threshold = mirror.util.expected_num_mirror_symmetries(peaks)
         
-        pivots = mirror.collapse_second_order_list([
-            mirror.find_pivots(
-                peaks, 
-                symmetry_threshold, 
-                r.index_tuples(), 
-                args.intergap_tolerance) 
-            for r in gap_results])
-
-        # enumerate boundary conditions
-        boundaries = (mirror.find_boundary_peaks(peaks, p, args.terminal_residues) for p in pivots)
+        pivots = mirror.find_all_pivots(peaks, symmetry_threshold, gap_results, args.intergap_tolerance)
 
         best_score = np.inf
         best_cand = None
-        for (pivot, (b_boundaries, y_boundaries)) in zip(pivots, boundaries):
+        for pivot in pivots:
             # todo - replace this with a TargetSpace method.
             pivot_residue = mirror.util.residue_lookup(pivot.gap())
             if args.verbosity > 1:
-                print(pivot)
-                print(pivot_residue)
+                print();print()
+                print(f"\t{pivot_residue} {pivot}")
 
-            for ((b_bound, b_res), (y_bound, y_res)) in zip(b_boundaries, y_boundaries):
-                if args.verbosity > 1:
-                    print(b_bound, b_res, y_bound, y_res)
-                # create augmented peaks, pivots, gaps
-                augmented_peaks, augmented_pivot = mirror.create_augmented_spectrum(
-                    peaks, 
-                    pivot,
-                    b_bound,
-                    y_bound,
-                    args.gap_tolerance)
-                augmented_gaps = [r.index_tuples() for r in target_space.find_gaps(augmented_peaks)]
-                augmented_gaps = mirror.collapse_second_order_list(augmented_gaps)
+            # enumerate boundary conditions
+            b_boundaries, y_boundaries = mirror.find_boundary_peaks(peaks, pivot, args.terminal_residues)
+            for (b_bound, b_res) in b_boundaries:
+                for (y_bound, y_res) in y_boundaries:
+                    if args.verbosity > 1:
+                        print(f"boundaries:\n\t{peaks[b_bound]}, {b_bound}, {b_res}\n\t{peaks[y_bound]}, {y_bound}, {y_res}")
+                    # create augmented peaks, pivots, gaps
+                    augmented_peaks, augmented_pivot = mirror.create_augmented_spectrum(
+                        peaks, 
+                        pivot,
+                        b_bound,
+                        y_bound,
+                        args.gap_tolerance)
+                    augmented_gaps = [r.index_tuples() for r in target_space.find_gaps(augmented_peaks)]
+                    augmented_gaps = mirror.collapse_second_order_list(augmented_gaps)
 
-                # create topologies
-                graph_pair = mirror.create_spectrum_graph_pair(
-                    augmented_peaks, 
-                    augmented_gaps, 
-                    augmented_pivot,
-                    gap_key = args.gap_key)
-                
-                # find dual paths
-                gap_comparator = lambda x, y: (abs(x - y) < args.intergap_tolerance) and (x != -1) and (y != -1)
-                dual_paths = mirror.find_dual_paths(
-                    *graph_pair,
-                    args.gap_key,
-                    gap_comparator)
-
-                # find viable path pairings
-                pair_indices = mirror.find_edge_disjoint_dual_path_pairs(dual_paths)
-
-                # create affixes
-                affixes = np.array([mirror.create_affix(dp, graph_pair) for dp in dual_paths])
-                affixes = mirror.filter_affixes(
-                    affixes, 
-                    args.suffix_array_path, 
-                    occurrence_threshold = args.occurrence_threshold)
-
-                if args.verbosity > 1:
-                    print(affixes)
-
-                # create candidates
-                for (i, j) in pair_indices:
-                    candidates = np.array(mirror.create_candidates(
+                    # create topologies
+                    graph_pair = mirror.create_spectrum_graph_pair(
                         augmented_peaks, 
-                        graph_pair, 
-                        affixes[[i,j]],
-                        (b_res, y_res),
-                        pivot_residue))
-                    #candidates = mirror.filter_candidate_sequences(
-                    #    peaks,
-                    #    candidates,
-                    #    args.alignment_threshold,
-                    #    args.alignment_parameters)
-                    for candidate in candidates:
-                        score, idx = candidate.edit_distance(true_sequence)
-                        if score < best_score:
-                            best_score = score
-                            best_cand = (candidate,idx)
+                        augmented_gaps, 
+                        augmented_pivot,
+                        gap_key = args.gap_key)
+                    
+                    # find dual paths
+                    gap_comparator = lambda x, y: (abs(x - y) < args.intergap_tolerance) and (x != -1) and (y != -1)
+                    dual_paths = mirror.find_dual_paths(
+                        *graph_pair,
+                        args.gap_key,
+                        gap_comparator)
+                    
+                    if args.verbosity > 1:
+                        print("paths",dual_paths)
+
+                    # find viable path pairings
+                    pair_indices = mirror.find_edge_disjoint_dual_path_pairs(dual_paths)
+
+                    # create affixes
+                    affixes = np.array([mirror.create_affix(dp, graph_pair) for dp in dual_paths])
+                    affixes = mirror.filter_affixes(
+                        affixes, 
+                        args.suffix_array_path, 
+                        occurrence_threshold = args.occurrence_threshold)
+
+                    if args.verbosity > 1:
+                        print("affixes",affixes)
+
+                    # create candidates
+                    for (i, j) in pair_indices:
+                        candidates = np.array(mirror.create_candidates(
+                            augmented_peaks, 
+                            graph_pair, 
+                            affixes[[i,j]],
+                            (b_res, y_res),
+                            pivot_residue))
+                        #candidates = mirror.filter_candidate_sequences(
+                        #    peaks,
+                        #    candidates,
+                        #    args.alignment_threshold,
+                        #    args.alignment_parameters)
+                        for candidate in candidates:
+                            score, idx = candidate.edit_distance(true_sequence)
+                            if score < best_score:
+                                best_score = score
+                                best_cand = (candidate,idx)
         optimal_scores.append(best_score)
         optimal_candidates.append(best_cand)
         if best_score > 0:
             print(f"edit distance {best_score}")
-            best_cand[0].edit_distance(true_sequence, verbose = True)
-            print(best_cand[0].characterize_errors(true_sequence))
+            if best_score == np.inf:
+                print("no candidates were found ):<")
+            else:
+                best_cand[0].edit_distance(true_sequence, verbose = True)
+                print(best_cand[0]._pivot_res)
+                print(best_cand[0].characterize_errors(true_sequence))
             #input()
 
     mirror.util.plot_hist(optimal_scores)
