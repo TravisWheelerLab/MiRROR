@@ -59,7 +59,11 @@ def create_augmented_spectrum(
         new_index_pairs = [(i + offset, j + offset) for (i, j) in index_pairs]
         new_peak_pairs = [(augmented_spectrum[i], augmented_spectrum[j]) for (i,j) in new_index_pairs]
         index_shifted_pivot = Pivot(*new_peak_pairs, *new_index_pairs)
-        assert index_shifted_pivot.peaks() == pivot.peaks()
+        try:
+            assert index_shifted_pivot.peaks() == pivot.peaks()
+        except AssertionError as e:
+            print(index_shifted_pivot.peaks(), pivot.peaks())
+            raise e
     #elif type(pivot) == VirtualPivot:
     #    indices = pivot.indices()
     #    new_indices = (indices[0] + offset, indices[1] + offset)

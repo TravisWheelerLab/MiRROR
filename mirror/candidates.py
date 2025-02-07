@@ -29,6 +29,7 @@ class Candidate:
             affix_b
         )
         self._boundary = boundary_chrs
+        self._pivot_res = pivot_res
         self._affixes = (
             called_affix_a,
             called_affix_b
@@ -37,12 +38,33 @@ class Candidate:
             apply_boundary_residues(forward_seq, *boundary_chrs), 
             apply_boundary_residues(backward_seq, *boundary_chrs))
 
-    def edit_distance(self, peptide):
+    def edit_distance(self, peptide, verbose = False):
         target = construct_target(peptide)
         dist = [edit_distance(query, target) for query in self._sequences]
         optimizer = np.argmin(dist)
         optimum = dist[optimizer]
+        if verbose:
+            print()
+            print(target)
+            print(self._sequences[optimizer])
         return optimum, optimizer
+    
+    def characterize_errors(self, peptide):
+        optimum, optimizer = self.edit_distance(peptide)
+        if optimum == 0:
+            return []
+        else:
+            query = self._sequences[optimizer]
+            target = construct_target(peptide)
+            errors = []
+            if query[0] != target[0]:
+                errors.append("first")
+            if query[-1] != target[-1]:
+                errors.append("last")
+            if query[1:-2] != target[1:-2]:
+                errors.append("mid")
+            # how to detect a pivot error?
+            return errors
     
     def sequences(self):
         return (

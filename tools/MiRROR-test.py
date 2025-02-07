@@ -1,13 +1,14 @@
 from _tool_init import mirror, timed_op, argparse
 import numpy as np
 
-PROG = "𝕄iℝℝ𝕆ℝ-test"
+PROG = "𝕄 iℝ ℝ 𝕆 ℝ - test\n"
 DESC = """the test system for MiRROR;
 reads sequences from a .fasta.
 enumerates the tryptic peptides of those sequences.
 generates synthetic spectra for each peptide.
 applies the integrated MiRROR pipeline to the spectra;
 compares result(s) to the groundtruth tryptic peptide."""
+
 ARG_NAMES = [
     "sequences",
     "alphabet_path",
@@ -19,7 +20,8 @@ ARG_NAMES = [
     "alignment_threshold",
     "alignment_parameters",
     "terminal_residues",
-    "gap_key"
+    "gap_key",
+    "verbosity",
 ]
 ARG_TYPES = [
     str,
@@ -33,6 +35,7 @@ ARG_TYPES = [
     str,
     list[str],
     str,
+    int,
 ]
 ARG_DEFAULTS = [
     None,
@@ -46,6 +49,7 @@ ARG_DEFAULTS = [
     "",
     mirror.util.TERMINAL_RESIDUES,
     mirror.spectrum_graphs.GAP_KEY,
+    0,
 ]
 
 def get_parser():
@@ -59,27 +63,43 @@ def get_parser():
 
 def main(args):
     # load sequences, gap alphabet
+    if args.sequences.endswith(".fasta"):
+        sequences = mirror.io.load_fasta_as_strings(args.sequences)
     if args.sequences.startswith("::random"):
         _, n_seqs, seq_len = args.sequences.split("_")
         n_seqs = int(n_seqs)
         seq_len = int(seq_len)
         sequences = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
     else:
-        sequences = mirror.io.load_fasta_as_strings(args.sequences)
+        sequences = args.sequences.split(",")
+    sequence_iterator = mirror.util.add_tqdm(sequences)
+
+    if args.verbosity > 1:
+        print(sequences)
+
     target_groups, residues = mirror.io.load_target_groups(args.alphabet_path)
     target_space = mirror.TargetSpace(target_groups, residues, args.gap_tolerance)
 
+    if args.verbosity > 1:
+        for (res, grp) in zip(residues, target_groups):
+            print(f"{res}: {grp}")
+
     # lazy iterators
-    tryptic_peptides = mirror.util.enumerate_tryptic_peptides(sequences)
-    peak_arrays = map(mirror.util.simulate_peaks, tryptic_peptides)
+    tryptic_peptides = enumerate(mirror.util.enumerate_tryptic_peptides(sequence_iterator))
 
     # pipeline
-    scores = []
-    for (true_sequence, peaks) in zip(tryptic_peptides, peak_arrays):
-        #print(f"peptide: {true_sequence}")
+    optimal_scores = []
+    optimal_candidates = []
+    for idx, true_sequence in tryptic_peptides:
+        peaks = mirror.util.simulate_peaks(true_sequence)
+        if args.verbosity > 1:
+            print(peaks)
+        
         # find gaps
         gap_results = target_space.find_gaps(peaks)
-        #print(f"gaps: {sum(len(r) for r in gap_results)}")
+        if args.verbosity > 1:
+            for (res, result) in zip(residues, gap_results):
+                print(f"{res}: {result.index_tuples()}")
 
         # find pivots
         symmetry_threshold = args.symmetry_threshold
@@ -93,17 +113,22 @@ def main(args):
                 r.index_tuples(), 
                 args.intergap_tolerance) 
             for r in gap_results])
-        #print(f"pivots: {len(pivots)}")
 
         # enumerate boundary conditions
         boundaries = (mirror.find_boundary_peaks(peaks, p, args.terminal_residues) for p in pivots)
 
         best_score = np.inf
+        best_cand = None
         for (pivot, (b_boundaries, y_boundaries)) in zip(pivots, boundaries):
             # todo - replace this with a TargetSpace method.
             pivot_residue = mirror.util.residue_lookup(pivot.gap())
-            #print(f"boundaries: {len(b_boundaries), len(y_boundaries)}")
+            if args.verbosity > 1:
+                print(pivot)
+                print(pivot_residue)
+
             for ((b_bound, b_res), (y_bound, y_res)) in zip(b_boundaries, y_boundaries):
+                if args.verbosity > 1:
+                    print(b_bound, b_res, y_bound, y_res)
                 # create augmented peaks, pivots, gaps
                 augmented_peaks, augmented_pivot = mirror.create_augmented_spectrum(
                     peaks, 
@@ -120,6 +145,7 @@ def main(args):
                     augmented_gaps, 
                     augmented_pivot,
                     gap_key = args.gap_key)
+                
                 # find dual paths
                 gap_comparator = lambda x, y: (abs(x - y) < args.intergap_tolerance) and (x != -1) and (y != -1)
                 dual_paths = mirror.find_dual_paths(
@@ -132,12 +158,13 @@ def main(args):
 
                 # create affixes
                 affixes = np.array([mirror.create_affix(dp, graph_pair) for dp in dual_paths])
-                #print(f"affix candidates: {len(affixes)}")
                 affixes = mirror.filter_affixes(
                     affixes, 
                     args.suffix_array_path, 
                     occurrence_threshold = args.occurrence_threshold)
-                #print(f"affixes: {len(affixes)}")
+
+                if args.verbosity > 1:
+                    print(affixes)
 
                 # create candidates
                 for (i, j) in pair_indices:
@@ -147,20 +174,25 @@ def main(args):
                         affixes[[i,j]],
                         (b_res, y_res),
                         pivot_residue))
-                    candidates = mirror.filter_candidate_sequences(
-                        peaks,
-                        candidates,
-                        args.alignment_threshold,
-                        args.alignment_parameters)
+                    #candidates = mirror.filter_candidate_sequences(
+                    #    peaks,
+                    #    candidates,
+                    #    args.alignment_threshold,
+                    #    args.alignment_parameters)
                     for candidate in candidates:
                         score, idx = candidate.edit_distance(true_sequence)
-                        optimizer = candidate.sequences()[idx]
                         if score < best_score:
                             best_score = score
-                            print(score, optimizer, true_sequence)
-                            input()
-        scores.append(best_score)
-    mirror.util.plot_hist(scores)
+                            best_cand = (candidate,idx)
+        optimal_scores.append(best_score)
+        optimal_candidates.append(best_cand)
+        if best_score > 0:
+            print(f"edit distance {best_score}")
+            best_cand[0].edit_distance(true_sequence, verbose = True)
+            print(best_cand[0].characterize_errors(true_sequence))
+            #input()
+
+    mirror.util.plot_hist(optimal_scores)
 
 if __name__ == "__main__":
     args = get_parser().parse_args()

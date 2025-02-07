@@ -18,6 +18,9 @@ class Affix:
 
     def translate(self) -> tuple[str, str]:
         return self._translations
+    
+    def __repr__(self):
+        return str(self._dual_path)
 
 AffixPair = tuple[Affix, Affix]
 
@@ -57,6 +60,8 @@ def filter_affixes(
     path_to_suffix_array: str,
     occurrence_threshold: int = 0,
 ) -> np.ndarray:
+    if len(affixes) == 0:
+        return np.array([])
     # admits an affix as long as one of its translations occurs in the suffix array 
     translations = np.array([afx.translate() for afx in affixes])
     asc_occurrences = _count_occurrences(translations[:, 0], path_to_suffix_array)
