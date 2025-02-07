@@ -158,6 +158,26 @@ def residue_lookup(
 #=============================================================================#
 # misc utilities
 
+def plot_hist(x: list[int], width = 60):
+    left = min(x)
+    right = max(x)
+    vals = list(range(left, right + 1))
+    counts = [0 for _ in range(left, right + 1)]
+    for pt in x:
+        counts[pt - left] += 1
+    
+    lo = min(counts)
+    hi = max(counts)
+    rng = hi - lo + 1
+    print('-' * (width + 20))
+    for i in range(len(counts)):
+        frac = (counts[i] - lo) / rng
+        bars = int(width * frac)
+        if counts[i] > 0:
+            bars = max(bars, 1)
+        print(f"{vals[i]}\t|" + "o" * bars + f"  ({counts[i]})")
+    print('-' * (width + 20))
+
 def comma_separated(items):
     return ','.join(map(str, items))
 

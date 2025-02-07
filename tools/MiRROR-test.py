@@ -9,7 +9,7 @@ generates synthetic spectra for each peptide.
 applies the integrated MiRROR pipeline to the spectra;
 compares result(s) to the groundtruth tryptic peptide."""
 ARG_NAMES = [
-    "fasta_path",
+    "sequences",
     "alphabet_path",
     "suffix_array_path",
     "gap_tolerance",
@@ -59,7 +59,13 @@ def get_parser():
 
 def main(args):
     # load sequences, gap alphabet
-    sequences = mirror.io.load_fasta_as_strings(args.fasta_path)
+    if args.sequences.startswith("::random"):
+        _, n_seqs, seq_len = args.sequences.split("_")
+        n_seqs = int(n_seqs)
+        seq_len = int(seq_len)
+        sequences = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
+    else:
+        sequences = mirror.io.load_fasta_as_strings(args.sequences)
     target_groups, residues = mirror.io.load_target_groups(args.alphabet_path)
     target_space = mirror.TargetSpace(target_groups, residues, args.gap_tolerance)
 
@@ -68,6 +74,7 @@ def main(args):
     peak_arrays = map(mirror.util.simulate_peaks, tryptic_peptides)
 
     # pipeline
+    scores = []
     for (true_sequence, peaks) in zip(tryptic_peptides, peak_arrays):
         #print(f"peptide: {true_sequence}")
         # find gaps
@@ -91,6 +98,7 @@ def main(args):
         # enumerate boundary conditions
         boundaries = (mirror.find_boundary_peaks(peaks, p, args.terminal_residues) for p in pivots)
 
+        best_score = np.inf
         for (pivot, (b_boundaries, y_boundaries)) in zip(pivots, boundaries):
             # todo - replace this with a TargetSpace method.
             pivot_residue = mirror.util.residue_lookup(pivot.gap())
@@ -145,7 +153,14 @@ def main(args):
                         args.alignment_threshold,
                         args.alignment_parameters)
                     for candidate in candidates:
-                        print(candidate, candidate.edit_distance(true_sequence))
+                        score, idx = candidate.edit_distance(true_sequence)
+                        optimizer = candidate.sequences()[idx]
+                        if score < best_score:
+                            best_score = score
+                            print(score, optimizer, true_sequence)
+                            input()
+        scores.append(best_score)
+    mirror.util.plot_hist(scores)
 
 if __name__ == "__main__":
     args = get_parser().parse_args()
