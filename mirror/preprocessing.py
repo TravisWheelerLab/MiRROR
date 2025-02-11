@@ -12,11 +12,15 @@ from .util import add_tqdm
 # preprocessing for mzSpecLib spectra
 
 class MzSpecLib:
+    """A wrapper for an mzspeclib.SpectrumLibrary object. Implements getters for length, peaks (i.e., spectra), and annotated peptides (i.e., analytes)"""
 
     def __init__(self, lib: mzlib.SpectrumLibrary):
         self._spectrum_library = lib
     
     def __len__(self):
+        """The number of spectra in the record.
+
+            len(self._spectrum_library)"""
         return len(self._spectrum_library)
     
     def _get_spectrum(self,
@@ -29,6 +33,7 @@ class MzSpecLib:
     def get_peaks(self,
         idx: int
     ) -> tuple[np.ndarray, np.ndarray, list, list]:
+        """Return the intensity, peaks, and metadata as a 4-tuple given the index of the spectrum."""
         peaks = self._get_spectrum(idx).peak_list
         mz, intensity, metadata, etc = zip(*peaks)
         return np.array(list(intensity)), np.array(list(mz)), list(metadata), list(etc)
@@ -42,6 +47,7 @@ class MzSpecLib:
     def get_peptides(self,
         idx: int
     ) -> list[str]:
+        """Return the peptides (analytes) as str types, given the index of the spectrum."""
         return [''.join(res[0] for res in pep_list) for pep_list in self._get_peptides(idx)]
 
 #=============================================================================#
@@ -65,6 +71,14 @@ def create_spectrum_bins(
     n_processes = 4, 
     verbose = False
 ) -> np.ndarray:
+    """Bin the peaks of a pyopenms.MSExperiment object.
+    
+    :exp: a pyopenms.MSExperiment object.
+    :max_mz: the maximum allowed mz value.
+    :resolution: the number of bins per mz. max_mz / resolution = n_bins.
+    :parallelize: boolean flag for parallelization. Defaults to false.
+    :n_processes: int value specifying the max number of processes to parallelize over.
+    :verbose: boolean flag. If true, bins will be summarized to standard out."""
     n_bins = int(max_mz / resolution)
     n_spectra = exp.getNrSpectra()
     spectrum_bins = np.zeros(n_bins)
@@ -103,6 +117,12 @@ def filter_spectrum_bins(
     resolution: float,
     binned_frequency_threshold: int,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Associates the output of create_spectrum_bins to arrays of frequencies (≈ intensities) and peak mz values.
+    
+    :spectrum_bins: np.ndarray, the output of create_spectrum_bins.
+    :max_mz: int, maximum allowed mz value.
+    :resolution: float, the number of bins per mz. max_mz / resolution = n_bins.
+    :binned_frequency_threshold: the threshold, above which bins are counted as peaks."""
     bin_mask = spectrum_bins > binned_frequency_threshold
     n_reduced_peaks = sum(bin_mask)
     reduced_frequencies = spectrum_bins[bin_mask]
