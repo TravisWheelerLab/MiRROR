@@ -115,17 +115,22 @@ ION_OFFSET_LOOKUP = dict(zip(ION_SERIES,ION_SERIES_OFFSETS))
 BOUNDARY_PADDING = 3
 
 def generate_random_residues(length: int, alphabet = RESIDUES):
+    """
+        np.random.choice(alphabet, length, replace=True)"""
     return np.random.choice(alphabet, length, replace=True)
 
 def generate_random_peptide(length: int, alphabet = RESIDUES):
+    "Generates a random string of given length from the alphabet, which defaults to RESIDUES."
     return ''.join(generate_random_residues(length, alphabet))
 
 def generate_random_tryptic_peptide(length: int):
+    "Creates a random string of given length from NONTERMINAL_RESIDUES, then appends a TERMINAL_RESIDUE suffix."
     terminus = np.random.choice(TERMINAL_RESIDUES)
     prefix = generate_random_peptide(length - 1, alphabet = NONTERMINAL_RESIDUES)
     return prefix + terminus
 
 def mask_ambiguous_residues(res: chr):
+    "Maps residues \'L\' and \'I\' to \"I/L\"."
     if res == "L" or res == "I":
         return "I/L"
     else:
@@ -135,6 +140,7 @@ def mass_error(
     mass: float,
     mass_table: list[float] = AMINO_MASS_MONO,
 ):
+    "The least difference between `mass: float` and `mass table: list[float]`. Mass table defaults to AMINO_MASS_MONO."
     return min([abs(m - mass) for m in mass_table])
 
 def residue_lookup(
@@ -145,6 +151,14 @@ def residue_lookup(
     unknown = UNKNOWN_AMINO,
     nan = '.',
 ):
+    """Associates a gap value to the best matching amino acid residue.
+    
+    :gap: a float.
+    :letters: the list of letters that may be output. Defaults to AMINOS.
+    :mass_table: the list of masses. Indexed by the same set as letters. Defaults to AMINO_MASS_MONO.
+    :tolerance: a float; the maximum permissible difference between the gap and the best match.
+    :unknown: the return value for gaps whose best match differs by more than the tolerance, or gaps == -1.
+    :nan: the value returned for gaps == -2."""
     if gap == -1:
         return unknown
     elif gap == -2:
@@ -162,6 +176,10 @@ def residue_lookup(
 # misc utilities
 
 def plot_hist(x: list[int], width = 60):
+    """Renders a histogram for a list of integers into the standard output.
+    
+    :x: a list of integers.
+    :width: the maximum width of the histogram, in characters. Defaults to 60."""
     left = min(x)
     right = max(x)
     vals = list(range(left, right + 1))
@@ -182,9 +200,15 @@ def plot_hist(x: list[int], width = 60):
     print('-' * (width + 20))
 
 def comma_separated(items):
+    """
+        ','.join(map(str, items))"""
     return ','.join(map(str, items))
 
 def split_commas(commastr, target_type):
+    """Splits a comma-separated string and converts the parts to a given type.
+    
+    :commastr: a comma-separated string.
+    :target_type: a callable; the type into which the split string components will be converted."""
     parts = commastr.split(',')
     try:
         return list(map(target_type, parts))
@@ -194,12 +218,22 @@ def split_commas(commastr, target_type):
         raise e
 
 def collapse_second_order_list(llist: list[list]):
+    """Associates a list of lists of elements to a flat list of elements.
+    
+        list(itertools.chain.from_iterable(llist))
+
+    :llist: a second-order iterable."""
     return list(itertools.chain.from_iterable(llist))
 
 def log(message, prefix=""):
     print(prefix + f"⚙\t{message}")
 
 def add_tqdm(inputs, total=None, description=None):
+    """Wraps an iterator with a tqdm progress bar.
+    
+    :inputs: an iterable.
+    :total: the number of elements in the iterable. This argument is non-optional if `inputs` does not implement __len__!
+    :description: passed to the `desc` field of the tqdm object."""
     if total == None:
         total = len(inputs)
     return tqdm(inputs, total=total, leave=False, desc=description)
@@ -208,6 +242,7 @@ def add_tqdm(inputs, total=None, description=None):
 # simulation via pyOpenMS
 
 def default_param():
+    """Creates a pyopenms.Param() object with add_b_ions, add_y_ions, and add_metadata set to true."""
     param = oms.Param()
     param.setValue("add_b_ions", "true")
     param.setValue("add_y_ions", "true")
@@ -215,6 +250,8 @@ def default_param():
     return param
 
 def advanced_param():
+    """Creates a pyopenms.Param() object with add_b_ions, add_y_ions, add_metadata,
+    add_all_precursor_charges, and add_losses set to true."""
     param = oms.Param()
     param.setValue("add_b_ions", "true")
     param.setValue("add_y_ions", "true")
@@ -224,6 +261,8 @@ def advanced_param():
     return param
 
 def generate_fragment_spectrum(seq: str, param: oms.Param):
+    """From a string and a pyopenms.Param() object, uses a pyopenms.TheoreticalSpectrumGenerator
+    object to create a simulated fragment spectrum as a pyopenms.MSSpectrum object."""
     tsg = oms.TheoreticalSpectrumGenerator()
     spec = oms.MSSpectrum()
     peptide = oms.AASequence.fromString(seq)
@@ -244,36 +283,65 @@ def get_y_ion_series(seq: str):
     return list_mz(generate_fragment_spectrum(seq,param))
 
 def generate_default_fragment_spectrum(seq: str):
+    """Creates a pyopenms.MSSpectrum object from a string 
+    with the default parametization from default_param."""
     return generate_fragment_spectrum(
         seq, param = default_param())
 
 def list_mz(spec: oms.MSSpectrum):
+    """Creates a numpy array of the peaks of a pyopenms.MSSpectrum object.
+    
+        np.array([peak.getMZ() for peak in spec])
+    
+    :spec: a pyopenms.MSSpectrum object."""
     return np.array([peak.getMZ() for peak in spec])
 
 def list_intensity(spec: oms.MSSpectrum):
-    "TODO"
+    """Creates a numpy array of the intensities of a pyopenms.MSSpectrum object.
+    
+        NOT IMPLEMENTED!
+    
+    :spec: a pyopenms.MSSpectrum object."""
     pass
 
 def simulate_peaks(seq: str, param = default_param()):
-    "Associate a sequence to an array of its b and y ions."
+    """Associate a sequence to a numpy array of its b and y ions.
+    
+    :seq: a str.
+    :param: a pyopenms.Param() object, to be passed to a pyopenms.TheoreticalSpectrumGenerator."""
     return list_mz(generate_fragment_spectrum(seq, param))
 
 def digest_trypsin(seq: str, minimum_length: int = 7, maximum_length: int = 50):
-    "Uses OpenMS ProteaseDigestion interface to generate tryptic peptides from a sequence."
+    """Uses OpenMS ProteaseDigestion interface to generate tryptic peptides from a sequence.
+    
+    :seq: a str.
+    :minimum length: the smallest viable tryptic peptide. Defaults to 7.
+    :maximum length: the largest viable tryptic peptide. Defaults to 50."""
     dig = oms.ProteaseDigestion()
     result = []
     oms_seq = oms.AASequence.fromString(seq)
     dig.digest(oms_seq, result, minimum_length, maximum_length)
     return [r.toString() for r in result]
 
-def enumerate_tryptic_peptides(sequences: list[str], minimum_length: int = 7, maximum_length: int = 50):
-    "Lazily iterates the tryptic peptides of a list of sequences."
+def enumerate_tryptic_peptides(sequences, minimum_length: int = 7, maximum_length: int = 50):
+    """Lazily iterates the tryptic peptides of a list of sequences.
+    
+    :sequences: an iterable of str types.
+    :minimum length: the smallest viable tryptic peptide. Defaults to 7.
+    :maximum length: the largest viable tryptic peptide. Defaults to 50."""
     dig = oms.ProteaseDigestion()
     for seq in sequences:
         for pep in digest_trypsin(seq, minimum_length, maximum_length):
             yield pep
 
-def enumerate_tryptic_spectra(sequences: list[str], minimum_length: int = 7, maximum_length: int = 50):
+def enumerate_tryptic_spectra(sequences, minimum_length: int = 7, maximum_length: int = 50):
+    """Return a lazy iterable of lazy iterators of the tryptic peptides of each sequence.
+    Can be collected by collapse_second_order_list, but this is not advised as the size
+    of the fully enumerated set may be intractible.
+    
+    :sequences: an iterable of str types.
+    :minimum length: the smallest viable tryptic peptide. Defaults to 7.
+    :maximum length: the largest viable tryptic peptide. Defaults to 50."""
     return map(simulate_peaks, enumerate_tryptic_peptides(sequences, minimum_length, maximum_length))
 
 #=============================================================================#
@@ -318,6 +386,14 @@ def find_initial_b_ion(
     hi,
     center: float,
 ):
+    """Generates the list of (index, residue) pairs. Each index corresponds to an m/z value 
+    (peak) in the spectrum, which, upon reflection around a center, and translation by the
+    typical b ion offset, matches the residue mass.
+    
+    :param spectrum: a sorted one-dimensional numeric array.
+    :lo: the smallest index to consider.
+    :hi: the largest index to consider.
+    :center: the point around which putative peaks are reflected."""
     # starting at the pivot, scan the upper half of the spectrum
     for i in range(lo, hi):
         corrected_mass = reflect(spectrum[i], center) - ION_OFFSET_LOOKUP['b']
@@ -329,6 +405,12 @@ def find_terminal_y_ion(
     spectrum, 
     hi,
 ):
+    """Generates the list of (index, residue) pairs. Each index corresponds to an m/z value 
+    (peak) in the spectrum which, upon translation by the typical y ion offset, matches the 
+    residue mass.
+    
+    :param spectrum: a sorted one-dimensional numeric array.
+    :hi: the largest index to consider. Iteration descends from this value."""
     # starting at the pivot, scan the lower half of the spectrum
     for i in range(hi - 1, -1, -1):
         corrected_mass = spectrum[i] - ION_OFFSET_LOOKUP['y']
@@ -342,6 +424,8 @@ def find_terminal_y_ion(
 def _construct_membership_table(
     X: list[set]
 ):
+    """Creates a dictionary that associates each element in each set in X to the 
+    index of the sets in which it is contained."""
     S = set(itertools.chain.from_iterable(X))
     table = {
         s: []
@@ -358,22 +442,20 @@ def _find_disjoint(
     n: int,
     membership_table: dict
 ):
-    disjoint = [
-        True 
-        for _ in range(n)
-    ]
+    """Given a set x, the number of sets in the superset, and the membership table representing
+    the superset, list the indices of the sets in the superset that do not intersect x.
+    
+    TODO: i think the last couple lines can be replaced by "yield set_idx"?"""
+    disjoint = [True for _ in range(n)]
     for elt in x:
         for set_idx in membership_table[elt]:
             disjoint[set_idx] = False
-    return [
-        i 
-        for i in range(n) 
-        if disjoint[i]
-    ]
+    return [i for i in range(n) if disjoint[i]]
 
 def _table_disjoint_pairs(
     X: list[set]
 ):
+    "Implements the \"table\" mode of `disjoint_pairs`."
     membership_table = _construct_membership_table(X)
     n = len(X)
     for i in range(n):
@@ -384,6 +466,7 @@ def _table_disjoint_pairs(
 def _naiive_disjoint_pairs(
     X: list[set]
 ):
+    "Implements the \"naiive\" mode of `disjoint_pairs`."
     n = len(X)
     return [(i, j) for i in range(n) for j in range(i + 1, n) if X[i].isdisjoint(X[j])]
 
@@ -391,7 +474,12 @@ def disjoint_pairs(
     X: list[set],
     mode = "table"
 ):
-    "associates sets that do not share elements."
+    """Returns the list of pairs (i,j) of indexes into X such that X[i] and X[j] do not share any
+    elements.
+    
+    :X: a list of sets, elsewhere referred to as the superset.
+    :mode: a string, specifies the internal routine by which pairs are identified. Supported modes 
+    are \"table\" and \"naiive\". Table is generally faster."""
     if mode == "table":
         return list(_table_disjoint_pairs(X))
     elif mode == "naiive":
