@@ -94,6 +94,8 @@ def _create_augmented_gaps(
 # interface
 
 class Boundary:
+    """Interface to the pair of boundary ions and the augmentations they induce in the peak list, pivot, and gaps.
+    Implements get_residues, get_offset, get_augmented peaks, get_augmented pivot, get_augmented gaps."""
 
     def __init__(self,
         spectrum: np.ndarray,
@@ -141,18 +143,26 @@ class Boundary:
         )
 
     def get_residues(self):
+        "Returns the b and y residues of the boundary."
         return self._b_res, self._y_res
     
     def get_augmented_peaks(self):
+        "Augments the peak array by restricting to the boundary index range and adding symmetric boundary conditions."
         return self._augmented_spectrum
     
     def get_offset(self):
+        """The integer by which pivot index values are offset to match the augmented peak array:
+        for each i in pivot.indices(), original_spectrum[i] = augmented_spectrum[i + offset]."""
         return self._offset
     
     def get_augmented_pivot(self):
+        """The pivot created by translating its pivot set by the offset value, so that the
+        mz values relative to the augmented peaks are the same."""
         return self._augmented_pivot
     
     def get_augmented_gaps(self):
+        """Finds all gaps in the augmented peaks, collecting and collapsing GapResult objects 
+        into a flat list of integer 2-tuples."""
         return self._augmented_gaps
     
 def find_and_create_boundaries(
@@ -163,6 +173,14 @@ def find_and_create_boundaries(
     tolerance: float,
     padding: int = 3,
 ):
+    """Find boundary ions of b and y series, and for each element in their product, construct a Boundary object.
+    
+    :spectrum: a sorted array of floats (peak mz values).
+    :pivot: a Pivot object.
+    :target_space: a TargetSpace object.
+    :valid_terminal_residues: list of valid residues for the y boundary ions. For tryptic peptides, these are K and R.
+    :tolerance: float, the threshold for equating two gaps.
+    :padding: integer, the number of peaks outside of the boundary to include in the augmented spectrum."""
     b_ions, y_ions = _find_boundary_peaks(spectrum, pivot, valid_terminal_residues)
     boundaries = [Boundary(spectrum, pivot,target_space,boundary_pair, valid_terminal_residues, tolerance, padding) 
         for boundary_pair in product(b_ions, y_ions)]

@@ -8,7 +8,7 @@ from .util import collapse_second_order_list
 #=============================================================================#
 
 class GapResult:
-    """Interface to the result of gap search. Implements length, values, indices, index_tuples, and local_ids."""
+    """Interface to the result of gap search. Implements __len__, values, indices, index_tuples, and local_ids."""
 
     def __init__(self,
         group_id: int,
