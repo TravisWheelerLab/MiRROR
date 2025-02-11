@@ -9,17 +9,21 @@ from .util import disjoint_pairs
 #=============================================================================#
 
 def get_sources(D: nx.DiGraph):
+    "All nodes in `D: nx.DiGraph` with indegree of 0."
     return [i for i in D.nodes if D.in_degree(i) == 0 if i != -1]
 
 def get_sinks(D: nx.DiGraph):
+    "All nodes in `D: nx.DiGraph` with outdegree of 0."
     return [i for i in D.nodes if D.out_degree(i) == 1 if i != -1]
 
 def get_nontrivial_sinks_and_sources(D: nx.DiGraph):
+    """All sinks that are not sources, and all sources that are not sinks. In other words: sinks and sources that are not singleton components."""
     sinks = set(get_sinks(D))
     sources = set(get_sources(D))
     return sinks.difference(sources), sources.difference(sinks)
 
 def get_edges(graph,node):
+    """Helper function, essentially the set of neighbors in `graph` to `node`."""
     return [i for i in graph.edges(node) if i != -1]
 
 #=============================================================================#
@@ -33,6 +37,15 @@ def find_dual_paths(
     weight_key,
     weight_metric,
 ) -> list[DualPath]:
+    """Lists all dual paths in G and H, as lists of integer 2-tuples [(v_1, w_1), (v_2, w2_), ..., (v_n, w_n)]
+    such that [v_1, v_2, ..., v_n] is a path in G, [w_1, w_2, ..., w_n] is a path in H, 
+    and for each dual edge ((v_k, w_k), (v_{k+1}, w_{k+1})), 
+    weight_metric(G[v_k][v_{k+1}][weight_key], H[w_k][w_{k+1}][weight_key]) == True. 
+    
+    :G: nx.DiGraph.
+    :H: nx.DiGraph.
+    :weight_key: the weight key for both G and H.
+    :weight_metric: function for comparing edge weights between G and H."""
     return list(all_weighted_dual_simple_paths(G,H,weight_key,weight_metric))
 
 def all_nontrivial_weighted_dual_simple_paths(
@@ -198,6 +211,13 @@ def find_extended_paths(
     G: nx.DiGraph,
     H: nx.DiGraph,
 ) -> list[DualPath]:
+    """Iterates dual_paths to identify paths that end prematurely in one graph, but not the other.
+    When such a path is found, the extension in one graph is appended, with the other graph's vertices
+    indicated as missing with -1 values. Returns extended paths as a list.
+
+    :dual_paths: iterable of list[tuple[int,int]] types as returned by find_dual_paths(G, H, ...).
+    :G: nx.DiGraph.
+    :H: nx.DiGraph."""
     return list(extend_truncated_paths(dual_paths, G, H))
 
 def extend_truncated_paths(
@@ -205,7 +225,13 @@ def extend_truncated_paths(
     G: nx.DiGraph,
     H: nx.DiGraph,
 ):
-    "identifies and extends dual paths that end on a non-sink vertex in one of their supporting graphs."
+    """Iterates dual_paths to identify paths that end prematurely in one graph, but not the other.
+    When such a path is found, the extension in one graph is appended, with the other graph's vertices
+    indicated as missing with -1 values. Returns a generator of extended paths.
+
+    :dual_paths: iterable of list[tuple[int,int]] types as returned by find_dual_paths(G, H, ...).
+    :G: nx.DiGraph.
+    :H: nx.DiGraph."""
     G_sinks = get_sinks(G)
     H_sinks = get_sinks(H)
     for dual_path in dual_paths:
