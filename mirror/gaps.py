@@ -8,6 +8,7 @@ from .util import collapse_second_order_list
 #=============================================================================#
 
 class GapResult:
+    """Interface to the result of gap search. Implements length, values, indices, index_tuples, and local_ids."""
 
     def __init__(self,
         group_id: int,
@@ -29,20 +30,25 @@ class GapResult:
         return self.n_gaps
     
     def values(self) -> np.ndarray:
+        """Returns the gap values as a numpy array."""
         return self._gap_values 
 
     def indices(self) -> np.ndarray:
+        """Returns the gap indices as a 2×n numpy array."""
         return self._gap_data[:, :2]
     
     def index_tuples(self) -> list[tuple[int,int]]:
+        """Returns the gap indices as a list of integer two-tuples."""
         return [(i, j) for i, j in self.indices()]
     
     def local_ids(self) -> np.ndarray:
+        """Returns the list of local indices, relating gaps to potential modifications of that the ideal gap value."""
         return self._gap_data[:, 2]
 
 #=============================================================================#
 
 class TargetSpace:
+    """Driver for gap search. Wraps linearithmic methods to find gaps in a peak list.""" 
 
     def __init__(self, 
         target_groups: list[TargetGroup],
@@ -101,6 +107,7 @@ class TargetSpace:
     def find_gaps(self,
         peaks: np.ndarray
     ) -> list[GapResult]:
+        "Given a np array of peak mz values, construct all gaps as a list of GapResult objects."
         unassigned_gaps = self._bisect_gaps(peaks)
         gaps_by_group, _ = self._assign_target_groups(unassigned_gaps)
         return [GapResult(group_id, self.residues[group_id], self.target_groups[group_id], result) 
@@ -109,6 +116,7 @@ class TargetSpace:
     def get_group_residue(self,
         group_id: int
     ) -> str:
+        "Returns the identifier residue of a target group."
         return self.residues[group_id]
 
 #=============================================================================#
@@ -119,6 +127,7 @@ def find_all_gaps(
     tolerance: float,
     verbose = False,
 ) -> list[list[Gap]]:
+    "deprecated method, but identical to TargetSpace(target_groups, [residues], tolerance).find_gaps(spectrum)"
     # create the target space
 
     all_targets = collapse_second_order_list(
