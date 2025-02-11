@@ -25,6 +25,15 @@ def create_spectrum_graph_pair(
     pivot: Pivot,
     gap_key = GAP_KEY,
 ) -> GraphPair:
+    """Constructs a pair of spectrum graphs. The ascending graph contains all gaps
+    with indices larger than the pivot indices, with edge pairs in ascending order.
+    The descending graph contains all gaps with indices smaller than the pivot indices,
+    with edge pairs in descending order.
+    
+    :spectrum: a sorted array of floats (peak mz values).
+    :gap_indices: a list of integer 2-tuples which index into `spectrum`.
+    :pivot: a Pivot object indexing into `spectrum`.
+    :gap_key: the key to retrieve edge weights from the spectrum graph pair."""
     # build the descending graph on the lower half of the spectrum
     desc_graph = _create_half_graph_from_gaps(
         spectrum,

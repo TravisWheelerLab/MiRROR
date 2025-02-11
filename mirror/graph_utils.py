@@ -258,7 +258,12 @@ def find_edge_disjoint_dual_path_pairs(
     dual_paths: list[DualPath],
     mode = "table"
 ) -> list[tuple[int,int]]:
-    "associates between paths that do not share any edges."
+    """Lists the indices of pairs of dual paths which do not share any edges.
+
+        disjoint_pairs(list(map(dual_path_to_edge_set, dual_paths)), mode)
+    
+    :dual_paths: an array of dual paths.
+    :mode: the mode with which to call mirror.util.disjoint_pairs."""
     path_edge_sets = list(map(dual_path_to_edge_set, dual_paths))
     return disjoint_pairs(path_edge_sets, mode)
 

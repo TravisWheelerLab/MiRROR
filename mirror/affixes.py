@@ -8,15 +8,19 @@ from .spectrum_graphs import GAP_KEY
 #=============================================================================#
 
 class Affix:
+    """Interface to a dual path and its residue sequences, which correspond to 
+    a potential affix (indeterminately either prefix or suffix) of a candidate sequence."""
 
     def __init__(self, dual_path, translations):
         self._dual_path = dual_path
         self._translations = translations
     
     def path(self) -> DualPath:
+        "The dual path underlying this Affix in the spectrum graph pair."
         return self._dual_path
 
     def translate(self) -> tuple[str, str]:
+        "The pair of string types created by sequencing the edge weights in the spectrum graph pair along this Affix's dual path."
         return self._translations
     
     def __repr__(self):
@@ -30,6 +34,7 @@ def create_affix(
     dual_path: DualPath,
     spectrum_graph_pair: GraphPair,
 ) -> Affix:
+    "Create an affix object from a dual_path and the spectrum_graph_pair which supports the paths."
     translations = _translate_dual_path(dual_path, spectrum_graph_pair)
     return Affix(dual_path, translations)
 
@@ -60,6 +65,13 @@ def filter_affixes(
     path_to_suffix_array: str,
     occurrence_threshold: int = 0,
 ) -> np.ndarray:
+    """Removes affixes which do not have either translation appearing in a suffix array.
+        
+        NOT YET IMPLEMENTED.
+    
+    :affixes: a numpy array of Affix objects.
+    :path_to_suffix_array: str, path to a suffix array created by sufr.
+    :occurrence_threshold: int, any Affix with less than or equal to this value is filtered out. defaults to 0: any Affix that occurs in the suffix array is kept."""
     if len(affixes) == 0:
         return np.array([])
     # admits an affix as long as one of its translations occurs in the suffix array 
@@ -82,5 +94,10 @@ def _count_occurrences(
 def find_affix_pairs(
     affixes: np.ndarray
 ) -> list[tuple[int,int]]:
+    """Lists the indices of pairs of affixes whose dual paths do not share any edges.
+
+        find_edge_disjoint_dual_path_pairs(afx.path() for afx in affixes)
+        
+    :affixes: a numpy array of Affix objects."""
     dual_paths = [afx.path() for afx in affixes]
     return find_edge_disjoint_dual_path_pairs(dual_paths)
