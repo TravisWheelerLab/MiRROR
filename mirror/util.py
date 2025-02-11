@@ -1,4 +1,5 @@
 import itertools
+from itertools import product
 
 import pyopenms as oms
 import numpy as np
@@ -110,6 +111,8 @@ ION_SERIES = [
     'z']
 
 ION_OFFSET_LOOKUP = dict(zip(ION_SERIES,ION_SERIES_OFFSETS))
+
+BOUNDARY_PADDING = 3
 
 def generate_random_residues(length: int, alphabet = RESIDUES):
     return np.random.choice(alphabet, length, replace=True)

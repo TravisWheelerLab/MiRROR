@@ -3,13 +3,15 @@
 from sortedcontainers import SortedList
 import numpy as np
 
-from .util import reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
+from .util import product, collapse_second_order_list, reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
 from .types import Gap
+from .gaps import TargetSpace, GapResult
 from .pivots import Pivot
 
 #=============================================================================#
+# underlying functions
 
-def find_boundary_peaks(
+def _find_boundary_peaks(
     spectrum: np.ndarray,
     pivot: Pivot,
     valid_terminal_residues,
@@ -18,9 +20,7 @@ def find_boundary_peaks(
     putative_y_ions = filter(lambda y: y[1] in valid_terminal_residues, find_terminal_y_ion(spectrum, pivot.outer_left()))
     return list(putative_b_ions), list(putative_y_ions)
 
-#=============================================================================#
-
-def create_augmented_spectrum(
+def _create_augmented_spectrum(
     spectrum: np.ndarray,
     pivot: Pivot,
     b_idx: tuple[int, str],
@@ -59,9 +59,7 @@ def create_augmented_spectrum(
     
     return augmented_spectrum, offset
 
-#=============================================================================#
-
-def create_augmented_pivot(
+def _create_augmented_pivot(
     augmented_spectrum: np.ndarray,
     offset: int,
     pivot: Pivot,
@@ -80,29 +78,92 @@ def create_augmented_pivot(
     else:
         raise ValueError(f"Unrecognized pivot type {type(pivot)}")
 
-def create_augmented_gaps(
+def _create_augmented_gaps(
     augmented_spectrum: np.ndarray,
     augmented_pivot: Pivot,
     offset: int,
-    original_gaps: list[Gap]
+    target_space: TargetSpace,
 ):
-    return list(_enumerate_augmented_gaps(
-        len(augmented_spectrum), 
-        offset, 
-        augmented_pivot.negative_index_pairs(),
-        original_gaps))
+    augmented_gap_results = target_space.find_gaps(augmented_spectrum)
+    augmented_gaps = collapse_second_order_list(r.index_tuples() for r in augmented_gap_results)
+    nonviable_gaps = augmented_pivot.negative_index_pairs()
+    augmented_gaps = [(i, j) for (i, j) in augmented_gaps if (i, j) not in nonviable_gaps]
+    return augmented_gaps
 
-def _enumerate_augmented_gaps(
-    size: int,
-    offset: int,
-    nonviable_gaps: list[Gap],
-    original_gaps: list[Gap],
-):
-    for (original_i, original_j) in original_gaps:
-        i = original_i + offset
-        j = original_j + offset
-        inbounds = (0 <= i <= j < size)
-        viable = ((i, j) not in nonviable_gaps)
-        if inbounds and viable:
-            yield (i,j)
+#=============================================================================#
+# interface
+
+class Boundary:
+
+    def __init__(self,
+        spectrum: np.ndarray,
+        pivot: Pivot,
+        target_space: TargetSpace,
+        boundary_pair: tuple[tuple,tuple],
+        valid_terminal_residues: list,
+        tolerance: float,
+        padding: int = 3,
+    ):
+        # stored fields
+        self._spectrum = spectrum
+        self._pivot = pivot
+        self._target_space = target_space
+        self._valid_terminal_residues = valid_terminal_residues
+        self._tolerance = tolerance
+        self._padding = padding
+        
+        # unpack and store individually
+        b_boundary, y_boundary = boundary_pair
+        self._b_idx, self._b_res = b_boundary
+        self._y_idx, self._y_res = y_boundary
+        
+        # create augmented data
+        self._augmented_spectrum , self._offset = _create_augmented_spectrum(
+            self._spectrum,
+            self._pivot,
+            self._b_idx,
+            self._y_idx,
+            self._tolerance,
+            self._padding,
+        )
+
+        self._augmented_pivot = _create_augmented_pivot(
+            self._augmented_spectrum,
+            self._offset,
+            self._pivot,
+        )
+        
+        self._augmented_gaps = _create_augmented_gaps(
+            self._augmented_spectrum,
+            self._augmented_pivot,
+            self._offset,
+            self._target_space,
+        )
+
+    def get_residues(self):
+        return self._b_res, self._y_res
     
+    def get_augmented_peaks(self):
+        return self._augmented_spectrum
+    
+    def get_offset(self):
+        return self._offset
+    
+    def get_augmented_pivot(self):
+        return self._augmented_pivot
+    
+    def get_augmented_gaps(self):
+        return self._augmented_gaps
+    
+def find_and_create_boundaries(
+    spectrum: np.ndarray,
+    pivot: Pivot,
+    target_space: TargetSpace,
+    valid_terminal_residues: list,
+    tolerance: float,
+    padding: int = 3,
+):
+    b_ions, y_ions = _find_boundary_peaks(spectrum, pivot, valid_terminal_residues)
+    boundaries = [Boundary(spectrum, pivot,target_space,boundary_pair, valid_terminal_residues, tolerance, padding) 
+        for boundary_pair in product(b_ions, y_ions)]
+    return boundaries, b_ions, y_ions
