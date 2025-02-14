@@ -121,6 +121,21 @@ class TargetSpace:
 
 #=============================================================================#
 
+def _find_gaps_without_targets(
+    spectrum: np.ndarray,
+    min_gap: float,
+    max_gap: float,
+    tolerance: float,
+):
+    n = len(spectrum)
+    for i in range(n):
+        for j in range(i + 1, n):
+            gap_dif = spectrum[j] - spectrum[i]
+            if gap_dif > max_gap + tolerance:
+                break
+            elif gap_dif >= min_gap - tolerance:
+                yield (i, j)
+
 def find_all_gaps(
     spectrum: np.ndarray,
     target_groups: list[TargetGroup],

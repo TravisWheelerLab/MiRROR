@@ -2,7 +2,7 @@ from statistics import mode
 
 import numpy as np
 
-from .gaps import GapResult
+from .gaps import GapResult, _find_gaps_without_targets
 from .util import collapse_second_order_list, mass_error, count_mirror_symmetries, residue_lookup, reflect, find_initial_b_ion, find_terminal_y_ion
 
 #=============================================================================#
@@ -167,6 +167,7 @@ def filter_viable_pivots(
     spectrum: np.ndarray,
     symmetry_threshold: float,
     pivots: list[Pivot],
+    filter_unknown_residues: bool = True
 ):
     """Filter out pivots that fall below the symmetry threshold and do not produce legible residues.
     
@@ -191,7 +192,7 @@ def filter_viable_pivots(
             #print(pivot_initial_b_ions)
             #print(pivot_terminal_y_ions)
             raise e
-        if any(pivot_residues != 'X'):
+        if any(pivot_residues != 'X') and filter_unknown_residues:
             viable *= pivot_residues != 'X'
         n = len(pivots)
         return [pivots[i] for i in range(n) if viable[i]]
@@ -208,7 +209,7 @@ def construct_all_pivots(
         2b. (i1, i2, j1, j2) = (i1, i1 + 1, i1 + 2, i1 + 3), that is, the indices are all adjacent.
     
     :spectrum: a sorted array of floats (peak mz values).
-    :gap_indices: a list of integer 2-tuples which index into `spectrum`.
+    :gap_results: a list of GapResult objects, organizing gaps by gap value according to targeted residue weights.
     :tolerance: float, the threshold difference for equating two gaps."""
     o_pivots = collapse_second_order_list(
         [find_overlapping_pivots(spectrum, r.index_tuples(), tolerance) for r in gap_results]
@@ -231,8 +232,77 @@ def find_all_pivots(
     
     :spectrum: a sorted array of floats (peak mz values).
     :symmetry_threshold: the expected number of mirror-symmetric peaks in the spectrum.
-    :gap_indices: a list of integer 2-tuples which index into `spectrum`.
+    :gap_results: a list of GapResult objects, organizing gaps by gap value according to targeted residue weights.
     :tolerance: float, the threshold difference for equating two gaps."""
     pivots = construct_all_pivots(spectrum, gap_results, tolerance)
     viable_pivots = filter_viable_pivots(spectrum, symmetry_threshold, pivots)
     return viable_pivots
+
+#=============================================================================#
+
+def _find_overlapping_pivots_without_targets(
+    spectrum: np.ndarray,
+    sorted_gaps: list[tuple[int, int]],
+    tolerance: float, 
+):
+    n = len(sorted_gaps)
+    for i in range(n):
+        p1, p2 = sorted_gaps[i]
+        p_gap = spectrum[p2] - spectrum[p1]
+        for j in range(i + 1, n):
+            q1, q2 = sorted_gaps[j]
+            q_gap = spectrum[q2] - spectrum[q1]
+            if not(p1 < q1 < p2 < q2) or (q_gap - p_gap > tolerance):
+                # the gap list is sorted, so increasing j will only increase q gap. 
+                # if the difference is already greater than the threshold, there aren't any (more) matches. 
+                break
+            elif q_gap - p_gap < tolerance:
+                yield Pivot((spectrum[p1], spectrum[p2]), (spectrum[q1], spectrum[q2]), (p1, p2), (q1, q2))
+
+def find_overlapping_pivots_without_targets(
+    spectrum: np.ndarray,
+    sorted_gaps: list[tuple[int, int]],
+    tolerance: float, 
+):
+    """Find pairs of indexes (i1,i2), (j1,j2) into a list of peaks such that 
+    1. i1 < j1 < i2 < j2, that is, the intervals [i1, i2] and [j1, j2] overlap.
+    2. the difference  between spectrum[i2] - spectrum[i1] and spectrum[j2] - spectrum[j1] is less than `tolerance`.
+    
+    :spectrum: a sorted array of floats (peak mz values).
+    :gap_indices: a list of integer 2-tuples which index into `spectrum`, sorted to be ascending w.r.t. gap length.
+    :tolerance: float, the threshold difference for equating two gaps."""
+    return list(_find_overlapping_pivots(spectrum, sorted_gaps, tolerance))
+
+def find_all_pivots_gap_agnostic(
+    spectrum: np.ndarray,
+    symmetry_threshold: float,
+    gap_bounds: tuple[float, float],
+    tolerance: float,
+):
+    """Without using precomputed gaps or a TargetSpace object, 
+    find pairs of indexes (i1,i2), (j1,j2) into a list of peaks such that 
+    1. the difference  between spectrum[i2] - spectrum[i1] and spectrum[j2] - spectrum[j1] is less than `tolerance`.
+    2. the pivots are either (a) overlapping or (b) disjoint:
+        2a. i1 < j1 < i2 < j2, that is, the intervals [i1, i2] and [j1, j2] overlap.
+        2b. (i1, i2, j1, j2) = (i1, i1 + 1, i1 + 2, i1 + 3), that is, the indices are all adjacent.
+    Then, filter the pivots to remove pivots whose centers do not induce sufficient mirror symmetry in the peak list.
+    
+    :spectrum: a sorted array of floats (peak mz values).
+    :symmetry_threshold: the expected number of mirror-symmetric peaks in the spectrum.
+    :gap_bounds: a float 2-tuple (lower_bound, upper_bound) that determines when quadratic search should be cut off.
+    :tolerance: float, the threshold difference for equating two gaps."""
+    # find all gaps; sort them. 
+    # in lieu of binsorting by targets, the pivot finding functions must be passed a list sorted by gap value.
+    candidate_pairs = sorted(
+        _find_gaps_without_targets(spectrum, *gap_bounds, tolerance), 
+        key = lambda x: spectrum[x[1]] - spectrum[x[0]])
+    # find overlapping and adjacent pivots
+    overlap_candidates = find_overlapping_pivots_without_targets(spectrum, candidate_pairs, tolerance)
+    adjacent_candidates = find_adjacent_pivots(spectrum, tolerance)
+    candidate_pivots = overlap_candidates + adjacent_candidates
+    # remove pivots below the symmetry threshold
+    return filter_viable_pivots(
+        spectrum, 
+        symmetry_threshold, 
+        candidate_pivots, 
+        filter_unknown_residues = False)
