@@ -3,7 +3,7 @@ __version__ = "0.0.1"
 from .io import *
 from .preprocessing import create_spectrum_bins, filter_spectrum_bins
 
-from .gaps import find_all_gaps, TargetSpace, GapResult
+from .gaps import TargetSpace, GapResult
 from .pivots import find_all_pivots, find_all_pivots_gap_agnostic
 from .boundaries import find_and_create_boundaries, Boundary
 

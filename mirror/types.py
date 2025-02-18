@@ -5,10 +5,11 @@ from networkx import DiGraph
 from collections.abc import Iterator
 from typing import Any
 
+# the types module is an initial object; it cannot have any local dependencies.
+
 #=============================================================================#
 
 TargetGroup = list[float]
-Gap = tuple[float, tuple[int,int], int]
 
 Edge = tuple[int,int]
 SingularPath = list[int]

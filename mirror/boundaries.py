@@ -4,7 +4,6 @@ from sortedcontainers import SortedList
 import numpy as np
 
 from .util import product, collapse_second_order_list, reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
-from .types import Gap
 from .gaps import TargetSpace, GapResult
 from .pivots import Pivot
 

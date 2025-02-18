@@ -114,6 +114,9 @@ ION_OFFSET_LOOKUP = dict(zip(ION_SERIES,ION_SERIES_OFFSETS))
 
 BOUNDARY_PADDING = 3
 
+WATER_LOSS_OFFSET = -18
+AMMONIA_LOSS_OFFSET = -17
+
 def generate_random_residues(length: int, alphabet = RESIDUES):
     """
         np.random.choice(alphabet, length, replace=True)"""
@@ -237,6 +240,9 @@ def add_tqdm(inputs, total=None, description=None):
     if total == None:
         total = len(inputs)
     return tqdm(inputs, total=total, leave=False, desc=description)
+
+def unique(arr):
+    return list(set(arr))
 
 #=============================================================================#
 # simulation via pyOpenMS
