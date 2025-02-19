@@ -9,8 +9,6 @@ from typing import Any
 
 #=============================================================================#
 
-TargetGroup = list[float]
-
 Edge = tuple[int,int]
 SingularPath = list[int]
 DualPath = list[tuple[int,int]]

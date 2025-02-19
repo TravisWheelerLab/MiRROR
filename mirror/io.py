@@ -8,7 +8,7 @@ warnings.filterwarnings(action="ignore", category = ValidationWarning)
 
 # the io module is a terminal object; it cannot be imported by any other local module.
 from .types import *
-from .gaps import GapResult
+from .gaps import TargetGroup, GapResult
 from .util import collapse_second_order_list, comma_separated, split_commas, AMINOS, AMINO_MASS, AMINO_MASS_MONO
 from .preprocessing import MzSpecLib
 

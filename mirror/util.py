@@ -10,6 +10,37 @@ from tqdm import tqdm
 #=============================================================================#
 # residue constants and functions
 
+AMINOS = [
+    'A',
+    'R',
+    'N',
+    'D',
+    'C',
+    'E',
+    'Q',
+    'G',
+    'H',
+    'I',
+    'L',
+    'K',
+    'M',
+    'F',
+    'P',
+    'S',
+    'T',
+    'W',
+    'Y',
+    'V',
+]
+
+RESIDUES = AMINOS
+
+UNKNOWN_AMINO = 'X'
+
+TERMINAL_RESIDUES = ['R', 'K']
+
+NONTERMINAL_RESIDUES = [r for r in RESIDUES if r not in TERMINAL_RESIDUES]
+
 AMINO_MASS = [
     71.08,
     156.2,
@@ -30,7 +61,8 @@ AMINO_MASS = [
     101.1,
     186.2,
     163.2,
-    99.13]
+    99.13,
+]
 
 AMINO_MASS_MONO = [
     71.037,
@@ -52,55 +84,51 @@ AMINO_MASS_MONO = [
     101.05,
     186.08,
     163.06,
-    99.068]
-
-AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
-
-LOOKUP_TOLERANCE = 0.1
-GAP_TOLERANCE = 0.01 # min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
-INTERGAP_TOLERANCE = GAP_TOLERANCE * 2 
-
-AMINOS = [
-    'A',
-    'R',
-    'N',
-    'D',
-    'C',
-    'E',
-    'Q',
-    'G',
-    'H',
-    'I',
-    'L',
-    'K',
-    'M',
-    'F',
-    'P',
-    'S',
-    'T',
-    'W',
-    'Y',
-    'V']
-
-UNKNOWN_AMINO = 'X'
-
-RESIDUES = AMINOS
-
-TERMINAL_RESIDUES = ['R', 'K']
-
-NONTERMINAL_RESIDUES = [r for r in RESIDUES if r not in TERMINAL_RESIDUES]
+    99.068,
+]
 
 AMINO_MASS_LOOKUP = dict(zip(AMINOS,AMINO_MASS))
 
 AMINO_MASS_MONO_LOOKUP = dict(zip(AMINOS,AMINO_MASS_MONO))
 
-ION_SERIES_OFFSETS = [
-    -27,
-    1,
-    18,
-    45,
-    19,
-    2]
+# expected change to a gap (i, j) if peak j has lost water
+WATER_LOSS_OFFSET = -18
+# expected change to a gap (i, j) if peak j has lost ammonia
+AMMONIA_LOSS_OFFSET = -17
+# expected change to a gap (i, j) if peak j has lost water and peak i has lost ammonia
+WATER_j_AMMONIA_i_LOSS_OFFSET = WATER_LOSS_OFFSET - AMMONIA_LOSS_OFFSET
+# expected change to a gap (i, j) if peak j has lost ammonia and peak i has lost water
+AMMONIA_j_WATER_i_LOSS_OFFSET = AMMONIA_LOSS_OFFSET - WATER_LOSS_OFFSET
+
+LOSS_OFFSET_LOOKUP = {
+    'A': [],
+    'R': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
+    'N': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
+    'D': [],
+    'C': [],
+    'E': [AMMONIA_LOSS_OFFSET, AMMONIA_j_WATER_i_LOSS_OFFSET],
+    'Q': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
+    'G': [],
+    'H': [],
+    'I': [],
+    'L': [],
+    'K': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
+    'M': [],
+    'F': [],
+    'P': [],
+    'S': [AMMONIA_LOSS_OFFSET, AMMONIA_j_WATER_i_LOSS_OFFSET],
+    'T': [AMMONIA_LOSS_OFFSET, AMMONIA_j_WATER_i_LOSS_OFFSET],
+    'W': [],
+    'Y': [],
+    'V': [],
+}
+
+LOSS_IDENTIFIER_LOOKUP = {
+    WATER_LOSS_OFFSET: "water_j",
+    AMMONIA_LOSS_OFFSET: "ammonia_j",
+    WATER_j_AMMONIA_i_LOSS_OFFSET: "water_j,ammonia_i",
+    AMMONIA_j_WATER_i_LOSS_OFFSET: "ammonia_j,water_i",
+}
 
 ION_SERIES = [
     'a',
@@ -108,14 +136,27 @@ ION_SERIES = [
     'c',
     'x',
     'y',
-    'z']
+    'z',
+]
+
+ION_SERIES_OFFSETS = [
+    -27,
+    1,
+    18,
+    45,
+    19,
+    2,
+]
 
 ION_OFFSET_LOOKUP = dict(zip(ION_SERIES,ION_SERIES_OFFSETS))
 
-BOUNDARY_PADDING = 3
+AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
 
-WATER_LOSS_OFFSET = -18
-AMMONIA_LOSS_OFFSET = -17
+LOOKUP_TOLERANCE = 0.1
+GAP_TOLERANCE = 0.01 # min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
+INTERGAP_TOLERANCE = GAP_TOLERANCE * 2 
+
+BOUNDARY_PADDING = 3
 
 def generate_random_residues(length: int, alphabet = RESIDUES):
     """
