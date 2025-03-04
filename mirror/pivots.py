@@ -212,7 +212,7 @@ def construct_all_pivots(
     :gap_results: a list of GapResult objects, organizing gaps by gap value according to targeted residue weights.
     :tolerance: float, the threshold difference for equating two gaps."""
     o_pivots = collapse_second_order_list(
-        [find_overlapping_pivots(spectrum, r.index_tuples(), tolerance) for r in gap_results]
+        [find_overlapping_pivots(spectrum, r.get_index_pairs(), tolerance) for r in gap_results]
     )
     a_pivots = find_adjacent_pivots(spectrum, tolerance)
     return o_pivots + a_pivots

@@ -75,7 +75,7 @@ def main(args):
     # load sequences, gap alphabet
     if args.sequences.endswith(".fasta"):
         sequences = mirror.io.load_fasta_as_strings(args.sequences)
-    if args.sequences.startswith("::random"):
+    elif args.sequences.startswith("::random"):
         _, n_seqs, seq_len = args.sequences.split("_")
         n_seqs = int(n_seqs)
         seq_len = int(seq_len)
@@ -83,14 +83,11 @@ def main(args):
     else:
         sequences = args.sequences.split(",")
     sequence_iterator = mirror.util.add_tqdm(sequences)
-
     printer(f"\nsequences:\n{sequences}\n", 2)
 
-    target_groups, residues = mirror.io.load_target_groups(args.alphabet_path)
-    target_space = mirror.TargetSpace(target_groups, residues, args.gap_tolerance)
-
+    gap_params = mirror.util.DEFAULT_GAP_SEARCH_PARAMETERS
     printer(f"alphabet:", 2)
-    for (res, grp) in zip(residues, target_groups):
+    for (res, grp) in zip(gap_params.residues, gap_params.masses):
         printer(f"{res}: {grp}", 2)
 
     # lazy iterators
@@ -105,10 +102,10 @@ def main(args):
         printer(f"peaks: {peaks}\n", 2)
         
         # find gaps
-        gap_results = target_space.find_gaps(peaks)
+        gap_results = mirror.find_gaps(gap_params, peaks)
         printer("gaps:", 2)
-        for (res, result) in zip(residues, gap_results):
-            printer(f"{res}: {result.index_tuples()}", 2)
+        for (res, result) in zip(gap_params.residues, gap_results):
+            printer(f"{res}: {result.get_index_pairs()}", 2)
 
         # find pivots
         symmetry_threshold = args.symmetry_threshold
@@ -124,41 +121,7 @@ def main(args):
             pivot_residue = mirror.util.residue_lookup(pivot.gap())
 
             printer(f"\npivot {pivot_idx}: {pivot_residue}\n\t{pivot}", 2)
-
-            # enumerate boundary conditions
-            #b_boundaries, y_boundaries = mirror.find_boundary_peaks(peaks, pivot, args.terminal_residues)
-            #if len(b_boundaries) * len(y_boundaries) == 0:
-            #    printer("\tno boundaries.", 2)
-            #    continue
-            #else:
-            #    printer(f"\t{b_boundaries}\n\t{y_boundaries}", 2)
-#
-            #for (b_bound, b_res) in b_boundaries:
-            #    for (y_bound, y_res) in y_boundaries:
-            #        printer(f"\n\t\tboundary: ({b_bound}, {b_res}) ({y_bound}, {y_res})\n\t\t{peaks[b_bound]}, {peaks[y_bound]}", 2)
-            #        
-            #        # create augmented peaks
-            #        augmented_peaks, offset = mirror.create_augmented_spectrum(
-            #            peaks, 
-            #            pivot,
-            #            b_bound,
-            #            y_bound,
-            #            args.gap_tolerance)
-            #        
-            #        # create augmented pivot
-            #        augmented_pivot = mirror.create_augmented_pivot(
-            #            augmented_peaks,
-            #            offset,
-            #            pivot)
-            #        
-            #        # create augmented gaps
-            #        original_gaps = mirror.util.collapse_second_order_list(r.index_tuples() for r in gap_results)
-            #        augmented_gaps = mirror.create_augmented_gaps(
-            #            augmented_peaks,
-            #            augmented_pivot,
-            #            offset,
-            #            target_space)
-            boundaries, b_ions, y_ions = mirror.find_and_create_boundaries(peaks, pivot, target_space, args.terminal_residues, args.gap_tolerance, args.boundary_padding)
+            boundaries, b_ions, y_ions = mirror.find_and_create_boundaries(peaks, pivot, gap_params, args.terminal_residues, args.gap_tolerance, args.boundary_padding)
             if len(boundaries) == 0:
                 printer("\tno boundaries.", 2)
                 continue

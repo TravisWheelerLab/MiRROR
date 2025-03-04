@@ -10,125 +10,13 @@ from tqdm import tqdm
 #=============================================================================#
 # residue constants and functions
 
-AMINOS = [
-    'A',
-    'R',
-    'N',
-    'D',
-    'C',
-    'E',
-    'Q',
-    'G',
-    'H',
-    'I',
-    'L',
-    'K',
-    'M',
-    'F',
-    'P',
-    'S',
-    'T',
-    'W',
-    'Y',
-    'V',
-]
+from .gaps.gap_types import DEFAULT_GAP_SEARCH_PARAMETERS, RESIDUES, MONO_MASSES, MASSES, RESIDUE_MONO_MASSES, RESIDUE_MASSES, LOSS_WATER, LOSS_AMMONIA, LOSSES, RESIDUE_LOSSES, MOD_Methionine_Sulfone, MOD_Methionine_Sulfoxide, MOD_PhosphoSerine, MODIFICATIONS, RESIDUE_MODIFICATIONS, CHARGES
 
-RESIDUES = AMINOS
+UNKNOWN_RESIDUE = 'X'
 
-UNKNOWN_AMINO = 'X'
+TERMINAL_RESIDUES = np.array(['R', 'K'])
 
-TERMINAL_RESIDUES = ['R', 'K']
-
-NONTERMINAL_RESIDUES = [r for r in RESIDUES if r not in TERMINAL_RESIDUES]
-
-AMINO_MASS = [
-    71.08,
-    156.2,
-    114.1,
-    115.1,
-    103.1,
-    129.1,
-    128.1,
-    57.05,
-    137.1,
-    113.2,
-    113.2,
-    128.2,
-    131.2,
-    147.2,
-    97.12,
-    87.08,
-    101.1,
-    186.2,
-    163.2,
-    99.13,
-]
-
-AMINO_MASS_MONO = [
-    71.037,
-    156.10,
-    114.04,
-    115.03,
-    103.01,
-    129.04,
-    128.06,
-    57.021,
-    137.06,
-    113.08,
-    113.08,
-    128.10,
-    131.04,
-    147.07,
-    97.053,
-    87.032,
-    101.05,
-    186.08,
-    163.06,
-    99.068,
-]
-
-AMINO_MASS_LOOKUP = dict(zip(AMINOS,AMINO_MASS))
-
-AMINO_MASS_MONO_LOOKUP = dict(zip(AMINOS,AMINO_MASS_MONO))
-
-# expected change to a gap (i, j) if peak j has lost water
-WATER_LOSS_OFFSET = -18
-# expected change to a gap (i, j) if peak j has lost ammonia
-AMMONIA_LOSS_OFFSET = -17
-# expected change to a gap (i, j) if peak j has lost water and peak i has lost ammonia
-WATER_j_AMMONIA_i_LOSS_OFFSET = WATER_LOSS_OFFSET - AMMONIA_LOSS_OFFSET
-# expected change to a gap (i, j) if peak j has lost ammonia and peak i has lost water
-AMMONIA_j_WATER_i_LOSS_OFFSET = AMMONIA_LOSS_OFFSET - WATER_LOSS_OFFSET
-
-LOSS_OFFSET_LOOKUP = {
-    'A': [],
-    'R': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
-    'N': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
-    'D': [],
-    'C': [],
-    'E': [AMMONIA_LOSS_OFFSET, AMMONIA_j_WATER_i_LOSS_OFFSET],
-    'Q': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
-    'G': [],
-    'H': [],
-    'I': [],
-    'L': [],
-    'K': [WATER_LOSS_OFFSET, WATER_j_AMMONIA_i_LOSS_OFFSET],
-    'M': [],
-    'F': [],
-    'P': [],
-    'S': [AMMONIA_LOSS_OFFSET, AMMONIA_j_WATER_i_LOSS_OFFSET],
-    'T': [AMMONIA_LOSS_OFFSET, AMMONIA_j_WATER_i_LOSS_OFFSET],
-    'W': [],
-    'Y': [],
-    'V': [],
-}
-
-LOSS_IDENTIFIER_LOOKUP = {
-    WATER_LOSS_OFFSET: "water_j",
-    AMMONIA_LOSS_OFFSET: "ammonia_j",
-    WATER_j_AMMONIA_i_LOSS_OFFSET: "water_j,ammonia_i",
-    AMMONIA_j_WATER_i_LOSS_OFFSET: "ammonia_j,water_i",
-}
+NONTERMINAL_RESIDUES = np.array([r for r in RESIDUES if r not in TERMINAL_RESIDUES])
 
 ION_SERIES = [
     'a',
@@ -150,10 +38,10 @@ ION_SERIES_OFFSETS = [
 
 ION_OFFSET_LOOKUP = dict(zip(ION_SERIES,ION_SERIES_OFFSETS))
 
-AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(np.array(AMINO_MASS) - np.array(AMINO_MASS_MONO)))
+AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(MASSES - MONO_MASSES))
 
 LOOKUP_TOLERANCE = 0.1
-GAP_TOLERANCE = 0.01 # min(abs(m1 - m2) for m1 in AMINO_MASS_MONO for m2 in AMINO_MASS_MONO if abs(m1 - m2) > 0)
+GAP_TOLERANCE = 0.01
 INTERGAP_TOLERANCE = GAP_TOLERANCE * 2 
 
 BOUNDARY_PADDING = 3
@@ -182,17 +70,17 @@ def mask_ambiguous_residues(res: chr):
 
 def mass_error(
     mass: float,
-    mass_table: list[float] = AMINO_MASS_MONO,
+    mass_table: np.ndarray = MONO_MASSES,
 ):
     "The least difference between `mass: float` and `mass table: list[float]`. Mass table defaults to AMINO_MASS_MONO."
     return min([abs(m - mass) for m in mass_table])
 
 def residue_lookup(
     gap: float,
-    letters: list[str] = AMINOS,
-    mass_table: list[float] = AMINO_MASS_MONO,
+    letters: np.ndarray = RESIDUES,
+    mass_table: list[float] = MONO_MASSES,
     tolerance: float = LOOKUP_TOLERANCE,
-    unknown = UNKNOWN_AMINO,
+    unknown = UNKNOWN_RESIDUE,
     nan = '.',
 ):
     """Associates a gap value to the best matching amino acid residue.
@@ -369,7 +257,11 @@ def digest_trypsin(seq: str, minimum_length: int = 7, maximum_length: int = 50):
     :maximum length: the largest viable tryptic peptide. Defaults to 50."""
     dig = oms.ProteaseDigestion()
     result = []
-    oms_seq = oms.AASequence.fromString(seq)
+    try:
+        oms_seq = oms.AASequence.fromString(seq)
+    except Exception as e:
+        print(seq)
+        raise e
     dig.digest(oms_seq, result, minimum_length, maximum_length)
     return [r.toString() for r in result]
 

@@ -3,7 +3,7 @@ from enum import Enum
 
 import networkx as nx
 
-from .util import AMINO_MASS_MONO, GAP_TOLERANCE, INTERGAP_TOLERANCE
+from .util import GAP_TOLERANCE, INTERGAP_TOLERANCE
 from .pivots import Pivot
 from .graph_utils import *
 
@@ -11,6 +11,7 @@ from .graph_utils import *
 
 GAP_KEY = "gap"
 
+# todo - update for new gap annotations
 GAP_COMPARATOR = lambda x,y: (abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)
 
 class SpectrumGraphOrientation(Enum):

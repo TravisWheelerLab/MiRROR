@@ -4,7 +4,7 @@ from sortedcontainers import SortedList
 import numpy as np
 
 from .util import product, collapse_second_order_list, reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
-from .gaps import TargetSpace, GapResult
+from .gaps import GapSearchParameters, GapResult, find_gaps
 from .pivots import Pivot
 
 #=============================================================================#
@@ -81,10 +81,10 @@ def _create_augmented_gaps(
     augmented_spectrum: np.ndarray,
     augmented_pivot: Pivot,
     offset: int,
-    target_space: TargetSpace,
+    gap_params: GapSearchParameters,
 ):
-    augmented_gap_results = target_space.find_gaps(augmented_spectrum)
-    augmented_gaps = collapse_second_order_list(r.index_tuples() for r in augmented_gap_results)
+    augmented_gap_results = find_gaps(gap_params, augmented_spectrum)
+    augmented_gaps = collapse_second_order_list(r.get_index_pairs() for r in augmented_gap_results)
     nonviable_gaps = augmented_pivot.negative_index_pairs()
     augmented_gaps = [(i, j) for (i, j) in augmented_gaps if (i, j) not in nonviable_gaps]
     return augmented_gaps
@@ -99,7 +99,7 @@ class Boundary:
     def __init__(self,
         spectrum: np.ndarray,
         pivot: Pivot,
-        target_space: TargetSpace,
+        gap_params: GapSearchParameters,
         boundary_pair: tuple[tuple,tuple],
         valid_terminal_residues: list,
         tolerance: float,
@@ -108,7 +108,7 @@ class Boundary:
         # stored fields
         self._spectrum = spectrum
         self._pivot = pivot
-        self._target_space = target_space
+        self._gap_params = gap_params
         self._valid_terminal_residues = valid_terminal_residues
         self._tolerance = tolerance
         self._padding = padding
@@ -138,7 +138,7 @@ class Boundary:
             self._augmented_spectrum,
             self._augmented_pivot,
             self._offset,
-            self._target_space,
+            self._gap_params
         )
 
     def get_residues(self):
@@ -167,7 +167,7 @@ class Boundary:
 def find_and_create_boundaries(
     spectrum: np.ndarray,
     pivot: Pivot,
-    target_space: TargetSpace,
+    gap_params: GapSearchParameters,
     valid_terminal_residues: list,
     tolerance: float,
     padding: int = 3,
@@ -181,6 +181,6 @@ def find_and_create_boundaries(
     :tolerance: float, the threshold for equating two gaps.
     :padding: integer, the number of peaks outside of the boundary to include in the augmented spectrum."""
     b_ions, y_ions = _find_boundary_peaks(spectrum, pivot, valid_terminal_residues)
-    boundaries = [Boundary(spectrum, pivot,target_space,boundary_pair, valid_terminal_residues, tolerance, padding) 
+    boundaries = [Boundary(spectrum, pivot, gap_params, boundary_pair, valid_terminal_residues, tolerance, padding) 
         for boundary_pair in product(b_ions, y_ions)]
     return boundaries, b_ions, y_ions
