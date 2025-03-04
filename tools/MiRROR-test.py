@@ -3,7 +3,7 @@ import numpy as np
 
 PROG = "𝕄 iℝ ℝ 𝕆 ℝ - test\n"
 DESC = """the test system for MiRROR;
-reads sequences from a .fasta.
+reads sequences from a .fasta, or passed as a comma-separated string, or generated via ::random_<NUM SEQS>_<SEQ LEN>.
 enumerates the tryptic peptides of those sequences.
 generates synthetic spectra for each peptide.
 applies the integrated MiRROR pipeline to the spectra;
@@ -11,7 +11,7 @@ compares result(s) to the groundtruth tryptic peptide."""
 
 ARG_NAMES = [
     "sequences",
-    "alphabet_path",
+    "gap_params",
     "suffix_array_path",
     "gap_tolerance",
     "intergap_tolerance",
@@ -85,7 +85,12 @@ def main(args):
     sequence_iterator = mirror.util.add_tqdm(sequences)
     printer(f"\nsequences:\n{sequences}\n", 2)
 
-    gap_params = mirror.util.DEFAULT_GAP_SEARCH_PARAMETERS
+    if args.gap_params == "simple":
+        gap_params = mirror.gaps.SIMPLE_GAP_SEARCH_PARAMETERS
+    elif args.gap_params == "default":
+        gap_params = mirror.gaps.DEFAULT_GAP_SEARCH_PARAMETERS
+    elif args.gap_params == "uncharged":
+        gap_params = mirror.gaps.UNCHARGED_GAP_SEARCH_PARAMETERS
     printer(f"alphabet:", 2)
     for (res, grp) in zip(gap_params.residues, gap_params.masses):
         printer(f"{res}: {grp}", 2)
@@ -102,17 +107,17 @@ def main(args):
         printer(f"peaks: {peaks}\n", 2)
         
         # find gaps
-        gap_results = mirror.find_gaps(gap_params, peaks)
-        printer("gaps:", 2)
+        annotated_peaks, gap_results = mirror.find_gaps(gap_params, peaks)
+        printer(f"gaps:\n\t(annotated peaks)\n{annotated_peaks}", 2)
         for (res, result) in zip(gap_params.residues, gap_results):
             printer(f"{res}: {result.get_index_pairs()}", 2)
 
         # find pivots
         symmetry_threshold = args.symmetry_threshold
         if symmetry_threshold == None:
-            symmetry_threshold = mirror.util.expected_num_mirror_symmetries(peaks)
+            symmetry_threshold = mirror.util.expected_num_mirror_symmetries(annotated_peaks)
         
-        pivots = mirror.find_all_pivots(peaks, symmetry_threshold, gap_results, args.intergap_tolerance)
+        pivots = mirror.find_all_pivots(annotated_peaks, symmetry_threshold, gap_results, args.intergap_tolerance)
 
         best_score = np.inf
         best_cand = None
@@ -121,7 +126,7 @@ def main(args):
             pivot_residue = mirror.util.residue_lookup(pivot.gap())
 
             printer(f"\npivot {pivot_idx}: {pivot_residue}\n\t{pivot}", 2)
-            boundaries, b_ions, y_ions = mirror.find_and_create_boundaries(peaks, pivot, gap_params, args.terminal_residues, args.gap_tolerance, args.boundary_padding)
+            boundaries, b_ions, y_ions = mirror.find_and_create_boundaries(annotated_peaks, pivot, gap_params, args.terminal_residues, args.gap_tolerance, args.boundary_padding)
             if len(boundaries) == 0:
                 printer("\tno boundaries.", 2)
                 continue
@@ -158,12 +163,12 @@ def main(args):
 
                 # create affixes
                 affixes = np.array([mirror.create_affix(dp, graph_pair) for dp in dual_paths])
-                affixes = mirror.filter_affixes(
-                    affixes, 
-                    args.suffix_array_path, 
-                    occurrence_threshold = args.occurrence_threshold)
+                #affixes = mirror.filter_affixes(
+                #    affixes, 
+                #    args.suffix_array_path, 
+                #    occurrence_threshold = args.occurrence_threshold)
 
-                printer(f"\t\taffixes {affixes}", 2)
+                printer(f"\t\taffixes {affixes}\n\t\taffix translations {[affix.translate() for affix in affixes]}", 2)
                 
                 if len(pair_indices) == 0:
                     printer("\t\tNO CANDIDATES.", 2)

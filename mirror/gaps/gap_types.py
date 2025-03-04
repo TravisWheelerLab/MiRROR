@@ -14,7 +14,8 @@ RESIDUES = np.array([
     'Q',
     'G',
     'H',
-    'Lxx',
+    'L',
+    'I',
     'K',
     'M',
     'F',
@@ -36,6 +37,7 @@ MONO_MASSES = np.array([
     128.06,
     57.021,
     137.06,
+    113.08,
     113.08,
     128.10,
     131.04,
@@ -61,6 +63,7 @@ MASSES = np.array([
     57.05,
     137.1,
     113.2,
+    113.2,  
     128.2,
     131.2,
     147.2,
@@ -88,7 +91,8 @@ RESIDUE_LOSSES = {
     'Q' : [LOSS_WATER],
     'G' : [],
     'H' : [],
-    'Lxx' : [],
+    'L' : [],
+    'I' : [],
     'K' : [LOSS_WATER],
     'M' : [],
     'F' : [],
@@ -120,7 +124,8 @@ RESIDUE_MODIFICATIONS = {
     'Q' : [],
     'G' : [],
     'H' : [],
-    'Lxx' : [],
+    'L' : [],
+    'I' : [],
     'K' : [],
     'M' : [MOD_Methionine_Sulfone, MOD_Methionine_Sulfoxide],
     'F' : [],
@@ -172,6 +177,7 @@ class GapAbstractTransformationSolver(ABC):
 @dataclass
 class GapMatch:
     index_pair: tuple[int,int]
+    outer_index: tuple[int, int]
     inner_index: tuple[int,int]
     charge_state: tuple[float,float]
     match_residue: str
@@ -188,11 +194,12 @@ class GapMatch:
     def indices(self):
         return np.array([
             *self.index_pair,       # 0,1
-            *self.inner_index,      # 2,3
-            self.match_idx,         # 4
-            self.left_loss_idx,     # 5
-            self.right_loss_idx,    # 6
-            self.modification_idx,  # 7
+            *self.outer_index,      # 2,3
+            *self.inner_index,      # 4,5
+            self.match_idx,         # 6
+            self.left_loss_idx,     # 7
+            self.right_loss_idx,    # 8
+            self.modification_idx,  # 9
         ])
     
     def values(self):
@@ -226,7 +233,7 @@ class GapMatch:
         return f"GapMatch(cost\t = {self.cost()}\nindex_pair\t = {self.index_pair}\ninner_index\t = {self.inner_index}\ncharge_state\t = {self.charge_state}\nmatch_residue\t = {self.match_residue}\nmatch_mass\t = {self.match_mass} ({self.match_idx})\nquery_mass\t = {self.query_mass}\nleft_loss\t = {self.left_loss} ({self.left_loss_idx})\nright_loss\t = {self.right_loss} ({self.right_loss_idx})\nmodification\t = {self.modification} ({self.modification_idx})\n)"
 
 class GapResult:
-    """Array representation of a collection of GapMatch objects. Can be constructed either from an iterable, or using the `gap_data` kwarg, from a tuple of arrays of shapes (n,8), (n,7), and (n,)."""
+    """Array representation of a collection of GapMatch objects. Can be constructed either from an iterable, or using the `gap_data` kwarg, from a tuple of arrays of shapes (n,10), (n,7), and (n,)."""
     def __init__(self, matches: Iterator[GapMatch], gap_data = None):
         if matches != None:
             inds = [m.indices() for m in matches]
@@ -244,7 +251,7 @@ class GapResult:
             self._gap_inds, self._gap_vals, self._gap_res = gap_data
         self._n = len(self._gap_res)
         if not self.empty:
-            assert self._gap_inds.shape == (self._n,8)
+            assert self._gap_inds.shape == (self._n,10)
             assert self._gap_vals.shape == (self._n,7)
             assert self._gap_res.shape == (self._n,)
     
@@ -255,32 +262,39 @@ class GapResult:
         "The matched residue of the gap at index `i`."
         return self._gap_res[i]
     
-    def index_pair(self, i: int) -> tuple[int,int]:
-        "The (topological) indices of the gap at index `i`."
+    def topological_index(self, i: int) -> tuple[int, int]:
+        """Topological index pair (v, w) which guarantees: 
+        1) v < w.
+        2) the graph over all such pairs is a DAG.
+        (Conditions 1 and 2 are more-or-less equivalent in this context.)"""
         return tuple(self._gap_inds[i, 0:2])
+    
+    def outer_index_pair(self, i: int) -> tuple[int,int]:
+        "Indices into the original array for the gap at index `i`."
+        return tuple(self._gap_inds[i, 2:4])
     
     def get_index_pairs(self) -> list[tuple[int, int]]:
         "All pairs of topological indices."
         if self.empty:
             return []
         else:
-            return [self.index_pair(i) for i in range(len(self))]
+            return [self.topological_index(i) for i in range(len(self))]
     
     def inner_index_pair(self, i: int) -> tuple[int,int]:
         "Indices into the charge-duplicated array for the gap at index `i`."
-        return tuple(self._gap_inds[i, 2:4])
+        return tuple(self._gap_inds[i, 4:6])
     
     def match_index(self, i: int) -> int:
         "The match ID for the gap at index `i`."
-        return self._gap_inds[i, 4]
+        return self._gap_inds[i, 6]
     
     def loss_index_pair(self, i: int) -> tuple[int,int]:
         "The IDs of the loss types affecting the peaks supporting the gap at index `i`."
-        return tuple(self._gap_inds[i, 5:7])
+        return tuple(self._gap_inds[i, 7:9])
     
     def modification_index(self, i: int) -> int:
         "The ID of the modification affecting the right peak of the gap at index `i`."
-        return self._gap_inds[i, 7]
+        return self._gap_inds[i, 9]
     
     def charge_state(self, i: int) -> tuple[float,float]:
         "The charge states of the peaks supporting the gap at index `i`."
@@ -363,9 +377,29 @@ class GapSearchParameters:
 DEFAULT_GAP_SEARCH_PARAMETERS = GapSearchParameters(
     "tensor",
     RESIDUES,
-    MASSES,
+    MONO_MASSES,
     LOSSES,
     MODIFICATIONS,
     CHARGES,
-    1e-5,
+    0.01,
+)
+
+SIMPLE_GAP_SEARCH_PARAMETERS = GapSearchParameters(
+    "tensor",
+    RESIDUES,
+    MONO_MASSES,
+    np.array([]),
+    np.array([]),
+    np.array([]),
+    0.01,
+)
+
+UNCHARGED_GAP_SEARCH_PARAMETERS = GapSearchParameters(
+    "tensor",
+    RESIDUES,
+    MONO_MASSES,
+    LOSSES,
+    MODIFICATIONS,
+    np.array([]),
+    0.01,
 )

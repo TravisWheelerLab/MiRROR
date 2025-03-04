@@ -83,7 +83,7 @@ def _create_augmented_gaps(
     offset: int,
     gap_params: GapSearchParameters,
 ):
-    augmented_gap_results = find_gaps(gap_params, augmented_spectrum)
+    _, augmented_gap_results = find_gaps(gap_params, augmented_spectrum)
     augmented_gaps = collapse_second_order_list(r.get_index_pairs() for r in augmented_gap_results)
     nonviable_gaps = augmented_pivot.negative_index_pairs()
     augmented_gaps = [(i, j) for (i, j) in augmented_gaps if (i, j) not in nonviable_gaps]
@@ -109,6 +109,7 @@ class Boundary:
         self._spectrum = spectrum
         self._pivot = pivot
         self._gap_params = gap_params
+        self._gap_params.charges = np.array([])
         self._valid_terminal_residues = valid_terminal_residues
         self._tolerance = tolerance
         self._padding = padding

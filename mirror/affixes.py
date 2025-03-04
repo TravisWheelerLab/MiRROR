@@ -56,7 +56,7 @@ def _translate_singular_path(
     weight_key = GAP_KEY,
 ) -> str:
     path_edges = path_to_edges(singular_path)
-    return (spectrum_graph[i][j][weight_key] for (i,j) in path_edges)
+    return [spectrum_graph[i][j][weight_key] for (i,j) in path_edges]
 
 #=============================================================================#
 
