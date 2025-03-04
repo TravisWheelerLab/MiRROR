@@ -9,7 +9,7 @@ from .util import product, collapse_second_order_list, LOSS_OFFSET_LOOKUP
 
 class TargetGroup:
     """A glorified constructor for a list of float values. Given a residue, its ideal mass values, 
-    and its potential modifications and losses, iterate all possible observations as gap values.
+    and its potential modifications and losses, iterate the product as all possible observations as gap values.
     Implements access to the list of observables with `__len__`, `__getitem__` and `__iter__`, 
     and access to the mass value + modification + loss decomposition with `decompose`."""
 
@@ -24,7 +24,7 @@ class TargetGroup:
         # private records of input values
         self._target_values = target_values
         self._modifiers = [0] + modifiers
-        self._losses = [0] + losses
+        self._losses = [0] + losses + [-l for l in losses]
         # constructed value/combination sets
         self._values = []
         self._combinations = []
@@ -42,13 +42,13 @@ class TargetGroup:
         self._constructed = True
     
     def decompose(self, i):
-        "Given a valid index `i`, return the decomposition of `self[i]` as a dictionary over keys `[\"mass\", \"mod\", \"loss\"]"
+        "Given a valid index `i`, return the decomposition of `self[i]` as an array `[mass, modification, loss]`"
         ti, mi, li = self._combinations[i]
         tv = self._target_values[ti]
         mv = self._modifiers[i]
         li = self._losses[i]
         assert tv + mv + li == self[i]
-        return {"mass": tv, "modifier": mv, "loss": li}
+        return [tv, mv, li]
     
     def __len__(self):
         return len(self._values)
@@ -75,10 +75,14 @@ class GapResult:
         self.group_residue = target_group.residue
         self.group_values = target_group
         self.n_gaps = len(gap_data)
-        self._gap_data = np.vstack(gap_data)
+        self._gap_data = np.vstack([[]] + gap_data)
     
     def __len__(self) -> int:
         return self.n_gaps
+    
+    def __getitem(self, i: int) -> np.ndarray:
+        """Return all data for gap `i`."""
+        return self._gap_data[i, :]
     
     def values(self) -> np.ndarray:
         """Return the gap values as a numpy array."""
@@ -103,6 +107,18 @@ class GapResult:
         Taken with `internal_indices`, these data can be used to recover the peak lists from which
         a given gap was constructed."""
         return self._gap_data[:, 6:8]
+    
+    def base_values(self) -> np.ndarray:
+        """Return the target values associated with gaps, excluding modifications or losses."""
+        pass
+
+    def modifications(self) -> np.ndarray:
+        """Return the modification values associated with gaps."""
+        pass
+
+    def losses(self) -> np.ndarray:
+        """Return the loss values associated with gaps."""
+        pass
     
     def index_tuples(self) -> Iterator[tuple[int,int]]:
         """Return a lazy iterator over gap indices as integer two-tuples."""
