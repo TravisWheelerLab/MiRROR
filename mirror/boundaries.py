@@ -102,7 +102,6 @@ class Boundary:
         gap_params: GapSearchParameters,
         boundary_pair: tuple[tuple,tuple],
         valid_terminal_residues: list,
-        tolerance: float,
         padding: int = 3,
     ):
         # stored fields
@@ -111,7 +110,7 @@ class Boundary:
         self._gap_params = gap_params
         self._gap_params.charges = np.array([])
         self._valid_terminal_residues = valid_terminal_residues
-        self._tolerance = tolerance
+        self._tolerance = gap_params.tolerance
         self._padding = padding
         
         # unpack and store individually
@@ -170,7 +169,6 @@ def find_and_create_boundaries(
     pivot: Pivot,
     gap_params: GapSearchParameters,
     valid_terminal_residues: list,
-    tolerance: float,
     padding: int = 3,
 ):
     """Find boundary ions of b and y series, and for each element in their product, construct a Boundary object.
@@ -182,6 +180,6 @@ def find_and_create_boundaries(
     :tolerance: float, the threshold for equating two gaps.
     :padding: integer, the number of peaks outside of the boundary to include in the augmented spectrum."""
     b_ions, y_ions = _find_boundary_peaks(spectrum, pivot, valid_terminal_residues)
-    boundaries = [Boundary(spectrum, pivot, gap_params, boundary_pair, valid_terminal_residues, tolerance, padding) 
+    boundaries = [Boundary(spectrum, pivot, gap_params, boundary_pair, valid_terminal_residues, padding) 
         for boundary_pair in product(b_ions, y_ions)]
     return boundaries, b_ions, y_ions

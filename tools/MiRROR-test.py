@@ -75,28 +75,28 @@ def main(args):
     # load sequences, gap alphabet
     if args.sequences.endswith(".fasta"):
         sequences = mirror.io.load_fasta_as_strings(args.sequences)
+        tryptic_peptides = mirror.util.add_tqdm(mirror.util.enumerate_tryptic_peptides(sequences))
     elif args.sequences.startswith("::random"):
         _, n_seqs, seq_len = args.sequences.split("_")
         n_seqs = int(n_seqs)
         seq_len = int(seq_len)
         sequences = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
+        tryptic_peptides = mirror.util.add_tqdm(sequences)
     else:
         sequences = args.sequences.split(",")
-    sequence_iterator = mirror.util.add_tqdm(sequences)
+        tryptic_peptides = mirror.util.add_tqdm(mirror.util.enumerate_tryptic_peptides(sequences))
     printer(f"\nsequences:\n{sequences}\n", 2)
 
     if args.gap_params == "simple":
         gap_params = mirror.gaps.SIMPLE_GAP_SEARCH_PARAMETERS
-    elif args.gap_params == "default":
-        gap_params = mirror.gaps.DEFAULT_GAP_SEARCH_PARAMETERS
     elif args.gap_params == "uncharged":
         gap_params = mirror.gaps.UNCHARGED_GAP_SEARCH_PARAMETERS
+    else:#if args.gap_params == "default":
+        gap_params = mirror.gaps.DEFAULT_GAP_SEARCH_PARAMETERS
     printer(f"alphabet:", 2)
     for (res, grp) in zip(gap_params.residues, gap_params.masses):
         printer(f"{res}: {grp}", 2)
 
-    # lazy iterators
-    tryptic_peptides = mirror.util.enumerate_tryptic_peptides(sequence_iterator)
 
     # pipeline
     optimal_scores = []
@@ -122,11 +122,17 @@ def main(args):
         best_score = np.inf
         best_cand = None
         for pivot_idx, pivot in enumerate(pivots):
-            # todo - replace this with a TargetSpace method.
             pivot_residue = mirror.util.residue_lookup(pivot.gap())
 
             printer(f"\npivot {pivot_idx}: {pivot_residue}\n\t{pivot}", 2)
-            boundaries, b_ions, y_ions = mirror.find_and_create_boundaries(annotated_peaks, pivot, gap_params, args.terminal_residues, args.gap_tolerance, args.boundary_padding)
+            boundaries, b_ions, y_ions = mirror.find_and_create_boundaries(
+                annotated_peaks, 
+                pivot, 
+                gap_params, 
+                args.terminal_residues, 
+                args.boundary_padding
+            )
+            
             if len(boundaries) == 0:
                 printer("\tno boundaries.", 2)
                 continue
@@ -197,13 +203,12 @@ def main(args):
             printer(f"{'-'*10}\nedit distance {best_score}", 1)
             if best_score == np.inf:
                 printer("no candidates were found ):<", 1)
+                best_score = 2 * len(true_sequence)
             else:
                 best_cand[0].edit_distance(true_sequence, verbose = args.verbosity >= 1)
                 printer(best_cand[0]._pivot_res, 1)
                 printer(best_cand[0].characterize_errors(true_sequence), 1)
             #input()
-        if best_score == np.inf:
-            best_score = len(true_sequence)
         optimal_scores.append(best_score)
         optimal_candidates.append(best_cand)
 
