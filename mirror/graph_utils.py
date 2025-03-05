@@ -1,4 +1,5 @@
 import itertools
+from copy import deepcopy
 
 import networkx as nx
 import numpy as np
@@ -30,6 +31,46 @@ def get_edges(graph,node):
 # methods for iterating the mutual path space of a pair of graphs.
 # based on the implementation in networkx.algorithms.simple_paths
 # https://github.com/networkx/networkx/blob/main/networkx/algorithms/simple_paths.py
+
+def find_all_dual_paths(
+    G: nx.DiGraph,
+    H: nx.DiGraph,
+    weight_key,
+    weight_metric,
+) -> list[DualPath]:
+    G = deepcopy(G)
+    H = deepcopy(H)
+    G_sources = get_sources(G)
+    H_sources = get_sources(H)
+    dual_paths = []
+    while len(G_sources) > 0 or len(H_sources) > 0:
+        G_copy = deepcopy(G)
+        H_copy = deepcopy(H)
+        G_sinks = get_sinks(G_copy)
+        H_sinks = get_sinks(H_copy)
+        while len(G_sinks) > 0 or len(H_sinks) > 0:
+            dual_paths.extend(
+                find_dual_paths(
+                    G_copy,
+                    H_copy,
+                    weight_key,
+                    weight_metric
+                )
+            )
+            for i in G_sinks:
+                G_copy.remove_node(i)
+            for i in H_sinks:
+                H_copy.remove_node(i)
+            G_sinks = get_sinks(G_copy)
+            H_sinks = get_sinks(H_copy)
+        for i in G_sources:
+            G.remove_node(i)
+        for i in H_sources:
+            H.remove_node(i)
+        G_sources = get_sources(G)
+        H_sources = get_sources(H)
+    return dual_paths
+        
 
 def find_dual_paths(
     G: nx.DiGraph,

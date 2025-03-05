@@ -75,17 +75,15 @@ def main(args):
     # load sequences, gap alphabet
     if args.sequences.endswith(".fasta"):
         sequences = mirror.io.load_fasta_as_strings(args.sequences)
-        tryptic_peptides = mirror.util.add_tqdm(mirror.util.enumerate_tryptic_peptides(sequences))
+        tryptic_peptides = mirror.util.enumerate_tryptic_peptides(sequences)
     elif args.sequences.startswith("::random"):
         _, n_seqs, seq_len = args.sequences.split("_")
         n_seqs = int(n_seqs)
         seq_len = int(seq_len)
-        sequences = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
-        tryptic_peptides = mirror.util.add_tqdm(sequences)
+        tryptic_peptides = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
     else:
         sequences = args.sequences.split(",")
-        tryptic_peptides = mirror.util.add_tqdm(mirror.util.enumerate_tryptic_peptides(sequences))
-    printer(f"\nsequences:\n{sequences}\n", 2)
+        tryptic_peptides = mirror.util.enumerate_tryptic_peptides(sequences)
 
     if args.gap_params == "simple":
         gap_params = mirror.gaps.SIMPLE_GAP_SEARCH_PARAMETERS
@@ -97,6 +95,8 @@ def main(args):
     for (res, grp) in zip(gap_params.residues, gap_params.masses):
         printer(f"{res}: {grp}", 2)
 
+    tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
+    printer(f"\nsequences:\n{tryptic_peptides}\n", 1)
 
     # pipeline
     optimal_scores = []
@@ -138,7 +138,8 @@ def main(args):
                 continue
             else:
                 printer(f"\t{b_ions}\n\t{y_ions}", 2)
-            for boundary in boundaries:
+            for b_idx, boundary in enumerate(boundaries):
+                printer(f"\tboundary {b_idx}", 2)
                 b_res, y_res = boundary.get_residues()
                 augmented_peaks = boundary.get_augmented_peaks()
                 offset = boundary.get_offset()
@@ -146,7 +147,7 @@ def main(args):
                 augmented_gaps = boundary.get_augmented_gaps()
                 printer(f"\t\taugmented peaks: {augmented_peaks}, offset = {offset}", 2)
                 printer(f"\t\taugmented pivot: {augmented_pivot}", 2)
-                printer(f"{'-'*10}\n\t\taugmented gaps: {augmented_gaps}", 2)
+                printer(f"\t\taugmented gaps: {augmented_gaps}", 2)
                 
                 # create topologies
                 graph_pair = mirror.create_spectrum_graph_pair(
@@ -157,7 +158,7 @@ def main(args):
                 
                 # find dual paths
                 gap_comparator = lambda x, y: (abs(x - y) < args.intergap_tolerance) and (x != -1) and (y != -1)
-                dual_paths = mirror.find_dual_paths(
+                dual_paths = mirror.graph_utils.find_all_dual_paths(
                     *graph_pair,
                     args.gap_key,
                     gap_comparator)
@@ -199,6 +200,7 @@ def main(args):
                         if score < best_score:
                             best_score = score
                             best_cand = (candidate,idx)
+        printer(best_score, 1)
         if best_score > 0:
             printer(f"{'-'*10}\nedit distance {best_score}", 1)
             if best_score == np.inf:
@@ -208,7 +210,7 @@ def main(args):
                 best_cand[0].edit_distance(true_sequence, verbose = args.verbosity >= 1)
                 printer(best_cand[0]._pivot_res, 1)
                 printer(best_cand[0].characterize_errors(true_sequence), 1)
-            #input()
+        #input()
         optimal_scores.append(best_score)
         optimal_candidates.append(best_cand)
 

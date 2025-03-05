@@ -2,6 +2,7 @@
 
 from sortedcontainers import SortedList
 import numpy as np
+from copy import deepcopy
 
 from .util import product, collapse_second_order_list, reflect, residue_lookup, find_initial_b_ion, find_terminal_y_ion
 from .gaps import GapSearchParameters, GapResult, find_gaps
@@ -82,11 +83,13 @@ def _create_augmented_gaps(
     augmented_pivot: Pivot,
     offset: int,
     gap_params: GapSearchParameters,
+    nonviable_gaps: list[tuple[int,int]]
 ):
-    _, augmented_gap_results = find_gaps(gap_params, augmented_spectrum)
+    annotated_augmented_spectrum, augmented_gap_results = find_gaps(gap_params, augmented_spectrum)
     augmented_gaps = collapse_second_order_list(r.get_index_pairs() for r in augmented_gap_results)
-    nonviable_gaps = augmented_pivot.negative_index_pairs()
     augmented_gaps = [(i, j) for (i, j) in augmented_gaps if (i, j) not in nonviable_gaps]
+    augmented_gaps = list(set(augmented_gaps))
+    augmented_gaps.sort(key = lambda x: x[0] + x[1] / 1000)
     return augmented_gaps
 
 #=============================================================================#
@@ -107,7 +110,7 @@ class Boundary:
         # stored fields
         self._spectrum = spectrum
         self._pivot = pivot
-        self._gap_params = gap_params
+        self._gap_params = deepcopy(gap_params)
         self._gap_params.charges = np.array([])
         self._valid_terminal_residues = valid_terminal_residues
         self._tolerance = gap_params.tolerance
@@ -134,11 +137,13 @@ class Boundary:
             self._pivot,
         )
         
+        self._nonviable_gaps = self._augmented_pivot.negative_index_pairs()
         self._augmented_gaps = _create_augmented_gaps(
             self._augmented_spectrum,
             self._augmented_pivot,
             self._offset,
-            self._gap_params
+            self._gap_params,
+            self._nonviable_gaps,
         )
 
     def get_residues(self):

@@ -9,17 +9,17 @@ def duplicate_inverse_charges(mz, charge_values):
     charge_values = charge_values
     # create charge table
     mz_idx = np.arange(len(mz))
-    charge_states = np.hstack([np.full_like(mz, 1.)] + [np.full_like(mz[1:], c) for c in charge_values])
-    indices = np.hstack([mz_idx] + [mz_idx[1:] for _ in range(len(charge_values))])
+    charge_states = np.hstack([np.full_like(mz, 1.)] + [np.full_like(mz, c) for c in charge_values])
+    indices = np.hstack([mz_idx for _ in range(len(charge_values) + 1)])
     charge_table = np.vstack((
         indices, 
         charge_states,
     ))
     # create duplicate peaks with inverse charges
-    mz = np.hstack([mz] + [mz[1:] * c for c in charge_values])
+    dup_mz = np.hstack([mz] + [mz * c for c in charge_values])
     # reorder
-    order = np.argsort(mz)
-    return mz[order], charge_table[:, order]
+    order = np.argsort(dup_mz)
+    return dup_mz[order], charge_table[:, order]
 
 def _create_transformation_tensors(
     masses: list[float],
@@ -281,24 +281,28 @@ def find_gaps(
         else:
             bins['X'].append(match)
     # create 'annotated' peaks, subsetting dup_mz and restoring i<j order.
-    annotated_mask = np.zeros_like(dup_mz, dtype = bool)
-    annotated_idx = []
-    for residue in residues + ['X']:
-        for match in bins[residue]:
-            for i in match.inner_index:
-                annotated_mask[i] = True
-                annotated_idx.append(i)
-    annotated_idx = sorted(set(annotated_idx))
-    annotated_idx = np.array(annotated_idx)
-    annotated_peaks = dup_mz[annotated_idx]
-    idx_position = np.full_like(dup_mz, -1, dtype=int)
-    idx_position[annotated_idx] = np.arange(annotated_idx.size)
+#    annotated_mask = np.zeros_like(dup_mz, dtype = bool)
+#    annotated_idx = []
+#    for residue in residues + ['X']:
+#        for match in bins[residue]:
+#            for i in match.inner_index:
+#                annotated_mask[i] = True
+#                annotated_idx.append(i)
+#    annotated_idx = sorted(set(annotated_idx))
+#    annotated_idx = np.array(annotated_idx)
+#    annotated_peaks = dup_mz[annotated_mask]
+#    idx_position = np.full_like(dup_mz, -1, dtype=int)
+#    idx_position[annotated_mask] = np.arange(annotated_idx.size)
     for residue in residues + ['X']:
         for match in bins[residue]:
             i, j = match.inner_index
-            match.index_pair = (idx_position[i], idx_position[j])
+#            match.index_pair = (idx_position[i], idx_position[j])
+            assert dup_mz[j] - dup_mz[i] > 0 
+            match.index_pair = match.inner_index
     # construct GapResult objects
-    return annotated_peaks, [GapResult(bins[residue]) for residue in residues + ['X']]
+#    return annotated_peaks, [GapResult(bins[residue]) for residue in residues + ['X']]
+
+    return dup_mz, [GapResult(bins[residue]) for residue in residues + ['X']]
 
 def _find_gaps_tensor(
     mz: np.ndarray,
