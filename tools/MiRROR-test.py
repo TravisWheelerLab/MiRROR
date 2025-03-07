@@ -1,5 +1,22 @@
 from _tool_init import mirror, timed_op, argparse
 import numpy as np
+import networkx as nx
+from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
+import matplotlib.pyplot as plt
+from copy import deepcopy
+
+def draw_graph(graph, title, gap_key):
+    graph.remove_node(-1)
+    graph.graph['graph'] = {'rankdir':'LR'}
+    graph.graph['node'] = {'shape':'circle'}
+    graph.graph['edges'] = {'arrowsize':'4.0'}
+    A = to_agraph(graph)
+    for (i,j) in graph.edges:
+        truncated_weight = round(graph[i][j][gap_key],4)
+        res = mirror.util.residue_lookup(truncated_weight)
+        A.get_edge(i,j).attr['label'] = f"{res} [ {str(truncated_weight)} ]" 
+    A.layout('dot')
+    A.draw(title)
 
 PROG = "𝕄 iℝ ℝ 𝕆 ℝ - test\n"
 DESC = """the test system for MiRROR;
@@ -89,7 +106,7 @@ def main(args):
         gap_params = mirror.gaps.SIMPLE_GAP_SEARCH_PARAMETERS
     elif args.gap_params == "uncharged":
         gap_params = mirror.gaps.UNCHARGED_GAP_SEARCH_PARAMETERS
-    else:#if args.gap_params == "default":
+    else: # elif args.gap_params == "default":
         gap_params = mirror.gaps.DEFAULT_GAP_SEARCH_PARAMETERS
     printer(f"alphabet:", 2)
     for (res, grp) in zip(gap_params.residues, gap_params.masses):
@@ -141,6 +158,7 @@ def main(args):
             for b_idx, boundary in enumerate(boundaries):
                 printer(f"\tboundary {b_idx}", 2)
                 b_res, y_res = boundary.get_residues()
+                boundary_indices = boundary.get_boundary_indices()
                 augmented_peaks = boundary.get_augmented_peaks()
                 offset = boundary.get_offset()
                 augmented_pivot = boundary.get_augmented_pivot()
@@ -156,9 +174,22 @@ def main(args):
                     augmented_pivot,
                     gap_key = args.gap_key)
                 
+                for i in boundary_indices:
+                    for graph in graph_pair:
+                        if (i in graph) and (i not in mirror.get_sources(graph)):
+                            #for (_,j) in graph.out_edges(i):
+                            #    graph.add_edge(i + 100,j)
+                            #    graph[i + 100][j][args.gap_key] = graph[i][j][args.gap_key]
+                            in_edges = list(graph.in_edges(i))
+                            for (j,_i) in in_edges:
+                                assert i == _i
+                                graph.remove_edge(j, i) 
+                #for (name,graph) in zip(["asc", "desc"],graph_pair):
+                #    draw_graph(deepcopy(graph), f"{name}_graph.png", args.gap_key)
+                
                 # find dual paths
                 gap_comparator = lambda x, y: (abs(x - y) < args.intergap_tolerance) and (x != -1) and (y != -1)
-                dual_paths = mirror.graph_utils.find_all_dual_paths(
+                dual_paths = mirror.graph_utils.find_dual_paths(
                     *graph_pair,
                     args.gap_key,
                     gap_comparator)

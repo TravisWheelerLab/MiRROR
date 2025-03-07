@@ -37,19 +37,22 @@ def _create_augmented_spectrum(
     n = len(spectrum)
     subspectrum = spectrum[max(0, y_idx - padding):min(n - 1, b_idx + padding + 1)]
     augmented_spectrum = SortedList(subspectrum)
-    augments = []
+    boundaries = []
     for val in [b_mz, y_mz]:
         reflected_val = reflect(val, center)
         for aug_peak in [val, reflected_val]:
             min_dif = np.inf
+            closest_peak = -1
             for peak in subspectrum:  
                 dif = abs(peak - aug_peak)
                 if dif < min_dif:
                     min_dif = dif
+                    closest_peak = peak
             if min_dif > tolerance:
                 augmented_spectrum.add(aug_peak)
-                augments.append(aug_peak)
-    augmented_spectrum = np.array(augmented_spectrum)
+                boundaries.append(aug_peak)
+            else:
+                boundaries.append(closest_peak)
 
     # shift the pivot
     pivot_left = pivot.outer_left()
@@ -57,7 +60,8 @@ def _create_augmented_spectrum(
     new_left = len([val for val in augmented_spectrum if val < pivot_left_mz])
     offset = new_left - pivot_left
     
-    return augmented_spectrum, offset
+    boundary_indices = [augmented_spectrum.index(mz) for mz in boundaries]
+    return np.array(augmented_spectrum), offset, boundaries, boundary_indices
 
 def _create_augmented_pivot(
     augmented_spectrum: np.ndarray,
@@ -122,7 +126,7 @@ class Boundary:
         self._y_idx, self._y_res = y_boundary
         
         # create augmented data
-        self._augmented_spectrum , self._offset = _create_augmented_spectrum(
+        self._augmented_spectrum , self._offset, self._boundary_values, self._boundary_indices = _create_augmented_spectrum(
             self._spectrum,
             self._pivot,
             self._b_idx,
@@ -149,6 +153,12 @@ class Boundary:
     def get_residues(self):
         "Returns the b and y residues of the boundary."
         return self._b_res, self._y_res
+    
+    def get_boundary_indices(self):
+        return self._boundary_indices
+
+    def get_boundary_values(self):
+        return self._boundary_values
     
     def get_augmented_peaks(self):
         "Augments the peak array by restricting to the boundary index range and adding symmetric boundary conditions."
