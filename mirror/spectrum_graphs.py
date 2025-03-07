@@ -20,61 +20,6 @@ class SpectrumGraphOrientation(Enum):
 
 #=============================================================================#
 
-def create_spectrum_graph_pair(
-    spectrum,
-    gaps: list[tuple[int,int]],
-    pivot: Pivot,
-    gap_key = GAP_KEY,
-) -> GraphPair:
-    """Constructs a pair of spectrum graphs. The ascending graph contains all gaps
-    with indices larger than the pivot indices, with edge pairs in ascending order.
-    The descending graph contains all gaps with indices smaller than the pivot indices,
-    with edge pairs in descending order.
-    
-    :spectrum: a sorted array of floats (peak mz values).
-    :gap_indices: a list of integer 2-tuples which index into `spectrum`.
-    :pivot: a Pivot object indexing into `spectrum`.
-    :gap_key: the key to retrieve edge weights from the spectrum graph pair."""
-    # build the descending graph on the lower half of the spectrum
-    desc_graph = _create_half_graph_from_gaps(
-        spectrum,
-        gaps,
-        pivot,
-        gap_key,
-        SpectrumGraphOrientation.DESCENDING
-    )
-    
-    # build the ascending graph on the upper half of the spectrum
-    asc_graph = _create_half_graph_from_gaps(
-        spectrum,
-        gaps,
-        pivot,
-        gap_key,
-        SpectrumGraphOrientation.ASCENDING
-    )
-    
-    return (asc_graph, desc_graph)
-            
-def _create_half_graph_from_gaps(
-    spectrum,
-    gaps,
-    pivot,
-    gap_key,
-    orientation,
-) -> nx.DiGraph:
-    edges = list(_half_graph_edges(gaps, pivot, orientation))
-    half_graph = nx.DiGraph()
-    for (i, j) in edges:
-        v = abs(spectrum[j] - spectrum[i])
-        half_graph.add_edge(i, j)
-        half_graph[i][j][gap_key] = v
-    
-    for i in list(half_graph.nodes):
-        half_graph.add_edge(i, -1)
-        half_graph[i][-1][gap_key] = -1
-    
-    return half_graph
-
 def _half_graph_edges(
     gaps,
     pivot,
@@ -97,3 +42,68 @@ def _half_graph_edges(
                 yield (j, i)
             else:
                 yield (i, j)
+            
+def _create_half_graph_from_gaps(
+    spectrum,
+    gaps,
+    pivot,
+    boundaries,
+    gap_key,
+    orientation,
+) -> nx.DiGraph:
+    edges = list(_half_graph_edges(gaps, pivot, orientation))
+    half_graph = nx.DiGraph()
+    for (i, j) in edges:
+        v = abs(spectrum[j] - spectrum[i])
+        half_graph.add_edge(i, j)
+        half_graph[i][j][gap_key] = v
+    
+    for i in list(half_graph.nodes):
+        half_graph.add_edge(i, -1)
+        half_graph[i][-1][gap_key] = -1
+    
+    for i in boundaries:
+        if (i in half_graph):
+            inbound_edges = list(half_graph.in_edges(i))
+            for (j, _) in inbound_edges:
+                half_graph.remove_edge(j, i)
+    
+    return half_graph
+
+def create_spectrum_graph_pair(
+    spectrum,
+    gaps: list[tuple[int,int]],
+    pivot: Pivot,
+    boundaries: list[int],
+    gap_key = GAP_KEY,
+) -> GraphPair:
+    """Constructs a pair of spectrum graphs. The ascending graph contains all gaps
+    with indices larger than the pivot indices, with edge pairs in ascending order.
+    The descending graph contains all gaps with indices smaller than the pivot indices,
+    with edge pairs in descending order.
+    
+    :spectrum: a sorted array of floats (peak mz values).
+    :gap_indices: a list of integer 2-tuples which index into `spectrum`.
+    :pivot: a Pivot object indexing into `spectrum`.
+    :gap_key: the key to retrieve edge weights from the spectrum graph pair."""
+    # build the descending graph on the lower half of the spectrum
+    desc_graph = _create_half_graph_from_gaps(
+        spectrum,
+        gaps,
+        pivot,
+        boundaries,
+        gap_key,
+        SpectrumGraphOrientation.DESCENDING
+    )
+    
+    # build the ascending graph on the upper half of the spectrum
+    asc_graph = _create_half_graph_from_gaps(
+        spectrum,
+        gaps,
+        pivot,
+        boundaries,
+        gap_key,
+        SpectrumGraphOrientation.ASCENDING
+    )
+    
+    return (asc_graph, desc_graph)

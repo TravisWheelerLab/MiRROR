@@ -172,18 +172,8 @@ def main(args):
                     augmented_peaks, 
                     augmented_gaps, 
                     augmented_pivot,
+                    boundary_indices,
                     gap_key = args.gap_key)
-                
-                for i in boundary_indices:
-                    for graph in graph_pair:
-                        if (i in graph) and (i not in mirror.get_sources(graph)):
-                            #for (_,j) in graph.out_edges(i):
-                            #    graph.add_edge(i + 100,j)
-                            #    graph[i + 100][j][args.gap_key] = graph[i][j][args.gap_key]
-                            in_edges = list(graph.in_edges(i))
-                            for (j,_i) in in_edges:
-                                assert i == _i
-                                graph.remove_edge(j, i) 
                 #for (name,graph) in zip(["asc", "desc"],graph_pair):
                 #    draw_graph(deepcopy(graph), f"{name}_graph.png", args.gap_key)
                 
