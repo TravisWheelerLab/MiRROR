@@ -179,6 +179,13 @@ class Boundary:
         into a flat list of integer 2-tuples."""
         return self._augmented_gaps
     
+    def __repr__(self):
+        return f"""Boundary(
+    indices = {self.get_boundary_indices()}
+    peaks = {self.get_boundary_values()}
+    residues = {self.get_residues()}
+)"""
+    
 def find_and_create_boundaries(
     spectrum: np.ndarray,
     pivot: Pivot,

@@ -5,46 +5,12 @@ import pyopenms as oms
 import numpy as np
 from tqdm import tqdm
 
-# the util module is an initial object; it cannot have any local dependencies.
-
-#=============================================================================#
-# residue constants and functions
+from .types import UNKNOWN_RESIDUE, TERMINAL_RESIDUES, NONTERMINAL_RESIDUES, ION_SERIES, ION_SERIES_OFFSETS, ION_OFFSET_LOOKUP, AVERAGE_MASS_DIFFERENCE, LOOKUP_TOLERANCE, GAP_TOLERANCE, INTERGAP_TOLERANCE, BOUNDARY_PADDING
 
 from .gaps.gap_types import DEFAULT_GAP_SEARCH_PARAMETERS, RESIDUES, MONO_MASSES, MASSES, RESIDUE_MONO_MASSES, RESIDUE_MASSES, LOSS_WATER, LOSS_AMMONIA, LOSSES, RESIDUE_LOSSES, MOD_Methionine_Sulfone, MOD_Methionine_Sulfoxide, MOD_PhosphoSerine, MODIFICATIONS, RESIDUE_MODIFICATIONS, CHARGES
 
-UNKNOWN_RESIDUE = 'X'
-
-TERMINAL_RESIDUES = np.array(['R', 'K'])
-
-NONTERMINAL_RESIDUES = np.array([r for r in RESIDUES if r not in TERMINAL_RESIDUES])
-
-ION_SERIES = [
-    'a',
-    'b',
-    'c',
-    'x',
-    'y',
-    'z',
-]
-
-ION_SERIES_OFFSETS = [
-    -27,
-    1,
-    18,
-    45,
-    19,
-    2,
-]
-
-ION_OFFSET_LOOKUP = dict(zip(ION_SERIES,ION_SERIES_OFFSETS))
-
-AVERAGE_MASS_DIFFERENCE = np.mean(np.abs(MASSES - MONO_MASSES))
-
-LOOKUP_TOLERANCE = 0.1
-GAP_TOLERANCE = 0.01
-INTERGAP_TOLERANCE = GAP_TOLERANCE * 2 
-
-BOUNDARY_PADDING = 3
+#=============================================================================#
+# residue constants and functions
 
 def generate_random_residues(length: int, alphabet = RESIDUES):
     """
@@ -106,6 +72,12 @@ def residue_lookup(
     
 #=============================================================================#
 # misc utilities
+
+def get_respectful_printer(args):
+    def print_respectfully(msg, verbosity_level, arg_verbosity = args.verbosity):
+        if arg_verbosity >= verbosity_level:
+            print(msg)
+    return print_respectfully
 
 def plot_hist(x: list[int], width = 60):
     """Renders a histogram for a list of integers into the standard output.

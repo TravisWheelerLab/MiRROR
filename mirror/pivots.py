@@ -45,6 +45,9 @@ class Pivot:
 
     def center(self):
         return sum(self.data) / 4
+
+    def residue(self):
+        return residue_lookup(self.gap())
     
     def gap(self):
         peak_pairs = self.peak_pairs()
@@ -64,7 +67,11 @@ class Pivot:
         return negative_pairs
 
     def __repr__(self):
-        return f"Pivot{*self.peak_pairs(), *self.index_pairs()}"
+        return f"""Pivot(
+\tpeaks = {self.peak_pairs()}
+\tindices = {self.index_pairs()}
+\tresidue = {self.residue()}
+)"""
     
     def __eq__(self, other):
         return self.peaks() == other.peaks()

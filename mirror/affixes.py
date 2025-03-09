@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from .util import residue_lookup
 from .graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges, find_edge_disjoint_dual_path_pairs
 from .spectrum_graphs import GAP_KEY
 
@@ -24,7 +25,10 @@ class Affix:
         return self._translations
     
     def __repr__(self):
-        return str(self._dual_path)
+        return f"""Affix(
+    paths = {self._dual_path}
+    translations = {self.translate()}
+)"""
 
 AffixPair = tuple[Affix, Affix]
 
@@ -56,7 +60,7 @@ def _translate_singular_path(
     weight_key = GAP_KEY,
 ) -> str:
     path_edges = path_to_edges(singular_path)
-    return [spectrum_graph[i][j][weight_key] for (i,j) in path_edges]
+    return ' '.join([residue_lookup(spectrum_graph[i][j][weight_key]) for (i,j) in path_edges])
 
 #=============================================================================#
 

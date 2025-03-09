@@ -86,14 +86,25 @@ def create_mz(mass_sequence, loss_arr, mod_arr, charge_arr, noise_arr):
         position_lookup[k] = i
     return mz, true_gaps, position_lookup
 
-def random_data(seq_len, num_losses, num_mods, num_charged, num_noise, masses, residues, losses, modifications, charges):
-    mass_seq, residues = create_mass_sequence(masseses, residu, seq_len)
+def random_data(
+    seq_len, 
+    num_losses, 
+    num_mods, 
+    num_charged, 
+    num_noise, 
+    masses = MASSES, 
+    residues = RESIDUES, 
+    losses = LOSSES, 
+    modifications = MODIFICATIONS, 
+    charges = CHARGES,
+):
+    mass_seq, res_seq = create_mass_sequence(masses, residues, seq_len)
     losses = create_losses(mass_seq, losses, num_losses)
     modifications = create_modifications(mass_seq, modifications, num_mods)
     charges = create_charges(mass_seq, charges, num_charged)
     noise = create_noise(mass_seq, num_noise)
     mz, true_gaps, position_lookup = create_mz(mass_seq, losses, modifications, charges, noise)
-    return mass_seq, residues, losses, modifications, charges, noise, mz, true_gaps, position_lookup
+    return mass_seq, res_seq, losses, modifications, charges, noise, mz, true_gaps, position_lookup
 
 def display_true_data(mass_sequence, residues, losses, modifications, charges, mz, true_gaps):
     pass

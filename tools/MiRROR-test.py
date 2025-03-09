@@ -88,7 +88,7 @@ def get_parser():
     return parser
 
 def main(args):
-    printer = get_respectful_printer(args)
+    printer = mirror.util.get_respectful_printer(args)
     # load sequences, gap alphabet
     if args.sequences.endswith(".fasta"):
         sequences = mirror.io.load_fasta_as_strings(args.sequences)

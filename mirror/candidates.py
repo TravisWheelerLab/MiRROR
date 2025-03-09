@@ -20,20 +20,20 @@ class Candidate:
         boundary_chrs: tuple[chr, chr],
         pivot_res: chr,
     ):
-        called_affix_a = call_sequence_from_path(spectrum, affix_a)
-        called_affix_b = call_sequence_from_path(spectrum, affix_b)
-        forward_seq = called_affix_a + ([pivot_res] if pivot_res != "" else []) + reverse_called_sequence(called_affix_b)
-        backward_seq = reverse_called_sequence(forward_seq)
         self._path_affixes = (
             affix_a,
             affix_b
         )
         self._boundary = boundary_chrs
         self._pivot_res = pivot_res
+        self._called_affix_a = call_sequence_from_path(spectrum, affix_a)
+        self._called_affix_b = call_sequence_from_path(spectrum, affix_b)
         self._affixes = (
-            called_affix_a,
-            called_affix_b
+            self._called_affix_a,
+            self._called_affix_b
         )
+        forward_seq = self._called_affix_a + ([pivot_res] if pivot_res != "" else []) + reverse_called_sequence(self._called_affix_b)
+        backward_seq = reverse_called_sequence(forward_seq)
         self._sequences = (
             apply_boundary_residues(forward_seq, *boundary_chrs), 
             apply_boundary_residues(backward_seq, *boundary_chrs))
@@ -47,6 +47,7 @@ class Candidate:
             print()
             print(target)
             print(self._sequences[optimizer])
+            print(optimum)
         return optimum, optimizer
     
     def characterize_errors(self, peptide):
@@ -73,7 +74,13 @@ class Candidate:
         )
     
     def __repr__(self):
-        return ' | '.join(self.sequences())
+        return f"""Candidate(
+    boundary = {self._boundary}
+    affix_a = {self._called_affix_a}
+    pivot = {self._pivot_res}
+    affix_b = {self._called_affix_b}
+    sequences = {self.sequences()}
+)"""
 
 #=============================================================================#
 
