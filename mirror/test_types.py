@@ -1,25 +1,13 @@
 from dataclasses import dataclass
 import pickle
 from types import NoneType
+from time import time
 
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 
 from . import *
-
-#from .io import *
-#from .preprocessing import create_spectrum_bins, filter_spectrum_bins
-#
-#from .gaps import GapMatch, GapResult, GapTensorTransformationSolver, GapBisectTransformationSolver, duplicate_inverse_charges, find_gaps, find_gaps_old
-#from .pivots import find_all_pivots, find_all_pivots_gap_agnostic
-#from .boundaries import find_and_create_boundaries, Boundary
-#
-#from .spectrum_graphs import create_spectrum_graph_pair
-#from .graph_utils import get_sinks, get_sources, find_dual_paths, find_extended_paths, find_edge_disjoint_dual_path_pairs
-#
-#from .affixes import create_affix, filter_affixes, find_affix_pairs
-#from .candidates import create_candidates, filter_candidate_sequences
 
 @dataclass
 class TestSpectrum:
@@ -62,46 +50,43 @@ class TestSpectrum:
     # a gap result for each amino acid, plus an unrecognized category.
     _output_gaps: list[GapResult] = None
 
+    _output_time: dict[str, float] = None
+
     # stitches the output stack together by indexing into pivots, boundaries, affixes, and candidates.
     # there is an OutputTrace for every Candidate.
     _output_indices: list[OutputIndex] = None
 
-    #@classmethod
-    #def random(cls, params: TestParameters):
-    #    run_params = params.run_params
-    #    mass_sequence, residue_sequence, losses, modifications, charges, noise, mz, true_gaps, position_lookup = gap_simulate.random_data(
-    #        params.num_residues,
-    #        params.num_losses,
-    #        params.num_modifications,
-    #        params.num_charged,
-    #        params.num_noise,
-    #        masses = params.masses,
-    #        residues = params.residues,
-    #        losses = params.losses,
-    #        modifications = params.modifications,
-    #        charges = params.charges
-    #    )
-    #    
-    #    return cls(
-    #        residue_sequence,
-    #        mass_sequence,
-    #        losses,
-    #        charges,
-    #        modifications,
-    #        noise,
-    #        mz,
-    #        gaps,
-    #        pivot,
-    #        gap_search_parameters = run_params.gap_search_parameters,
-    #        intergap_tolerance = run_params.pivot_tolerance,
-    #        terminal_residues = run_params.terminal_residues,
-    #        boundary_padding = run_params.boundary_padding,
-    #        gap_key = run_params.gap_key
-    #    )
-
     @classmethod
     def read(cls, handle):
         return pickle.load(handle)
+    
+    @classmethod
+    def run_sequence(cls):
+        RUN_SEQUENCE = [
+            ("gaps", cls.run_gaps),
+            ("pivots", cls.run_pivots),
+            ("boundaries", cls.run_boundaries),
+            ("augment", cls.run_augment),
+            ("topology", cls.run_spectrum_graphs),
+            ("affix", cls.run_affixes),
+            ("pairs", cls.run_affix_pairs),
+            ("candidates", cls.run_candidates),
+            ("index", cls.run_indices),
+        ]
+        return RUN_SEQUENCE
+    
+    @classmethod
+    def step_names(cls):
+        names, _ = zip(*cls.run_sequence())
+        return names
+
+    def _keep_time(self, tag, fn, *args, **kwargs):
+        t = time()
+        fn(*args, **kwargs)
+        self._output_time[tag] = time() - t
+    
+    def times_as_vec(self):
+        return np.array(list(self._output_time.values()))
     
     def _check_state(self, *args):
         values = [self.__dict__[k] for k in args]
@@ -177,12 +162,10 @@ class TestSpectrum:
                     gap_key = self.gap_key
                 )
     
-    def run_affixes_and_affix_pairs(self):
+    def run_affixes(self):
         self._check_state("_output_pivots", "_output_boundaries", "_output_spectrum_graphs", "gap_key")
         self._output_affixes = [[None  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        self._n_affixes = [[-1  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        self._output_affix_pairs = [[None  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        self._n_affix_pairs = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        self._n_affixes = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
         for p_idx in range(self._n_pivots):
             for b_idx in range(self._n_boundaries[p_idx]):
                 graph_pair = self._output_spectrum_graphs[p_idx][b_idx]
@@ -192,12 +175,20 @@ class TestSpectrum:
                     self.gap_key,
                     gap_comparator)
                 affixes = np.array([create_affix(dp, graph_pair) for dp in dual_paths])
-                affix_pairs = np.array(find_edge_disjoint_dual_path_pairs(dual_paths))
                 self._output_affixes[p_idx][b_idx] = affixes
                 self._n_affixes[p_idx][b_idx] = len(affixes)
+        #print(f"affixes:\n\t{self._n_affixes}\n\t{[list(aa) for a in self._output_affixes for aa in a]}")
+
+    def run_affix_pairs(self):
+        self._check_state("_output_pivots", "_output_boundaries", "_output_spectrum_graphs", "gap_key")
+        self._output_affix_pairs = [[None  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        self._n_affix_pairs = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        for p_idx in range(self._n_pivots):
+            for b_idx in range(self._n_boundaries[p_idx]):
+                dual_paths = [afx.path() for afx in self._output_affixes[p_idx][b_idx]]
+                affix_pairs = np.array(find_edge_disjoint_dual_path_pairs(dual_paths))
                 self._output_affix_pairs[p_idx][b_idx] = affix_pairs
                 self._n_affix_pairs[p_idx][b_idx] = len(affix_pairs)
-        #print(f"affixes:\n\t{self._n_affixes}\n\t{[list(aa) for a in self._output_affixes for aa in a]}")
         #print(f"affix pairs:\n\t{self._n_affix_pairs}\n\t{[list(aa) for a in self._output_affix_pairs for aa in a]}")
     
     def run_candidates(self):
@@ -240,29 +231,9 @@ class TestSpectrum:
 
     def run(self):
         """Generate candidates, associated data structures, and output traces."""
-        # gaps
-        self.run_gaps()
-        
-        # pivots
-        self.run_pivots()
-        
-        # boundaries
-        self.run_boundaries()
-
-        # augmented datad
-        self.run_augment()
-        
-        # spectrum graphs
-        self.run_spectrum_graphs()
-        
-        # affixes and affix pairs
-        self.run_affixes_and_affix_pairs()
-
-        # candidates
-        self.run_candidates()
-        
-        # indices
-        self.run_indices()
+        self._output_time = dict()
+        for (tag, fn) in self.__class__.run_sequence():
+            self._keep_time(tag, fn, self)
 
     def __post_init__(self):
         self.run()

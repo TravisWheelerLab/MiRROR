@@ -79,7 +79,7 @@ def get_respectful_printer(args):
             print(msg)
     return print_respectfully
 
-def plot_hist(x: list[int], width = 60):
+def plot_hist(x: list[int], header: str = None, width = 60):
     """Renders a histogram for a list of integers into the standard output.
     
     :x: a list of integers.
@@ -94,14 +94,17 @@ def plot_hist(x: list[int], width = 60):
     lo = min(counts)
     hi = max(counts)
     rng = hi - lo + 1
-    print('-' * (width + 20))
+    print('=' * (width + 20))
+    if header != None:
+        print(header)
+        print('-' * (width + 20))
     for i in range(len(counts)):
         frac = (counts[i] - lo) / rng
         bars = int(width * frac)
         if counts[i] > 0:
             bars = max(bars, 1)
         print(f"{vals[i]}\t|" + "o" * bars + f"  ({counts[i]})")
-    print('-' * (width + 20))
+    print('=' * (width + 20))
 
 def comma_separated(items):
     """

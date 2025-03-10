@@ -4,6 +4,7 @@ import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
 import matplotlib.pyplot as plt
 from copy import deepcopy
+from tabulate import tabulate
 
 def draw_graph(graph, title, gap_key):
     graph.remove_node(-1)
@@ -72,12 +73,6 @@ ARG_DEFAULTS = [
     0,
 ]
 
-def get_respectful_printer(args):
-    def print_respectfully(msg, verbosity_level, arg_verbosity = args.verbosity):
-        if arg_verbosity >= verbosity_level:
-            print(msg)
-    return print_respectfully
-
 def get_parser():
     parser = argparse.ArgumentParser(
         prog = PROG,
@@ -115,127 +110,62 @@ def main(args):
     tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
     printer(f"\nsequences:\n{tryptic_peptides}\n", 1)
 
+    times = np.zeros(len(mirror.TestSpectrum.run_sequence()))
     # pipeline
     optimal_scores = []
     optimal_candidates = []
     for peptide_idx, true_sequence in enumerate(tryptic_peptides):
         peaks = mirror.util.simulate_peaks(true_sequence)
-        printer(f"\npeptide {peptide_idx}: {true_sequence}\n", 2)
-        printer(f"peaks: {peaks}\n", 2)
+        printer(f"mz\n\t{peaks}", 2)
         
-        # find gaps
-        annotated_peaks, gap_results = mirror.find_gaps(gap_params, peaks)
-        printer(f"gaps:\n\t(annotated peaks)\n{annotated_peaks}", 2)
-        for (res, result) in zip(gap_params.residues, gap_results):
-            printer(f"{res}: {result.get_index_pairs()}", 2)
+        residue_seq = np.array([r for r in true_sequence])
+        printer(f"\nresidue sequence\n\t{residue_seq}", 2)
 
-        # find pivots
-        symmetry_threshold = args.symmetry_threshold
-        if symmetry_threshold == None:
-            symmetry_threshold = mirror.util.expected_num_mirror_symmetries(annotated_peaks)
-        
-        pivots = mirror.find_all_pivots(annotated_peaks, symmetry_threshold, gap_results, args.intergap_tolerance)
+        mass_seq = np.array([mirror.util.RESIDUE_MONO_MASSES[r] for r in residue_seq])
+        printer(f"mass sequence\n\t{mass_seq}", 2)
 
-        best_score = np.inf
-        best_cand = None
-        for pivot_idx, pivot in enumerate(pivots):
-            pivot_residue = mirror.util.residue_lookup(pivot.gap())
+        test_spectrum = mirror.TestSpectrum(
+            residue_seq,
+            mass_seq,
+            np.zeros_like(mass_seq),
+            np.zeros_like(mass_seq),
+            np.zeros_like(mass_seq),
+            np.array([]),
+            peaks,
+            gaps = [],
+            pivot = None,
+            gap_search_parameters = gap_params,
+            intergap_tolerance = args.intergap_tolerance,
+            symmetry_factor = 1.0,
+            terminal_residues = args.terminal_residues,
+            boundary_padding = args.boundary_padding,
+            gap_key = args.gap_key
+        )
 
-            printer(f"\npivot {pivot_idx}: {pivot_residue}\n\t{pivot}", 2)
-            boundaries, b_ions, y_ions = mirror.find_and_create_boundaries(
-                annotated_peaks, 
-                pivot, 
-                gap_params, 
-                args.terminal_residues, 
-                args.boundary_padding
-            )
-            
-            if len(boundaries) == 0:
-                printer("\tno boundaries.", 2)
-                continue
-            else:
-                printer(f"\t{b_ions}\n\t{y_ions}", 2)
-            for b_idx, boundary in enumerate(boundaries):
-                printer(f"\tboundary {b_idx}", 2)
-                b_res, y_res = boundary.get_residues()
-                boundary_indices = boundary.get_boundary_indices()
-                augmented_peaks = boundary.get_augmented_peaks()
-                offset = boundary.get_offset()
-                augmented_pivot = boundary.get_augmented_pivot()
-                augmented_gaps = boundary.get_augmented_gaps()
-                printer(f"\t\taugmented peaks: {augmented_peaks}, offset = {offset}", 2)
-                printer(f"\t\taugmented pivot: {augmented_pivot}", 2)
-                printer(f"\t\taugmented gaps: {augmented_gaps}", 2)
-                
-                # create topologies
-                graph_pair = mirror.create_spectrum_graph_pair(
-                    augmented_peaks, 
-                    augmented_gaps, 
-                    augmented_pivot,
-                    boundary_indices,
-                    gap_key = args.gap_key)
-                #for (name,graph) in zip(["asc", "desc"],graph_pair):
-                #    draw_graph(deepcopy(graph), f"{name}_graph.png", args.gap_key)
-                
-                # find dual paths
-                gap_comparator = lambda x, y: (abs(x - y) < args.intergap_tolerance) and (x != -1) and (y != -1)
-                dual_paths = mirror.graph_utils.find_dual_paths(
-                    *graph_pair,
-                    args.gap_key,
-                    gap_comparator)
-                
-                printer(f"\t\tpaths {dual_paths}", 2)
+        tvec = test_spectrum.times_as_vec()
+        times += tvec
 
-                # find viable path pairings
-                pair_indices = mirror.find_edge_disjoint_dual_path_pairs(dual_paths)
-
-                # create affixes
-                affixes = np.array([mirror.create_affix(dp, graph_pair) for dp in dual_paths])
-                #affixes = mirror.filter_affixes(
-                #    affixes, 
-                #    args.suffix_array_path, 
-                #    occurrence_threshold = args.occurrence_threshold)
-
-                printer(f"\t\taffixes {affixes}\n\t\taffix translations {[affix.translate() for affix in affixes]}", 2)
-                
-                if len(pair_indices) == 0:
-                    printer("\t\tNO CANDIDATES.", 2)
-                    continue
-
-                # create candidates
-                for (i, j) in pair_indices:
-                    candidates = np.array(mirror.create_candidates(
-                        augmented_peaks, 
-                        graph_pair, 
-                        affixes[[i,j]],
-                        (b_res, y_res),
-                        pivot_residue))
-                    #candidates = mirror.filter_candidate_sequences(
-                    #    peaks,
-                    #    candidates,
-                    #    args.alignment_threshold,
-                    #    args.alignment_parameters)
-                    for candidate in candidates:
-                        score, idx = candidate.edit_distance(true_sequence)
-                        printer(f"\t\tcandidate: {candidate.sequences()[idx]}\t{candidate._pivot_res}\t{score}", 2)
-                        if score < best_score:
-                            best_score = score
-                            best_cand = (candidate,idx)
-        printer(best_score, 1)
-        if best_score > 0:
-            printer(f"{'-'*10}\nedit distance {best_score}", 1)
-            if best_score == np.inf:
-                printer("no candidates were found ):<", 1)
-                best_score = 2 * len(true_sequence)
-            else:
-                best_cand[0].edit_distance(true_sequence, verbose = args.verbosity >= 1)
-                printer(best_cand[0]._pivot_res, 1)
-                printer(best_cand[0].characterize_errors(true_sequence), 1)
-        #input()
+        best_score, best_cand = test_spectrum.optimize()
         optimal_scores.append(best_score)
         optimal_candidates.append(best_cand)
 
-    mirror.util.plot_hist(optimal_scores)
+    # print match statistics
+    num_matches = sum(x == 0 for x in optimal_scores)
+    n = len(optimal_candidates)
+    print(f"\nmatch rate\n\t= {num_matches} / {n}\n\t= {100 * num_matches / n}%\n")
+    # print miss statistics
+    miss_scores = [x for x in optimal_scores if x != 0]
+    if num_matches < n:
+        mirror.util.plot_hist(miss_scores, "miss distance distribution")
+    # print timing statistics
+    pct_times = list((100 * times / times.sum()).round(4))
+    raw_times = list(times.round(4))
+    step_names = mirror.TestSpectrum.step_names()
+    table = [
+        ["steps", *step_names],
+        ["(raw)", *raw_times],
+        ["(pct)", *pct_times]]
+    print(f"timing:\n{tabulate(table)}")
 
 if __name__ == "__main__":
     args = get_parser().parse_args()
