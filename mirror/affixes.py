@@ -1,10 +1,9 @@
-#
-
 import numpy as np
 
 from .util import residue_lookup
 from .graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges, find_edge_disjoint_dual_path_pairs
 from .spectrum_graphs import GAP_KEY
+from .suffix_array import SuffixArray
 
 #=============================================================================#
 
@@ -66,32 +65,22 @@ def _translate_singular_path(
 
 def filter_affixes(
     affixes: np.ndarray,
-    path_to_suffix_array: str,
+    suffix_array: SuffixArray,
     occurrence_threshold: int = 0,
 ) -> np.ndarray:
     """Removes affixes which do not have either translation appearing in a suffix array.
-        
-        NOT YET IMPLEMENTED.
     
     :affixes: a numpy array of Affix objects.
     :path_to_suffix_array: str, path to a suffix array created by sufr.
-    :occurrence_threshold: int, any Affix with less than or equal to this value is filtered out. defaults to 0: any Affix that occurs in the suffix array is kept."""
+    :occurrence_threshold: int, any Affix with less than or equal to this value is filtered out. defaults to 0; any Affix that occurs in the suffix array is kept."""
     if len(affixes) == 0:
         return np.array([])
     # admits an affix as long as one of its translations occurs in the suffix array 
     translations = np.array([afx.translate() for afx in affixes])
-    asc_occurrences = _count_occurrences(translations[:, 0], path_to_suffix_array)
-    desc_occurrences = _count_occurrences(translations[:, 1], path_to_suffix_array)
+    asc_occurrences = np.array(suffix_array.count(translations[:, 0]))
+    desc_occurrences = np.array(suffix_array.count(translations[:, 1]))
     occurrence_mask = asc_occurrences + desc_occurrences > 0
     return affixes[occurrence_mask]
-
-def _count_occurrences(
-    biosequences: np.ndarray,
-    path_to_suffix_array: str
-) -> list[int]:
-    # associates strings, assumed to be biosequence, to their occurrence in a suffix array.
-    # TODO: these will be calls to pylibsufr 
-    return np.ones_like(biosequences)
 
 #=============================================================================#
 
@@ -100,8 +89,7 @@ def find_affix_pairs(
 ) -> list[tuple[int,int]]:
     """Lists the indices of pairs of affixes whose dual paths do not share any edges.
 
-        find_edge_disjoint_dual_path_pairs(afx.path() for afx in affixes)
+        np.array(find_edge_disjoint_dual_path_pairs(afx.path() for afx in affixes))
         
     :affixes: a numpy array of Affix objects."""
-    dual_paths = [afx.path() for afx in affixes]
-    return find_edge_disjoint_dual_path_pairs(dual_paths)
+    return np.array(find_edge_disjoint_dual_path_pairs(afx.path() for afx in affixes))

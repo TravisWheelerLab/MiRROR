@@ -374,16 +374,6 @@ class GapSearchParameters:
             self.tolerance
         ]
 
-DEFAULT_GAP_SEARCH_PARAMETERS = GapSearchParameters(
-    "tensor",
-    RESIDUES,
-    MONO_MASSES,
-    LOSSES,
-    MODIFICATIONS,
-    CHARGES,
-    0.01,
-)
-
 SIMPLE_GAP_SEARCH_PARAMETERS = GapSearchParameters(
     "tensor",
     RESIDUES,
@@ -401,5 +391,15 @@ UNCHARGED_GAP_SEARCH_PARAMETERS = GapSearchParameters(
     LOSSES,
     MODIFICATIONS,
     np.array([]),
+    0.01,
+)
+
+DEFAULT_GAP_SEARCH_PARAMETERS = GapSearchParameters(
+    "tensor",
+    RESIDUES,
+    MONO_MASSES,
+    LOSSES,
+    MODIFICATIONS,
+    CHARGES,
     0.01,
 )

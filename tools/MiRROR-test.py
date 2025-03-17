@@ -33,7 +33,7 @@ ARG_NAMES = [
     "suffix_array_path",
     "gap_tolerance",
     "intergap_tolerance",
-    "symmetry_threshold",
+    "symmetry_factor",
     "occurrence_threshold",
     "alignment_threshold",
     "alignment_parameters",
@@ -63,8 +63,8 @@ ARG_DEFAULTS = [
     None,
     mirror.util.GAP_TOLERANCE,
     mirror.util.INTERGAP_TOLERANCE,
-    None,
-    1,
+    5.0,
+    0,
     -1,
     "",
     mirror.util.TERMINAL_RESIDUES,
@@ -84,19 +84,30 @@ def get_parser():
 
 def main(args):
     printer = mirror.util.get_respectful_printer(args)
-    # load sequences, gap alphabet
+
+    # construct tryptic peptides
     if args.sequences.endswith(".fasta"):
+        # load from fasta
         sequences = mirror.io.load_fasta_as_strings(args.sequences)
         tryptic_peptides = mirror.util.enumerate_tryptic_peptides(sequences)
     elif args.sequences.startswith("::random"):
+        # generate randomly
         _, n_seqs, seq_len = args.sequences.split("_")
         n_seqs = int(n_seqs)
         seq_len = int(seq_len)
-        tryptic_peptides = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
+        sequences = tryptic_peptides = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
     else:
+        # parse from sequences arg
         sequences = args.sequences.split(",")
         tryptic_peptides = mirror.util.enumerate_tryptic_peptides(sequences)
+    
+    # prepare suffix array
+    if args.suffix_array_path == None:
+        temp_fasta_file = "_temp.fa"
+        mirror.save_strings_as_fasta(temp_fasta_file, sequences)
+        args.suffix_array_path = mirror.SuffixArray.write(temp_fasta_file)
 
+    # create gap parameters
     if args.gap_params == "simple":
         gap_params = mirror.gaps.SIMPLE_GAP_SEARCH_PARAMETERS
     elif args.gap_params == "uncharged":
@@ -107,10 +118,11 @@ def main(args):
     for (res, grp) in zip(gap_params.residues, gap_params.masses):
         printer(f"{res}: {grp}", 2)
 
+    printer(f"\ttryptic_peptides:\n\t{tryptic_peptides}\n", 1)
     tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
-    printer(f"\nsequences:\n{tryptic_peptides}\n", 1)
 
     times = np.zeros(len(mirror.TestSpectrum.run_sequence()))
+    sizes = np.zeros(len(mirror.TestSpectrum.run_sequence()), dtype=int )
     # pipeline
     optimal_scores = []
     optimal_candidates = []
@@ -132,19 +144,22 @@ def main(args):
             np.zeros_like(mass_seq),
             np.array([]),
             peaks,
-            gaps = [],
-            pivot = None,
+            target_gaps = [],
+            target_pivot = None,
             gap_search_parameters = gap_params,
             intergap_tolerance = args.intergap_tolerance,
-            symmetry_factor = 1.0,
+            symmetry_factor = args.symmetry_factor,
             terminal_residues = args.terminal_residues,
             boundary_padding = args.boundary_padding,
-            gap_key = args.gap_key
+            gap_key = args.gap_key,
+            suffix_array_file = args.suffix_array_path,
+            occurrence_threshold = args.occurrence_threshold
         )
 
         tvec = test_spectrum.times_as_vec()
+        svec = test_spectrum.sizes_as_vec()
         times += tvec
-
+        sizes += svec
         best_score, best_cand = test_spectrum.optimize()
         optimal_scores.append(best_score)
         optimal_candidates.append(best_cand)
@@ -158,14 +173,17 @@ def main(args):
     if num_matches < n:
         mirror.util.plot_hist(miss_scores, "miss distance distribution")
     # print timing statistics
-    pct_times = list((100 * times / times.sum()).round(4))
+    pct_times = list((100 * times / times.sum()).round(2))
+    pct_sum = sum(pct_times)
     raw_times = list(times.round(4))
+    step_sizes = list(sizes)
     step_names = mirror.TestSpectrum.step_names()
     table = [
-        ["steps", *step_names],
-        ["(raw)", *raw_times],
-        ["(pct)", *pct_times]]
-    print(f"timing:\n{tabulate(table)}")
+        ["step name", *step_names, "total"],
+        ["size", *step_sizes, ""],
+        ["time", *raw_times, round(sum(raw_times), 4)],
+        ["time (pct)", *pct_times, f"100 (err: {round(pct_sum - 100, 4)})"],]
+    print(f"\ntiming:\n{tabulate(table)}")
 
 if __name__ == "__main__":
     args = get_parser().parse_args()

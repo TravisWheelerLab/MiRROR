@@ -141,13 +141,12 @@ class Boundary:
             self._pivot,
         )
         
-        self._nonviable_gaps = self._augmented_pivot.negative_index_pairs()
         self._augmented_gaps = _create_augmented_gaps(
             self._augmented_spectrum,
             self._augmented_pivot,
             self._offset,
             self._gap_params,
-            self._nonviable_gaps,
+            self._augmented_pivot.negative_index_pairs(),
         )
 
     def get_residues(self):

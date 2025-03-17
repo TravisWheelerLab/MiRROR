@@ -19,8 +19,8 @@ class TestSpectrum:
     modifications: np.ndarray
     noise: np.ndarray
     mz: np.ndarray
-    gaps: dict[str, GapResult]
-    pivot: Pivot
+    target_gaps: dict[str, GapResult]
+    target_pivot: Pivot
     
     # params:
     gap_search_parameters: GapSearchParameters
@@ -29,36 +29,220 @@ class TestSpectrum:
     terminal_residues: list[str]
     boundary_padding: int
     gap_key: str
+    suffix_array_file: str
+    occurrence_threshold: int
+
+    # test params:
+    autorun: bool = True
     
     # output:
     # a (potentially empty) list of candidates for each viable pair of affixes.
-    _output_candidates: list[list[list[list[Candidate]]]] = None
+    _candidates: list[list[list[list[Candidate]]]] = None
     # a list of index pairs into each array of affixes
-    _output_affix_pairs: list[list[npt.NDArray[int]]] = None
+    _affix_pairs: list[list[npt.NDArray[int]]] = None
     # an array of affixes for each spectrum graph pair.
-    _output_affixes: list[list[npt.NDArray[Affix]]] = None
+    _affixes: list[list[npt.NDArray[Affix]]] = None
     # a spectrum graph pair for each boundary.
-    _output_graph_pairs: list[list[tuple[nx.DiGraph,nx.DiGraph]]] = None
+    _graph_pairs: list[list[tuple[nx.DiGraph,nx.DiGraph]]] = None
     # an augmented spectrum, pivot, gap indices, and boundary peak indices for each boundary.
-    _output_augmented_data: list[list[tuple[np.ndarray,Pivot,list[tuple[int,int]],list[int]]]] = None
+    _augmented_data: list[list[tuple[np.ndarray,Pivot,list[tuple[int,int]],list[int]]]] = None
     # a list of boundaries for each pivot.
-    _output_boundaries: list[list[Boundary]] = None
-    # some number of pivots.
-    _output_pivots: list[Pivot] = None
+    _boundaries: list[list[Boundary]] = None
+    # list of pivots.
+    _pivots: list[Pivot] = None
     # peaks annotated by the set of GapResult objects
-    _output_annotated_peaks: np.ndarray = None
+    _annotated_peaks: np.ndarray = None
     # a gap result for each amino acid, plus an unrecognized category.
-    _output_gaps: list[GapResult] = None
+    _gaps: list[GapResult] = None
+    # list of potential C-terminal y ions
+    _left_boundary_y: list = None
 
-    _output_time: dict[str, float] = None
+    _time: dict[str, float] = None
 
-    # stitches the output stack together by indexing into pivots, boundaries, affixes, and candidates.
+    # stitches the output stack together by indexing into pivots, boundaries (and augmented data and graph pairs), affixes, and candidates.
     # there is an OutputTrace for every Candidate.
-    _output_indices: list[OutputIndex] = None
+    _indices: list[OutputIndex] = None
 
     @classmethod
     def read(cls, handle):
         return pickle.load(handle)
+    
+    def _record_complexity(self, tag, fn, *args, **kwargs):
+        t = time()
+        self._size[tag] = fn(*args, **kwargs)
+        self._time[tag] = time() - t
+
+    def times_as_vec(self):
+        tvals = list(self._time.values())
+        return np.array(tvals + [-np.inf for _ in range(len(self.step_names()) - len(tvals))])
+    
+    def sizes_as_vec(self):
+        svals = list(self._size.values())
+        return np.array(svals + [-np.inf for _ in range(len(self.step_names()) - len(svals))])
+    
+    def get_time(self, tag: str):
+        return self._time[tag]
+    
+    def get_size(self, tag: str):
+        return self._size[tag]
+    
+    def _check_state(self, *args):
+        values = [self.__dict__[k] for k in args]
+        valtypes = [type(v) for v in values]
+        if NoneType in valtypes:
+            state = '\n\t'.join(f"{k} = {v} {t}" for (k, v, t) in zip(args, values, valtypes) if t == type(None))
+            raise ValueError(f"Invalid TestSpectrum State:{state}")
+    
+    def run_gaps(self):
+        self._check_state("gap_search_parameters", "mz")
+        self._annotated_peaks, self._gaps = find_gaps(
+            self.gap_search_parameters,
+            self.mz
+        )
+        return len(self._gaps)
+
+    def run_pivots(self):
+        self._check_state("_gaps", "_annotated_peaks", "intergap_tolerance", "symmetry_factor")
+        self._pivots = find_all_pivots(
+            self._annotated_peaks, 
+            self.symmetry_factor * util.expected_num_mirror_symmetries(self._annotated_peaks), 
+            self._gaps, 
+            self.intergap_tolerance
+        )
+        self._n_pivots = len(self._pivots)
+        return self._n_pivots
+
+    def run_boundaries(self):
+        self._check_state("_annotated_peaks", "_pivots")
+        self._boundaries = [None for _ in range(len(self._pivots))]
+        self._n_boundaries = [-1 for _ in range(len(self._pivots))]
+        for p_idx, pivot in enumerate(self._pivots):
+            boundaries, _, __ = find_and_create_boundaries(
+                self._annotated_peaks, 
+                pivot,
+                self.gap_search_parameters,
+                self.terminal_residues,
+                self.boundary_padding
+            )
+            self._boundaries[p_idx] = boundaries
+            self._n_boundaries[p_idx] = len(boundaries)
+        return sum(self._n_boundaries)
+
+    def run_augment(self):
+        self._check_state("_pivots", "_boundaries")
+        self._augmented_data = [[None 
+            for _ in range(len(self._boundaries[p_idx]))] 
+            for p_idx in range(len(self._pivots))]
+        for p_idx in range(self._n_pivots):
+            for b_idx, boundary in enumerate(self._boundaries[p_idx]):
+                augmented_peaks = boundary.get_augmented_peaks()
+                augmented_pivot = boundary.get_augmented_pivot()
+                augmented_gaps = boundary.get_augmented_gaps()
+                boundary_indices = boundary.get_boundary_indices()
+                self._augmented_data[p_idx][b_idx] = (
+                    augmented_peaks, 
+                    augmented_pivot, 
+                    augmented_gaps, 
+                    boundary_indices
+                )
+        return sum(len(gaps) for _, __, gaps, ___ in self._augmented_data[p_idx] for p_idx in range(self._n_pivots))
+    
+    def run_spectrum_graphs(self):
+        self._check_state("_pivots", "_boundaries", "_augmented_data", "gap_key")
+        self._spectrum_graphs = [[None for _ in range(len(self._boundaries[p_idx]))] for p_idx in range(self._n_pivots)]
+        for p_idx in range(self._n_pivots):
+            for b_idx in range(self._n_boundaries[p_idx]):
+                augmented_peaks, augmented_pivot, augmented_gaps, boundary_indices = self._augmented_data[p_idx][b_idx]
+                self._spectrum_graphs[p_idx][b_idx] = create_spectrum_graph_pair(
+                    augmented_peaks, 
+                    augmented_gaps, 
+                    augmented_pivot, 
+                    boundary_indices, 
+                    gap_key = self.gap_key
+                )
+        return 0
+    
+    def run_affixes(self):
+        self._check_state("_pivots", "_boundaries", "_spectrum_graphs", "gap_key")
+        self._affixes = [[None  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        self._n_affixes = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        for p_idx in range(self._n_pivots):
+            for b_idx in range(self._n_boundaries[p_idx]):
+                graph_pair = self._spectrum_graphs[p_idx][b_idx]
+                gap_comparator = lambda x, y: (abs(x - y) < self.intergap_tolerance) and (x != -1) and (y != -1)
+                dual_paths = find_dual_paths(
+                    *graph_pair,
+                    self.gap_key,
+                    gap_comparator)
+                affixes = np.array([create_affix(dp, graph_pair) for dp in dual_paths])
+                self._affixes[p_idx][b_idx] = affixes
+                self._n_affixes[p_idx][b_idx] = len(affixes)
+        return sum(sum(self._n_affixes[i]) for i in range(self._n_pivots))
+    
+    def run_affixes_filter(self):
+        self._check_state("_pivots", "_boundaries", "_affixes")
+        self._unfiltered_n_affixes = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        for p_idx in range(self._n_pivots):
+            for b_idx in range(self._n_boundaries[p_idx]):
+                self._unfiltered_n_affixes[p_idx][b_idx] = self._n_affixes[p_idx][b_idx]
+                self._affixes[p_idx][b_idx] = filter_affixes(
+                    self._affixes[p_idx][b_idx], 
+                    self._suffix_array, 
+                    self.occurrence_threshold)
+                self._n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
+                print(f"unfiltered {self._unfiltered_n_affixes[p_idx][b_idx]} → filtered {self._n_affixes[p_idx][b_idx]}")
+        print(self._n_affixes)
+        return sum(sum(self._n_affixes[i]) for i in range(self._n_pivots))
+
+    def run_affixes_pair(self):
+        self._check_state("_pivots", "_boundaries", "_affixes")
+        self._affix_pairs = [[None  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        self._n_affix_pairs = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        for p_idx in range(self._n_pivots):
+            for b_idx in range(self._n_boundaries[p_idx]):
+                affixes = self._affixes[p_idx][b_idx]
+                affix_pairs = find_affix_pairs(affixes)
+                self._affix_pairs[p_idx][b_idx] = affix_pairs
+                self._n_affix_pairs[p_idx][b_idx] = len(affix_pairs)
+        return sum(sum(self._n_affix_pairs[i]) for i in range(self._n_pivots))
+
+    def run_candidates(self):
+        self._check_state("_pivots", "_boundaries", "_affixes", "_affix_pairs")
+        self._candidates = [[[None for _ in range(self._n_affix_pairs[p_idx][b_idx])] for b_idx in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        self._n_candidates = [[[-1 for _ in range(self._n_affix_pairs[p_idx][b_idx])] for b_idx in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
+        for p_idx, pivot in enumerate(self._pivots):
+            pivot_residue = pivot.residue()
+            for b_idx, boundary in enumerate(self._boundaries[p_idx]):
+                boundary_residues = boundary.get_residues()
+                augmented_peaks = self._augmented_data[p_idx][b_idx][0]
+                graph_pair = self._spectrum_graphs[p_idx][b_idx]
+                affixes = self._affixes[p_idx][b_idx]
+                for a_idx, affix_pair in enumerate(self._affix_pairs[p_idx][b_idx]):
+                    self._candidates[p_idx][b_idx][a_idx] = create_candidates(
+                        augmented_peaks,
+                        graph_pair,
+                        affixes[affix_pair],
+                        boundary_residues,
+                        pivot_residue
+                    )
+                    self._n_candidates[p_idx][b_idx][a_idx] = len(self._candidates[p_idx][b_idx][a_idx])
+        return sum(sum(self._n_candidates[p][b]) for p in range(self._n_pivots) for b in range(self._n_boundaries[p]))
+   
+    def run_indices(self):
+        self._check_state("_pivots", "_boundaries", "_affix_pairs", "_candidates")
+        self._indices = []
+        for p_idx in range(self._n_pivots):
+            for b_idx in range(self._n_boundaries[p_idx]):
+                for a_idx in range(self._n_affix_pairs[p_idx][b_idx]):
+                    for c_idx in range(self._n_candidates[p_idx][b_idx][a_idx]):
+                        self._indices.append(OutputIndex(
+                            pivot_index = p_idx, 
+                            boundary_index = b_idx, 
+                            affixes_index = a_idx, 
+                            candidate_index = c_idx
+                        ))
+        self._n_indices = len(self._indices)
+        return self._n_indices
     
     @classmethod
     def run_sequence(cls):
@@ -69,192 +253,56 @@ class TestSpectrum:
             ("augment", cls.run_augment),
             ("topology", cls.run_spectrum_graphs),
             ("affix", cls.run_affixes),
-            ("pairs", cls.run_affix_pairs),
+          #  ("affix-filter", cls.run_affixes_filter),
+            ("affixes-pair", cls.run_affixes_pair),
             ("candidates", cls.run_candidates),
             ("index", cls.run_indices),
         ]
         return RUN_SEQUENCE
-    
+
     @classmethod
     def step_names(cls):
         names, _ = zip(*cls.run_sequence())
         return names
 
-    def _keep_time(self, tag, fn, *args, **kwargs):
-        t = time()
-        fn(*args, **kwargs)
-        self._output_time[tag] = time() - t
-    
-    def times_as_vec(self):
-        return np.array(list(self._output_time.values()))
-    
-    def _check_state(self, *args):
-        values = [self.__dict__[k] for k in args]
-        valtypes = [type(v) for v in values]
-        if NoneType in valtypes:
-            state = '\n\t'.join(f"{k} = {v} (t)" for (k, v, t) in zip(args, values, valtypes))
-            raise ValueError(f"Invalid TestSpectrum State:{state}")
-    
-    def run_gaps(self):
-        self._check_state("gap_search_parameters", "mz")
-        self._output_annotated_peaks, self._output_gaps = find_gaps(
-            self.gap_search_parameters,
-            self.mz
-        )
-
-    def run_pivots(self):
-        self._check_state("_output_gaps", "_output_annotated_peaks", "intergap_tolerance", "symmetry_factor")
-        symmetry_threshold = self.symmetry_factor * util.expected_num_mirror_symmetries(self._output_annotated_peaks)
-        self._output_pivots = find_all_pivots(
-            self._output_annotated_peaks, 
-            symmetry_threshold, 
-            self._output_gaps, 
-            self.intergap_tolerance
-        )
-        self._n_pivots = len(self._output_pivots)
-        #print(f"pivots:\n\t{self._n_pivots}\n\t{self._output_pivots}")
-    
-    def run_boundaries(self):
-        self._check_state("_output_annotated_peaks", "_output_pivots")
-        self._output_boundaries = [None for _ in range(len(self._output_pivots))]
-        self._n_boundaries = [-1 for _ in range(len(self._output_pivots))]
-        for p_idx, pivot in enumerate(self._output_pivots):
-            boundaries, _, __ = find_and_create_boundaries(
-                self._output_annotated_peaks, 
-                pivot,
-                self.gap_search_parameters,
-                self.terminal_residues,
-                self.boundary_padding
-            )
-            self._output_boundaries[p_idx] = boundaries
-            self._n_boundaries[p_idx] = len(boundaries)
-        #print(f"boundaries:\n\t{self._n_boundaries}\n\t{self._output_boundaries}")
-    
-    def run_augment(self):
-        self._check_state("_output_pivots", "_output_boundaries")
-        self._output_augmented_data = [[None 
-            for _ in range(len(self._output_boundaries[p_idx]))] 
-            for p_idx in range(len(self._output_pivots))]
-        for p_idx in range(self._n_pivots):
-            for b_idx, boundary in enumerate(self._output_boundaries[p_idx]):
-                augmented_peaks = boundary.get_augmented_peaks()
-                augmented_pivot = boundary.get_augmented_pivot()
-                augmented_gaps = boundary.get_augmented_gaps()
-                boundary_indices = boundary.get_boundary_indices()
-                self._output_augmented_data[p_idx][b_idx] = (
-                    augmented_peaks, 
-                    augmented_pivot, 
-                    augmented_gaps, 
-                    boundary_indices
-                )
-    
-    def run_spectrum_graphs(self):
-        self._check_state("_output_pivots", "_output_boundaries", "_output_augmented_data", "gap_key")
-        self._output_spectrum_graphs = [[None for _ in range(len(self._output_boundaries[p_idx]))] for p_idx in range(self._n_pivots)]
-        for p_idx in range(self._n_pivots):
-            for b_idx in range(self._n_boundaries[p_idx]):
-                augmented_peaks, augmented_pivot, augmented_gaps, boundary_indices = self._output_augmented_data[p_idx][b_idx]
-                self._output_spectrum_graphs[p_idx][b_idx] = create_spectrum_graph_pair(
-                    augmented_peaks, 
-                    augmented_gaps, 
-                    augmented_pivot, 
-                    boundary_indices, 
-                    gap_key = self.gap_key
-                )
-    
-    def run_affixes(self):
-        self._check_state("_output_pivots", "_output_boundaries", "_output_spectrum_graphs", "gap_key")
-        self._output_affixes = [[None  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        self._n_affixes = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        for p_idx in range(self._n_pivots):
-            for b_idx in range(self._n_boundaries[p_idx]):
-                graph_pair = self._output_spectrum_graphs[p_idx][b_idx]
-                gap_comparator = lambda x, y: (abs(x - y) < self.intergap_tolerance) and (x != -1) and (y != -1)
-                dual_paths = find_dual_paths(
-                    *graph_pair,
-                    self.gap_key,
-                    gap_comparator)
-                affixes = np.array([create_affix(dp, graph_pair) for dp in dual_paths])
-                self._output_affixes[p_idx][b_idx] = affixes
-                self._n_affixes[p_idx][b_idx] = len(affixes)
-        #print(f"affixes:\n\t{self._n_affixes}\n\t{[list(aa) for a in self._output_affixes for aa in a]}")
-
-    def run_affix_pairs(self):
-        self._check_state("_output_pivots", "_output_boundaries", "_output_spectrum_graphs", "gap_key")
-        self._output_affix_pairs = [[None  for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        self._n_affix_pairs = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        for p_idx in range(self._n_pivots):
-            for b_idx in range(self._n_boundaries[p_idx]):
-                dual_paths = [afx.path() for afx in self._output_affixes[p_idx][b_idx]]
-                affix_pairs = np.array(find_edge_disjoint_dual_path_pairs(dual_paths))
-                self._output_affix_pairs[p_idx][b_idx] = affix_pairs
-                self._n_affix_pairs[p_idx][b_idx] = len(affix_pairs)
-        #print(f"affix pairs:\n\t{self._n_affix_pairs}\n\t{[list(aa) for a in self._output_affix_pairs for aa in a]}")
-    
-    def run_candidates(self):
-        self._check_state("_output_pivots", "_output_boundaries", "_output_affixes", "_output_affix_pairs")
-        self._output_candidates = [[[None for _ in range(self._n_affix_pairs[p_idx][b_idx])] for b_idx in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        self._n_candidates = [[[-1 for _ in range(self._n_affix_pairs[p_idx][b_idx])] for b_idx in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
-        for p_idx, pivot in enumerate(self._output_pivots):
-            pivot_residue = pivot.residue()
-            for b_idx, boundary in enumerate(self._output_boundaries[p_idx]):
-                boundary_residues = boundary.get_residues()
-                augmented_peaks = self._output_augmented_data[p_idx][b_idx][0]
-                graph_pair = self._output_spectrum_graphs[p_idx][b_idx]
-                affixes = self._output_affixes[p_idx][b_idx]
-                for a_idx, affix_pair in enumerate(self._output_affix_pairs[p_idx][b_idx]):
-                    self._output_candidates[p_idx][b_idx][a_idx] = create_candidates(
-                        augmented_peaks,
-                        graph_pair,
-                        affixes[affix_pair],
-                        boundary_residues,
-                        pivot_residue
-                    )
-                    self._n_candidates[p_idx][b_idx][a_idx] = len(self._output_candidates[p_idx][b_idx][a_idx])
-        #print(f"candidates:\n\t{self._n_candidates}\n\t{self._output_candidates}")
-    
-    def run_indices(self):
-        self._check_state("_output_pivots", "_output_boundaries", "_output_affix_pairs", "_output_candidates")
-        self._output_indices = []
-        for p_idx in range(self._n_pivots):
-            for b_idx in range(self._n_boundaries[p_idx]):
-                for a_idx in range(self._n_affix_pairs[p_idx][b_idx]):
-                    for c_idx in range(self._n_candidates[p_idx][b_idx][a_idx]):
-                        self._output_indices.append(OutputIndex(
-                            pivot_index = p_idx, 
-                            boundary_index = b_idx, 
-                            affixes_index = a_idx, 
-                            candidate_index = c_idx
-                        ))
-        self._n_indices = len(self._output_indices)
-        #print(f"indices (all candidates):\n\t{self._n_indices}\n\t{self._output_indices}")
-
     def run(self):
         """Generate candidates, associated data structures, and output traces."""
-        self._output_time = dict()
+        self._size = dict()
+        self._time = dict()
         for (tag, fn) in self.__class__.run_sequence():
-            self._keep_time(tag, fn, self)
+            try:
+                self._record_complexity(tag, fn, self)
+            except Exception as e:
+                print(f"[Warning] step {tag} crashed:\n{e}")
+                raise e
+                self._n_indices = 0
+                break
 
     def __post_init__(self):
-        self.run()
+        # setup
+        self._suffix_array = SuffixArray.read(self.suffix_array_file)
+        # construct candidates
+        if self.autorun:
+            self.run()
+        # compare to target
         if self._n_indices > 0:
-            candidate_indices = [(trace.pivot_index, trace.boundary_index, trace.affixes_index, trace.candidate_index) for trace in self._output_indices]
+            candidate_indices = [(trace.pivot_index, trace.boundary_index, trace.affixes_index, trace.candidate_index) for trace in self._indices]
             self._edit_distances = np.array([
-                self._output_candidates[p][b][a][c].edit_distance(self.residue_sequence)[0]
+                self._candidates[p][b][a][c].edit_distance(self.residue_sequence)[0]
                 for (p, b, a, c) in candidate_indices
             ])
             self._optimizer = self._edit_distances.argmin()
             self._optimum = self._edit_distances[self._optimizer]
 
     def __len__(self):
-        return len(self._output_indices)
+        return len(self._indices)
     
     def __getitem__(self, _i: OutputIndex) -> Candidate:
-        i = self._output_indices[_i]
-        return self._output_candidates[i.pivot_index][i.boundary_index][i.affixes_index][i.candidate_index]
+        i = self._indices[_i]
+        return self._candidates[i.pivot_index][i.boundary_index][i.affixes_index][i.candidate_index]
     
     def __iter__(self) -> list[Candidate]:
-        return (self[i] for i in self._output_indices)
+        return (self[i] for i in self._indices)
       
     def optimize(self) -> tuple[int, Candidate]:
         if self._n_indices == 0:
