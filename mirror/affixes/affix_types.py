@@ -1,9 +1,6 @@
-import numpy as np
-
-from .util import residue_lookup
-from .graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges, find_edge_disjoint_dual_path_pairs
-from .spectrum_graphs import GAP_KEY
-from .suffix_array import SuffixArray
+from ..util import residue_lookup
+from ..graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges
+from ..spectrum_graphs import GAP_KEY
 
 #=============================================================================#
 
@@ -28,8 +25,6 @@ class Affix:
     paths = {self._dual_path}
     translations = {self.translate()}
 )"""
-
-AffixPair = tuple[Affix, Affix]
 
 #=============================================================================#
 
@@ -60,36 +55,3 @@ def _translate_singular_path(
 ) -> str:
     path_edges = path_to_edges(singular_path)
     return ' '.join([residue_lookup(spectrum_graph[i][j][weight_key]) for (i,j) in path_edges])
-
-#=============================================================================#
-
-def filter_affixes(
-    affixes: np.ndarray,
-    suffix_array: SuffixArray,
-    occurrence_threshold: int = 0,
-) -> np.ndarray:
-    """Removes affixes which do not have either translation appearing in a suffix array.
-    
-    :affixes: a numpy array of Affix objects.
-    :path_to_suffix_array: str, path to a suffix array created by sufr.
-    :occurrence_threshold: int, any Affix with less than or equal to this value is filtered out. defaults to 0; any Affix that occurs in the suffix array is kept."""
-    if len(affixes) == 0:
-        return np.array([])
-    # admits an affix as long as one of its translations occurs in the suffix array 
-    translations = np.array([afx.translate() for afx in affixes])
-    asc_occurrences = np.array(suffix_array.count(translations[:, 0]))
-    desc_occurrences = np.array(suffix_array.count(translations[:, 1]))
-    occurrence_mask = asc_occurrences + desc_occurrences > 0
-    return affixes[occurrence_mask]
-
-#=============================================================================#
-
-def find_affix_pairs(
-    affixes: np.ndarray
-) -> list[tuple[int,int]]:
-    """Lists the indices of pairs of affixes whose dual paths do not share any edges.
-
-        np.array(find_edge_disjoint_dual_path_pairs(afx.path() for afx in affixes))
-        
-    :affixes: a numpy array of Affix objects."""
-    return np.array(find_edge_disjoint_dual_path_pairs(afx.path() for afx in affixes))
