@@ -12,8 +12,7 @@ from .boundaries import Boundary, find_and_create_boundaries
 from .graph_utils import get_sinks, get_sources, find_dual_paths, find_extended_paths, find_edge_disjoint_dual_path_pairs
 from .spectrum_graphs import create_spectrum_graph_pair
 
-from .suffix_array import SuffixArray
-from .affixes import Affix, create_affix, filter_affixes, find_affix_pairs
+from .affixes import Affix, create_affix, find_affix_pairs, SuffixArray, filter_affixes
 from .candidates import Candidate, create_candidates, filter_candidate_sequences
 
 from .test_types import TestSpectrum
