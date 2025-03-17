@@ -15,23 +15,15 @@ from .graph_utils import path_to_edges, unzip_dual_path, extend_truncated_paths,
 class Candidate:
     def __init__(self,
         spectrum: np.ndarray,
-        affix_a: list[tuple[int,int]],
-        affix_b: list[tuple[int,int]],
+        affix_pair: AffixPair,
         boundary_chrs: tuple[chr, chr],
         pivot_res: chr,
     ):
-        self._path_affixes = (
-            affix_a,
-            affix_b
-        )
+        self._affixes = affix_pair
         self._boundary = boundary_chrs
         self._pivot_res = pivot_res
-        self._called_affix_a = call_sequence_from_path(spectrum, affix_a)
-        self._called_affix_b = call_sequence_from_path(spectrum, affix_b)
-        self._affixes = (
-            self._called_affix_a,
-            self._called_affix_b
-        )
+        self._called_affix_a = list(self._affixes[0].call())
+        self._called_affix_b = list(self._affixes[1].call())
         forward_seq = self._called_affix_a + ([pivot_res] if pivot_res != "" else []) + reverse_called_sequence(self._called_affix_b)
         backward_seq = reverse_called_sequence(forward_seq)
         self._sequences = (
@@ -101,51 +93,12 @@ def _enumerate_candidates(
     boundary_chrs,
     pivot_res,
 ) -> list[Candidate]:
-    afx_a, afx_b = affix_pair
-    path_a = afx_a.path()
-    path_b = afx_b.path()
-    extension_a = [path_a] + list(extend_truncated_paths([path_a], *spectrum_graphs))
-    extension_b = [path_b] + list(extend_truncated_paths([path_b], *spectrum_graphs))
-    for ext_afx_a in extension_a:
-        for ext_afx_b in extension_b:
-            end_a = ext_afx_a[-1]
-            end_b = ext_afx_b[-1]
-            # if one of the affixes wasn't extended,
-            # or if they don't end at the same position,
-            # we want to use the pivot residue.
-            yield Candidate(
-                aug_spectrum, 
-                ext_afx_a, 
-                ext_afx_b, 
-                boundary_chrs,
-                pivot_res)
-            yield Candidate(
-                aug_spectrum, 
-                ext_afx_a, 
-                ext_afx_b, 
-                boundary_chrs,
-                '')
-            if ((-1 in end_a) and (-1 in end_b)) and (end_a == end_b):
-                # otherwise, if the extensions overlap, 
-                # they already contain the pivot residue;
-                # we don't want to repeat it.
-                for overlap in range(1, min(len(ext_afx_a),len(ext_afx_b))):
-                    if ext_afx_a[-overlap] != ext_afx_b[-overlap]:
-                        overlap -= 1
-                        break
-                if overlap > 0:
-                    yield Candidate(
-                        aug_spectrum, 
-                        ext_afx_a[:-overlap], 
-                        ext_afx_b, 
-                        boundary_chrs,
-                        '')
-                    yield Candidate(
-                        aug_spectrum, 
-                        ext_afx_a, 
-                        ext_afx_b[:-overlap], 
-                        boundary_chrs,
-                        '')
+    yield Candidate(
+        aug_spectrum,
+        affix_pair,
+        boundary_chrs,
+        pivot_res
+    )
 
 #=============================================================================#
 
