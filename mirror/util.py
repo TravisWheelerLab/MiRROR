@@ -332,7 +332,7 @@ def find_initial_b_ion(
     hi,
     center: float,
 ):
-    """Generates the list of (index, residue) pairs. Each index corresponds to an m/z value 
+    """Returns a generator of (index, residue) pairs. Each index corresponds to an m/z value 
     (peak) in the spectrum, which, upon reflection around a center, and translation by the
     typical b ion offset, matches the residue mass.
     
@@ -351,7 +351,7 @@ def find_terminal_y_ion(
     spectrum, 
     hi,
 ):
-    """Generates the list of (index, residue) pairs. Each index corresponds to an m/z value 
+    """Returns a generator of (index, residue) pairs. Each index corresponds to an m/z value 
     (peak) in the spectrum which, upon translation by the typical y ion offset, matches the 
     residue mass.
     
