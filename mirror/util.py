@@ -32,7 +32,7 @@ def generate_random_tryptic_peptide(length: int):
 def mask_ambiguous_residues(res: chr):
     "Maps residues \'L\' and \'I\' to \"I/L\"."
     if res == "L" or res == "I":
-        return "I/L"
+        return "L"
     else:
         return res
 

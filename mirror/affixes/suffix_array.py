@@ -3,10 +3,13 @@ import pathlib
 
 from .affix_types import Affix
 from ..types import Iterator
+from ..util import mask_ambiguous_residues
 
 import numpy as np
 import numpy.typing as npt
 from pylibsufr import read_sequence_file, SufrBuilderArgs, SuffixArray as SufrSuffixArray, SufrMetadata, CountOptions, CountResult
+
+#=============================================================================#
 
 class SuffixArray:
     """Wraps a `pylibsufr.SuffixArray` object, itself a binding to the `SuffixArray` struct in the `libsufr` Rust crate.
@@ -26,9 +29,11 @@ class SuffixArray:
             path_to_suffix_array = f"./{fasta_stem}.sufr"
         # read the fasta into libsufr's internal representation.
         sequence_file_data = read_sequence_file(path_to_fasta)
+        seq_str = ''.join(mask_ambiguous_residues(c) for c in sequence_file_data.seq().decode())    
+        #print(f"SFD:\n\t{seq_str}")
         # construct the arguments
         sufr_builder_args = SufrBuilderArgs(
-            sequence_file_data.seq(),
+            seq_str.encode(),
             path_to_suffix_array,
             sequence_file_data.start_positions(),
             sequence_file_data.sequence_names(),
@@ -60,7 +65,11 @@ class SuffixArray:
         """Given an iterator of strings, return a list of the same size counting the occurrences of each query in the suffix array."""
         count_options = CountOptions(list(queries))
         count_results = self._suffix_array.count(count_options)
-        return [res.count for res in count_results]
+        occurrences = [res.count for res in count_results]
+        #print(f"COUNT:\n\t{list(zip(queries,occurrences))}")
+        return occurrences
+
+#=============================================================================#
 
 def filter_affixes(
     affixes: np.ndarray,
@@ -76,7 +85,17 @@ def filter_affixes(
         return np.array([])
     # admits an affix as long as one of its translations occurs in the suffix array 
     translations = np.array([afx.translate() for afx in affixes])
-    asc_occurrences = np.array(suffix_array.count(translations[:, 0]))
-    desc_occurrences = np.array(suffix_array.count(translations[:, 1]))
-    occurrence_mask = asc_occurrences + desc_occurrences > 0
+    reverse_translations = np.array([afx.reverse_translate() for afx in affixes])
+    calls = np.array([afx.call() for afx in affixes])
+    rev_calls = np.array([afx.reverse_call() for afx in affixes])
+    
+    asc_occ = np.array(suffix_array.count(translations[:, 0]))
+    desc_occ = np.array(suffix_array.count(translations[:, 1]))
+    call_occ = np.array(suffix_array.count(calls))
+    
+    rev_asc_occ = np.array(suffix_array.count(reverse_translations[:, 0]))
+    rev_desc_occ = np.array(suffix_array.count(reverse_translations[:, 1]))
+    rev_call_occ = np.array(suffix_array.count(rev_calls))
+    
+    occurrence_mask = asc_occ + rev_asc_occ + desc_occ + rev_desc_occ + call_occ + rev_call_occ > 0
     return affixes[occurrence_mask]

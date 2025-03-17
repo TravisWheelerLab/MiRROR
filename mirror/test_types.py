@@ -169,7 +169,7 @@ class TestSpectrum:
                     boundary_indices, 
                     gap_key = self.gap_key
                 )
-        return 0
+        return -1
     
     def run_affixes(self):
         self._check_state("_pivots", "_boundaries", "_spectrum_graphs", "gap_key")
@@ -199,8 +199,8 @@ class TestSpectrum:
                     self._suffix_array, 
                     self.occurrence_threshold)
                 self._n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
-                print(f"unfiltered {self._unfiltered_n_affixes[p_idx][b_idx]} → filtered {self._n_affixes[p_idx][b_idx]}")
-        print(self._n_affixes)
+                #print(f"unfiltered {self._unfiltered_n_affixes[p_idx][b_idx]} → filtered {self._n_affixes[p_idx][b_idx]}")
+        #print(self._n_affixes)
         return sum(sum(self._n_affixes[i]) for i in range(self._n_pivots))
 
     def run_affixes_pair(self):
@@ -257,14 +257,14 @@ class TestSpectrum:
     def run_sequence(cls):
         RUN_SEQUENCE = [
             ("gaps", cls.run_gaps),
-            ("y-terminii", cls.run_y_terminii),
+            ("y-term", cls.run_y_terminii),
             ("pivots", cls.run_pivots),
             ("boundaries", cls.run_boundaries),
             ("augment", cls.run_augment),
             ("topology", cls.run_spectrum_graphs),
             ("affix", cls.run_affixes),
-          #  ("affix-filter", cls.run_affixes_filter),
-            ("affixes-pair", cls.run_affixes_pair),
+            ("afx-filter", cls.run_affixes_filter),
+            ("afx-pair", cls.run_affixes_pair),
             ("candidates", cls.run_candidates),
             ("index", cls.run_indices),
         ]
