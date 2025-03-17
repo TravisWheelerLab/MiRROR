@@ -11,7 +11,7 @@ from .pivots import Pivot
 #=============================================================================#
 # helper functions for augmentations
 
-def _create_augmented_spectrum(
+def _create_augmented_spectrum_and_pivot(
     spectrum: np.ndarray,
     pivot: Pivot,
     b_idx: tuple[int, str],
@@ -46,37 +46,16 @@ def _create_augmented_spectrum(
                 boundaries.append(closest_peak)
 
     # shift the pivot
-    pivot_left = pivot.outer_left()
-    pivot_left_mz = spectrum[pivot_left]
-    new_left = len([val for val in augmented_spectrum if val < pivot_left_mz])
-    offset = new_left - pivot_left
+    peak_pairs = pivot.peak_pairs()
+    shifted_index_pairs = [(augmented_spectrum.index(mz1), augmented_spectrum.index(mz2)) for (mz1, mz2) in peak_pairs]
+    index_shifted_pivot = Pivot(*peak_pairs, *shifted_index_pairs)
     
     boundary_indices = [augmented_spectrum.index(mz) for mz in boundaries]
-    return np.array(augmented_spectrum), offset, boundaries, boundary_indices
-
-def _create_augmented_pivot(
-    augmented_spectrum: np.ndarray,
-    offset: int,
-    pivot: Pivot,
-):
-    if type(pivot) == Pivot:
-        index_pairs = pivot.index_pairs()
-        new_index_pairs = [(i + offset, j + offset) for (i, j) in index_pairs]
-        new_peak_pairs = [(augmented_spectrum[i], augmented_spectrum[j]) for (i,j) in new_index_pairs]
-        index_shifted_pivot = Pivot(*new_peak_pairs, *new_index_pairs)
-        try:
-            assert index_shifted_pivot.peaks() == pivot.peaks()
-        except AssertionError as e:
-            print(index_shifted_pivot.peaks(), pivot.peaks())
-            raise e
-        return index_shifted_pivot
-    else:
-        raise ValueError(f"Unrecognized pivot type {type(pivot)}")
+    return np.array(augmented_spectrum), index_shifted_pivot, boundaries, boundary_indices
 
 def _create_augmented_gaps(
     augmented_spectrum: np.ndarray,
     augmented_pivot: Pivot,
-    offset: int,
     gap_params: GapSearchParameters,
     nonviable_gaps: list[tuple[int,int]]
 ):
@@ -120,7 +99,7 @@ class Boundary:
         self._y_idx, self._y_res = y_boundary
 
         # create augmented data
-        self._augmented_spectrum , self._offset, self._boundary_values, self._boundary_indices = _create_augmented_spectrum(
+        self._augmented_spectrum, self._augmented_pivot, self._boundary_values, self._boundary_indices = _create_augmented_spectrum_and_pivot(
             self._spectrum,
             self._pivot,
             self._b_idx,
@@ -128,17 +107,10 @@ class Boundary:
             self._tolerance,
             self._padding,
         )
-
-        self._augmented_pivot = _create_augmented_pivot(
-            self._augmented_spectrum,
-            self._offset,
-            self._pivot,
-        )
         
         self._augmented_gaps = _create_augmented_gaps(
             self._augmented_spectrum,
             self._augmented_pivot,
-            self._offset,
             self._gap_params,
             self._augmented_pivot.negative_index_pairs(),
         )
