@@ -50,6 +50,8 @@ class TestSpectrum:
     _boundaries: list[list[Boundary]] = None
     # list of pivots.
     _pivots: list[Pivot] = None
+    # potential terminal y ions
+    _y_terminii: list[tuple[int, float]] = None
     # peaks annotated by the set of GapResult objects
     _annotated_peaks: np.ndarray = None
     # a gap result for each amino acid, plus an unrecognized category.
@@ -100,6 +102,12 @@ class TestSpectrum:
             self.mz
         )
         return len(self._gaps)
+    
+    def run_y_terminii(self):
+        self._check_state("_annotated_peaks")
+        self._y_terminii = list(util.find_terminal_y_ion(self._annotated_peaks, len(self._annotated_peaks)))
+        self._n_y_terminii = len(self._y_terminii)
+        return self._n_y_terminii
 
     def run_pivots(self):
         self._check_state("_gaps", "_annotated_peaks", "intergap_tolerance", "symmetry_factor")
@@ -113,12 +121,13 @@ class TestSpectrum:
         return self._n_pivots
 
     def run_boundaries(self):
-        self._check_state("_annotated_peaks", "_pivots")
+        self._check_state("_annotated_peaks", "_pivots", "_y_terminii")
         self._boundaries = [None for _ in range(len(self._pivots))]
         self._n_boundaries = [-1 for _ in range(len(self._pivots))]
         for p_idx, pivot in enumerate(self._pivots):
-            boundaries, _, __ = find_and_create_boundaries(
+            boundaries, _ = find_and_create_boundaries(
                 self._annotated_peaks, 
+                self._y_terminii,
                 pivot,
                 self.gap_search_parameters,
                 self.terminal_residues,
@@ -248,6 +257,7 @@ class TestSpectrum:
     def run_sequence(cls):
         RUN_SEQUENCE = [
             ("gaps", cls.run_gaps),
+            ("y-terminii", cls.run_y_terminii),
             ("pivots", cls.run_pivots),
             ("boundaries", cls.run_boundaries),
             ("augment", cls.run_augment),

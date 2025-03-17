@@ -5,12 +5,14 @@ import pyopenms as oms
 import numpy as np
 from tqdm import tqdm
 
-from .types import UNKNOWN_RESIDUE, TERMINAL_RESIDUES, NONTERMINAL_RESIDUES, ION_SERIES, ION_SERIES_OFFSETS, ION_OFFSET_LOOKUP, AVERAGE_MASS_DIFFERENCE, LOOKUP_TOLERANCE, GAP_TOLERANCE, INTERGAP_TOLERANCE, BOUNDARY_PADDING
+from .types import Iterable, UNKNOWN_RESIDUE, TERMINAL_RESIDUES, NONTERMINAL_RESIDUES, ION_SERIES, ION_SERIES_OFFSETS, ION_OFFSET_LOOKUP, AVERAGE_MASS_DIFFERENCE, LOOKUP_TOLERANCE, GAP_TOLERANCE, INTERGAP_TOLERANCE, BOUNDARY_PADDING
 
 from .gaps.gap_types import DEFAULT_GAP_SEARCH_PARAMETERS, RESIDUES, MONO_MASSES, MASSES, RESIDUE_MONO_MASSES, RESIDUE_MASSES, LOSS_WATER, LOSS_AMMONIA, LOSSES, RESIDUE_LOSSES, MOD_Methionine_Sulfone, MOD_Methionine_Sulfoxide, MOD_PhosphoSerine, MODIFICATIONS, RESIDUE_MODIFICATIONS, CHARGES
 
 #=============================================================================#
 # residue constants and functions
+
+MAX_MASS = max(MONO_MASSES.max(), MASSES.max()) + LOSSES.max() + MODIFICATIONS.max() + LOOKUP_TOLERANCE
 
 def generate_random_residues(length: int, alphabet = RESIDUES):
     """
@@ -326,13 +328,38 @@ def expected_num_mirror_symmetries(arr: np.array, tolerance = 0.01):
     maxv = arr[-1]
     return n * (n - 1) * tolerance / (maxv - minv)
 
+def _generate_extremal_ions(
+    spectrum: np.ndarray,
+    index_range: Iterable,
+    mass_transform,
+    max_query_mass = MAX_MASS
+):
+    for i in index_range:
+        corrected_mass = mass_transform(spectrum[i])
+        residue = residue_lookup(corrected_mass)
+        #print(f"index {i} query {spectrum[i]} corrected {corrected_mass} residue {residue} MAX MASS {max_query_mass}")
+        if residue != 'X':
+            #print("\tmatch!")
+            yield i, residue
+        #elif corrected_mass > MAX_MASS:
+        #    #print("\tbreak!")
+        #    break
+
+def _get_b_ion_transform(center):
+    def _b_ion_transform(mz):
+        return reflect(mz, center) - ION_OFFSET_LOOKUP['b']
+    return _b_ion_transform
+
+def _y_ion_transform(mz):
+    return mz - ION_OFFSET_LOOKUP['y']
+
 def find_initial_b_ion(
     spectrum, 
     lo,
     hi,
     center: float,
 ):
-    """Generates the list of (index, residue) pairs. Each index corresponds to an m/z value 
+    """Returns a generator of (index, residue) pairs. Each index corresponds to an m/z value 
     (peak) in the spectrum, which, upon reflection around a center, and translation by the
     typical b ion offset, matches the residue mass.
     
@@ -341,28 +368,28 @@ def find_initial_b_ion(
     :hi: the largest index to consider.
     :center: the point around which putative peaks are reflected."""
     # starting at the pivot, scan the upper half of the spectrum
-    for i in range(lo, hi):
-        corrected_mass = reflect(spectrum[i], center) - ION_OFFSET_LOOKUP['b']
-        residue = residue_lookup(corrected_mass)
-        if residue != 'X':
-            yield i, residue
+    return _generate_extremal_ions(
+        spectrum, 
+        range(hi - 1, -1, -1), 
+        _get_b_ion_transform(center),
+    )
 
 def find_terminal_y_ion(
     spectrum, 
     hi,
 ):
-    """Generates the list of (index, residue) pairs. Each index corresponds to an m/z value 
+    """Returns a generator of (index, residue) pairs. Each index corresponds to an m/z value 
     (peak) in the spectrum which, upon translation by the typical y ion offset, matches the 
     residue mass.
     
     :param spectrum: a sorted one-dimensional numeric array.
     :hi: the largest index to consider. Iteration descends from this value."""
     # starting at the pivot, scan the lower half of the spectrum
-    for i in range(hi - 1, -1, -1):
-        corrected_mass = spectrum[i] - ION_OFFSET_LOOKUP['y']
-        residue = residue_lookup(corrected_mass)
-        if residue != 'X':
-            yield i, residue
+    return _generate_extremal_ions(
+        spectrum,
+        range(hi),
+        _y_ion_transform,
+    )
 
 #=============================================================================#
 # disjoint pairs

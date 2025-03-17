@@ -3,7 +3,7 @@ from pyopenms import MSExperiment
 from networkx import DiGraph
 
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, Iterable
 
 from dataclasses import dataclass
 

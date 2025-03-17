@@ -23,7 +23,7 @@ class Pivot:
         return self.data
 
     def indices(self):
-        return self.indices
+        return self.index_data
 
     def peak_pairs(self):
         return self._pair_a, self._pair_b

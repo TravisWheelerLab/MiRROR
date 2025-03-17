@@ -9,18 +9,9 @@ from .gaps import GapSearchParameters, GapResult, find_gaps
 from .pivots import Pivot
 
 #=============================================================================#
-# underlying functions
+# helper functions for augmentations
 
-def _find_boundary_peaks(
-    spectrum: np.ndarray,
-    pivot: Pivot,
-    valid_terminal_residues,
-):
-    putative_b_ions = find_initial_b_ion(spectrum, pivot.outer_right(), len(spectrum), pivot.center())
-    putative_y_ions = filter(lambda y: y[1] in valid_terminal_residues, find_terminal_y_ion(spectrum, pivot.outer_left()))
-    return list(putative_b_ions), list(putative_y_ions)
-
-def _create_augmented_spectrum(
+def _create_augmented_spectrum_and_pivot(
     spectrum: np.ndarray,
     pivot: Pivot,
     b_idx: tuple[int, str],
@@ -55,37 +46,16 @@ def _create_augmented_spectrum(
                 boundaries.append(closest_peak)
 
     # shift the pivot
-    pivot_left = pivot.outer_left()
-    pivot_left_mz = spectrum[pivot_left]
-    new_left = len([val for val in augmented_spectrum if val < pivot_left_mz])
-    offset = new_left - pivot_left
+    peak_pairs = pivot.peak_pairs()
+    shifted_index_pairs = [(augmented_spectrum.index(mz1), augmented_spectrum.index(mz2)) for (mz1, mz2) in peak_pairs]
+    index_shifted_pivot = Pivot(*peak_pairs, *shifted_index_pairs)
     
     boundary_indices = [augmented_spectrum.index(mz) for mz in boundaries]
-    return np.array(augmented_spectrum), offset, boundaries, boundary_indices
-
-def _create_augmented_pivot(
-    augmented_spectrum: np.ndarray,
-    offset: int,
-    pivot: Pivot,
-):
-    if type(pivot) == Pivot:
-        index_pairs = pivot.index_pairs()
-        new_index_pairs = [(i + offset, j + offset) for (i, j) in index_pairs]
-        new_peak_pairs = [(augmented_spectrum[i], augmented_spectrum[j]) for (i,j) in new_index_pairs]
-        index_shifted_pivot = Pivot(*new_peak_pairs, *new_index_pairs)
-        try:
-            assert index_shifted_pivot.peaks() == pivot.peaks()
-        except AssertionError as e:
-            print(index_shifted_pivot.peaks(), pivot.peaks())
-            raise e
-        return index_shifted_pivot
-    else:
-        raise ValueError(f"Unrecognized pivot type {type(pivot)}")
+    return np.array(augmented_spectrum), index_shifted_pivot, boundaries, boundary_indices
 
 def _create_augmented_gaps(
     augmented_spectrum: np.ndarray,
     augmented_pivot: Pivot,
-    offset: int,
     gap_params: GapSearchParameters,
     nonviable_gaps: list[tuple[int,int]]
 ):
@@ -100,14 +70,17 @@ def _create_augmented_gaps(
 # interface
 
 class Boundary:
-    """Interface to the pair of boundary ions and the augmentations they induce in the peak list, pivot, and gaps.
+    """Construct the augmented peak list, pivot, and gaps by restricting the spectrum to a window 
+    around the left and right ions, and forcing symmetry by mirroring each boundary around the 
+    pivot center.
+
     Implements get_residues, get_offset, get_augmented peaks, get_augmented pivot, get_augmented gaps."""
 
     def __init__(self,
         spectrum: np.ndarray,
         pivot: Pivot,
         gap_params: GapSearchParameters,
-        boundary_pair: tuple[tuple,tuple],
+        boundary_pair: tuple[tuple[int, float],tuple[int, float]],
         valid_terminal_residues: list,
         padding: int = 3,
     ):
@@ -124,9 +97,9 @@ class Boundary:
         b_boundary, y_boundary = boundary_pair
         self._b_idx, self._b_res = b_boundary
         self._y_idx, self._y_res = y_boundary
-        
+
         # create augmented data
-        self._augmented_spectrum , self._offset, self._boundary_values, self._boundary_indices = _create_augmented_spectrum(
+        self._augmented_spectrum, self._augmented_pivot, self._boundary_values, self._boundary_indices = _create_augmented_spectrum_and_pivot(
             self._spectrum,
             self._pivot,
             self._b_idx,
@@ -134,17 +107,10 @@ class Boundary:
             self._tolerance,
             self._padding,
         )
-
-        self._augmented_pivot = _create_augmented_pivot(
-            self._augmented_spectrum,
-            self._offset,
-            self._pivot,
-        )
         
         self._augmented_gaps = _create_augmented_gaps(
             self._augmented_spectrum,
             self._augmented_pivot,
-            self._offset,
             self._gap_params,
             self._augmented_pivot.negative_index_pairs(),
         )
@@ -187,12 +153,13 @@ class Boundary:
     
 def find_and_create_boundaries(
     spectrum: np.ndarray,
+    terminal_y_ions: list[tuple[int, float]],
     pivot: Pivot,
     gap_params: GapSearchParameters,
     valid_terminal_residues: list,
     padding: int = 3,
 ):
-    """Find boundary ions of b and y series, and for each element in their product, construct a Boundary object.
+    """Given the terminal y ion(s), find the initial b ion(s), and for each element in their product, construct a Boundary object.
     
     :spectrum: a sorted array of floats (peak mz values).
     :pivot: a Pivot object.
@@ -200,7 +167,7 @@ def find_and_create_boundaries(
     :valid_terminal_residues: list of valid residues for the y boundary ions. For tryptic peptides, these are K and R.
     :tolerance: float, the threshold for equating two gaps.
     :padding: integer, the number of peaks outside of the boundary to include in the augmented spectrum."""
-    b_ions, y_ions = _find_boundary_peaks(spectrum, pivot, valid_terminal_residues)
+    initial_b_ions = list(find_initial_b_ion(spectrum, pivot.outer_right(), len(spectrum), pivot.center()))
     boundaries = [Boundary(spectrum, pivot, gap_params, boundary_pair, valid_terminal_residues, padding) 
-        for boundary_pair in product(b_ions, y_ions)]
-    return boundaries, b_ions, y_ions
+        for boundary_pair in product(initial_b_ions, terminal_y_ions)]
+    return boundaries, initial_b_ions
