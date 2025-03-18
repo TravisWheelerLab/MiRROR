@@ -6,6 +6,7 @@ from time import time
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+from scipy.stats import zscore
 
 from . import *
 
@@ -57,11 +58,12 @@ class TestSpectrum:
     # a gap result for each amino acid, plus an unrecognized category.
     _gaps: list[GapResult] = None
 
-    _time: dict[str, float] = None
-
     # stitches the output stack together by indexing into pivots, boundaries (and augmented data and graph pairs), affixes, and candidates.
     # there is an OutputTrace for every Candidate.
     _indices: list[OutputIndex] = None
+
+    _time: dict[str, float] = None
+    _crash: list = None
     
     def _check_state(self, *args):
         values = [self.__dict__[k] for k in args]
@@ -232,20 +234,6 @@ class TestSpectrum:
         t = time()
         self._size[tag] = fn(*args, **kwargs)
         self._time[tag] = time() - t
-
-    def times_as_vec(self):
-        tvals = list(self._time.values())
-        return np.array(tvals + [-np.inf for _ in range(len(self.step_names()) - len(tvals))])
-    
-    def sizes_as_vec(self):
-        svals = list(self._size.values())
-        return np.array(svals + [-np.inf for _ in range(len(self.step_names()) - len(svals))])
-    
-    def get_time(self, tag: str):
-        return self._time[tag]
-    
-    def get_size(self, tag: str):
-        return self._size[tag]
     
     @classmethod
     def run_sequence(cls):
@@ -264,23 +252,37 @@ class TestSpectrum:
         ]
         return RUN_SEQUENCE
 
+    def run(self):
+        """Generate candidates, associated data structures, and output traces."""
+        self._size = dict()
+        self._time = dict()
+        for (tag, fn) in self.run_sequence():
+            try:
+                self._record_complexity(tag, fn, self)
+            except Exception as e:
+                print(f"[Warning] step {tag} crashed:\n{e}")
+                self._n_indices = -1
+                self._crash = [tag]
+                break
+
     @classmethod
     def step_names(cls):
         names, _ = zip(*cls.run_sequence())
         return names
 
-    def run(self):
-        """Generate candidates, associated data structures, and output traces."""
-        self._size = dict()
-        self._time = dict()
-        for (tag, fn) in self.__class__.run_sequence():
-            try:
-                self._record_complexity(tag, fn, self)
-            except Exception as e:
-                print(f"[Warning] step {tag} crashed:\n{e}")
-                raise e
-                self._n_indices = 0
-                break
+    def times_as_vec(self):
+        tvals = list(self._time.values())
+        return np.array(tvals + [-np.inf for _ in range(len(self.step_names()) - len(tvals))])
+    
+    def sizes_as_vec(self):
+        svals = list(self._size.values())
+        return np.array(svals + [-np.inf for _ in range(len(self.step_names()) - len(svals))])
+    
+    def get_time(self, tag: str):
+        return self._time[tag]
+    
+    def get_size(self, tag: str):
+        return self._size[tag]
 
     def load_suffix_array(self):
         self._suffix_array = SuffixArray.read(self.suffix_array_file)
@@ -325,11 +327,13 @@ class TestSpectrum:
     def optimize(self) -> tuple[int, Candidate]:
         if self._n_indices == 0:
             return 2 * len(self.peptide()), None
-        else:
+        elif self._n_indices > 0:
             if self._optimum == None:
                 self._optimize()
             return self._optimum, self[self._optimizer]
-    
+        else:
+            return -1, None
+
     def peptide(self):
         return ''.join(self.residue_sequence)
 
@@ -352,3 +356,79 @@ class TestSpectrum:
         self.autorun = False
         with open(filepath, 'wb') as handle:
             self._write(handle)
+
+class TestRecord:
+
+    def __init__(self):
+        self._test_spectra = []
+        self._times = []
+        self._sizes = []
+        self._optimizers = []
+        self._optima = []
+        self._n = 0
+        self._finalized = False
+    
+    def __len__(self):
+        return self._n
+
+    def add_test_spectrum(self, ts: TestSpectrum):
+        self._test_spectra.append(ts)
+        self._times.append(ts.times_as_vec())
+        self._sizes.append(ts.sizes_as_vec())
+        optimum, optimizer = ts.optimize()
+        self._optima.append(optimum)
+        self._optimizers.append(optimizer)
+        self._n += 1
+
+    def finalize(self):
+        # convert to numpy arrays
+        self._test_spectra = np.array(self._test_spectra)
+        self._times = np.vstack(self._times)
+        self._sizes = np.vstack(self._sizes)
+        self._optimizers = np.array(self._optimizers)
+        self._optima = np.array(self._optima)
+        # construct masks for each class of TestSpectrum 
+        matches = self._optima == 0
+        misses = self._optima > 0
+        crashes = self._optima == -1
+        time_outliers = np.absolute(zscore(self._times.sum(axis = 1))) > 2
+        size_outliers = np.absolute(zscore(self._sizes.sum(axis = 1))) > 2
+        # store indices for class membership
+        ind = np.arange(self._n)
+        self._matches = ind[matches]
+        self._misses = ind[misses]
+        self._crashes = ind[crashes]
+        self._time_outliers = ind[time_outliers]
+        self._size_outliers = ind[size_outliers]
+
+        self._finalized = True
+
+    def get_matches(self):
+        if self._finalized:
+            return list(self._test_spectra[self._matches])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_misses(self):
+        if self._finalized:
+            return list(self._test_spectra[self._misses])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_crashes(self):
+        if self._finalized:
+            return list(self._test_spectra[self._crashes])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_time_outliers(self):
+        if self._finalized:
+            return list(self._test_spectra[self._time_outliers])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_size_outliers(self):
+        if self._finalized:
+            return list(self._test_spectra[self._size_outliers])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
