@@ -56,37 +56,12 @@ class TestSpectrum:
     _annotated_peaks: np.ndarray = None
     # a gap result for each amino acid, plus an unrecognized category.
     _gaps: list[GapResult] = None
-    # list of potential C-terminal y ions
-    _left_boundary_y: list = None
 
     _time: dict[str, float] = None
 
     # stitches the output stack together by indexing into pivots, boundaries (and augmented data and graph pairs), affixes, and candidates.
     # there is an OutputTrace for every Candidate.
     _indices: list[OutputIndex] = None
-
-    @classmethod
-    def read(cls, handle):
-        return pickle.load(handle)
-    
-    def _record_complexity(self, tag, fn, *args, **kwargs):
-        t = time()
-        self._size[tag] = fn(*args, **kwargs)
-        self._time[tag] = time() - t
-
-    def times_as_vec(self):
-        tvals = list(self._time.values())
-        return np.array(tvals + [-np.inf for _ in range(len(self.step_names()) - len(tvals))])
-    
-    def sizes_as_vec(self):
-        svals = list(self._size.values())
-        return np.array(svals + [-np.inf for _ in range(len(self.step_names()) - len(svals))])
-    
-    def get_time(self, tag: str):
-        return self._time[tag]
-    
-    def get_size(self, tag: str):
-        return self._size[tag]
     
     def _check_state(self, *args):
         values = [self.__dict__[k] for k in args]
@@ -189,7 +164,7 @@ class TestSpectrum:
         return sum(sum(self._n_affixes[i]) for i in range(self._n_pivots))
     
     def run_affixes_filter(self):
-        self._check_state("_pivots", "_boundaries", "_affixes")
+        self._check_state("_pivots", "_boundaries", "_affixes", "_suffix_array")
         self._unfiltered_n_affixes = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
         for p_idx in range(self._n_pivots):
             for b_idx in range(self._n_boundaries[p_idx]):
@@ -252,6 +227,25 @@ class TestSpectrum:
                         ))
         self._n_indices = len(self._indices)
         return self._n_indices
+
+    def _record_complexity(self, tag, fn, *args, **kwargs):
+        t = time()
+        self._size[tag] = fn(*args, **kwargs)
+        self._time[tag] = time() - t
+
+    def times_as_vec(self):
+        tvals = list(self._time.values())
+        return np.array(tvals + [-np.inf for _ in range(len(self.step_names()) - len(tvals))])
+    
+    def sizes_as_vec(self):
+        svals = list(self._size.values())
+        return np.array(svals + [-np.inf for _ in range(len(self.step_names()) - len(svals))])
+    
+    def get_time(self, tag: str):
+        return self._time[tag]
+    
+    def get_size(self, tag: str):
+        return self._size[tag]
     
     @classmethod
     def run_sequence(cls):
@@ -288,21 +282,23 @@ class TestSpectrum:
                 self._n_indices = 0
                 break
 
+    def load_suffix_array(self):
+        self._suffix_array = SuffixArray.read(self.suffix_array_file)
+    
+    def unload_suffix_array(self):
+        self._suffix_array = None
+
     def __post_init__(self):
         # setup
-        self._suffix_array = SuffixArray.read(self.suffix_array_file)
+        self._edit_distances = None
+        self._optimizer = None
+        self._optimum = None
+        self.load_suffix_array()
         # construct candidates
         if self.autorun:
             self.run()
-        # compare to target
-        if self._n_indices > 0:
-            candidate_indices = [(trace.pivot_index, trace.boundary_index, trace.affixes_index, trace.candidate_index) for trace in self._indices]
-            self._edit_distances = np.array([
-                self._candidates[p][b][a][c].edit_distance(self.residue_sequence)[0]
-                for (p, b, a, c) in candidate_indices
-            ])
-            self._optimizer = self._edit_distances.argmin()
-            self._optimum = self._edit_distances[self._optimizer]
+            # compare to target
+            self._optimize()
 
     def __len__(self):
         return len(self._indices)
@@ -313,15 +309,46 @@ class TestSpectrum:
     
     def __iter__(self) -> list[Candidate]:
         return (self[i] for i in self._indices)
-      
+    
+    def _optimize(self):
+        if self._n_indices > 0:
+            candidate_indices = [
+                (trace.pivot_index, trace.boundary_index, trace.affixes_index, trace.candidate_index) 
+                for trace in self._indices]
+            self._edit_distances = np.array([
+                self._candidates[p][b][a][c].edit_distance(self.residue_sequence)[0]
+                for (p, b, a, c) in candidate_indices
+            ])
+            self._optimizer = self._edit_distances.argmin()
+            self._optimum = self._edit_distances[self._optimizer]
+    
     def optimize(self) -> tuple[int, Candidate]:
         if self._n_indices == 0:
             return 2 * len(self.peptide()), None
         else:
+            if self._optimum == None:
+                self._optimize()
             return self._optimum, self[self._optimizer]
     
     def peptide(self):
         return ''.join(self.residue_sequence)
 
-    def write(self, handle):
+    @classmethod
+    def _read(cls, handle):
+        return pickle.load(handle)
+    
+    @classmethod
+    def read(cls, filepath):
+        with open(filepath, 'rb') as handle:
+            ts = cls._read(handle)
+            ts.load_suffix_array()
+            return ts
+
+    def _write(self, handle):
         pickle.dump(self, handle)
+
+    def write(self, filepath):
+        self.unload_suffix_array()
+        self.autorun = False
+        with open(filepath, 'wb') as handle:
+            self._write(handle)

@@ -31,10 +31,19 @@ class Affix:
     def reverse_call(self) -> str:
         return ''.join(self._called_sequence[::-1])
     
+    def __eq__(self, other):
+        if isinstance(other, Affix):
+            return (
+            (self._dual_path == other._dual_path) and 
+            (self.translate() == other.translate()) and 
+            (self.call() == other.call()))
+        return False
+    
     def __repr__(self):
         return f"""Affix(
     paths = {self._dual_path}
     translations = {self.translate()}
+    called sequence = {self.call()}
 )"""
 
 #=============================================================================#

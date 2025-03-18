@@ -65,6 +65,16 @@ class Candidate:
             ' '.join(self._sequences[1])
         )
     
+    def __eq__(self, other):
+        if isinstance(other, Candidate):
+            return (
+            (self._boundary == other._boundary) and
+            (self._called_affix_a == other._called_affix_a) and
+            (self._pivot_res == other._pivot_res) and
+            (self._called_affix_b == other._called_affix_b) and
+            (self.sequences() == other.sequences()))
+        return False
+    
     def __repr__(self):
         return f"""Candidate(
     boundary = {self._boundary}
