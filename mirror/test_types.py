@@ -2,10 +2,13 @@ from dataclasses import dataclass
 import pickle
 from types import NoneType
 from time import time
+from pathlib import Path
 
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+from scipy.stats import zscore
+from tabulate import tabulate
 
 from . import *
 
@@ -56,37 +59,13 @@ class TestSpectrum:
     _annotated_peaks: np.ndarray = None
     # a gap result for each amino acid, plus an unrecognized category.
     _gaps: list[GapResult] = None
-    # list of potential C-terminal y ions
-    _left_boundary_y: list = None
-
-    _time: dict[str, float] = None
 
     # stitches the output stack together by indexing into pivots, boundaries (and augmented data and graph pairs), affixes, and candidates.
     # there is an OutputTrace for every Candidate.
     _indices: list[OutputIndex] = None
 
-    @classmethod
-    def read(cls, handle):
-        return pickle.load(handle)
-    
-    def _record_complexity(self, tag, fn, *args, **kwargs):
-        t = time()
-        self._size[tag] = fn(*args, **kwargs)
-        self._time[tag] = time() - t
-
-    def times_as_vec(self):
-        tvals = list(self._time.values())
-        return np.array(tvals + [-np.inf for _ in range(len(self.step_names()) - len(tvals))])
-    
-    def sizes_as_vec(self):
-        svals = list(self._size.values())
-        return np.array(svals + [-np.inf for _ in range(len(self.step_names()) - len(svals))])
-    
-    def get_time(self, tag: str):
-        return self._time[tag]
-    
-    def get_size(self, tag: str):
-        return self._size[tag]
+    _time: dict[str, float] = None
+    _crash: list = None
     
     def _check_state(self, *args):
         values = [self.__dict__[k] for k in args]
@@ -169,7 +148,7 @@ class TestSpectrum:
                     boundary_indices, 
                     gap_key = self.gap_key
                 )
-        return 0
+        return -1
     
     def run_affixes(self):
         self._check_state("_pivots", "_boundaries", "_spectrum_graphs", "gap_key")
@@ -189,7 +168,7 @@ class TestSpectrum:
         return sum(sum(self._n_affixes[i]) for i in range(self._n_pivots))
     
     def run_affixes_filter(self):
-        self._check_state("_pivots", "_boundaries", "_affixes")
+        self._check_state("_pivots", "_boundaries", "_affixes", "_suffix_array")
         self._unfiltered_n_affixes = [[-1 for _ in range(self._n_boundaries[p_idx])] for p_idx in range(self._n_pivots)]
         for p_idx in range(self._n_pivots):
             for b_idx in range(self._n_boundaries[p_idx]):
@@ -199,8 +178,8 @@ class TestSpectrum:
                     self._suffix_array, 
                     self.occurrence_threshold)
                 self._n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
-                print(f"unfiltered {self._unfiltered_n_affixes[p_idx][b_idx]} → filtered {self._n_affixes[p_idx][b_idx]}")
-        print(self._n_affixes)
+                #print(f"unfiltered {self._unfiltered_n_affixes[p_idx][b_idx]} → filtered {self._n_affixes[p_idx][b_idx]}")
+        #print(self._n_affixes)
         return sum(sum(self._n_affixes[i]) for i in range(self._n_pivots))
 
     def run_affixes_pair(self):
@@ -252,76 +231,285 @@ class TestSpectrum:
                         ))
         self._n_indices = len(self._indices)
         return self._n_indices
+
+    def _record_complexity(self, tag, fn, *args, **kwargs):
+        t = time()
+        self._size[tag] = fn(*args, **kwargs)
+        self._time[tag] = time() - t
     
     @classmethod
     def run_sequence(cls):
         RUN_SEQUENCE = [
             ("gaps", cls.run_gaps),
-            ("y-terminii", cls.run_y_terminii),
+            ("y-term", cls.run_y_terminii),
             ("pivots", cls.run_pivots),
             ("boundaries", cls.run_boundaries),
             ("augment", cls.run_augment),
             ("topology", cls.run_spectrum_graphs),
             ("affix", cls.run_affixes),
-          #  ("affix-filter", cls.run_affixes_filter),
-            ("affixes-pair", cls.run_affixes_pair),
+            ("afx-filter", cls.run_affixes_filter),
+            ("afx-pair", cls.run_affixes_pair),
             ("candidates", cls.run_candidates),
             ("index", cls.run_indices),
         ]
         return RUN_SEQUENCE
+
+    def run(self):
+        """Generate candidates, associated data structures, and output traces."""
+        self._size = dict()
+        self._time = dict()
+        for (tag, fn) in self.run_sequence():
+            try:
+                self._record_complexity(tag, fn, self)
+            except Exception as e:
+                print(f"[Warning] step {tag} crashed:\n{e}")
+                self._n_indices = -1
+                self._crash = [tag]
+                break
 
     @classmethod
     def step_names(cls):
         names, _ = zip(*cls.run_sequence())
         return names
 
-    def run(self):
-        """Generate candidates, associated data structures, and output traces."""
-        self._size = dict()
-        self._time = dict()
-        for (tag, fn) in self.__class__.run_sequence():
-            try:
-                self._record_complexity(tag, fn, self)
-            except Exception as e:
-                print(f"[Warning] step {tag} crashed:\n{e}")
-                raise e
-                self._n_indices = 0
-                break
+    def times_as_vec(self):
+        tvals = list(self._time.values())
+        return np.array(tvals + [-np.inf for _ in range(len(self.step_names()) - len(tvals))])
+    
+    def sizes_as_vec(self):
+        svals = list(self._size.values())
+        return np.array(svals + [-np.inf for _ in range(len(self.step_names()) - len(svals))])
+    
+    def get_time(self, tag: str):
+        return self._time[tag]
+    
+    def get_size(self, tag: str):
+        return self._size[tag]
+
+    def load_suffix_array(self):
+        self._suffix_array = SuffixArray.read(self.suffix_array_file)
+    
+    def unload_suffix_array(self):
+        self._suffix_array = None
 
     def __post_init__(self):
         # setup
-        self._suffix_array = SuffixArray.read(self.suffix_array_file)
+        self._edit_distances = None
+        self._optimizer = None
+        self._optimum = None
+        self.load_suffix_array()
         # construct candidates
         if self.autorun:
             self.run()
-        # compare to target
+            # compare to target
+            self._optimize()
+
+    def __len__(self):
+        return len(self._indices)
+    
+    def __getitem__(self, _i: int) -> Candidate:
+        i = self._indices[_i]
+        return self._candidates[i.pivot_index][i.boundary_index][i.affixes_index][i.candidate_index]
+    
+    def __iter__(self) -> list[Candidate]:
+        return (self[i] for i in range(len(self)))
+    
+    def _optimize(self):
         if self._n_indices > 0:
-            candidate_indices = [(trace.pivot_index, trace.boundary_index, trace.affixes_index, trace.candidate_index) for trace in self._indices]
+            candidate_indices = [
+                (trace.pivot_index, trace.boundary_index, trace.affixes_index, trace.candidate_index) 
+                for trace in self._indices]
             self._edit_distances = np.array([
                 self._candidates[p][b][a][c].edit_distance(self.residue_sequence)[0]
                 for (p, b, a, c) in candidate_indices
             ])
             self._optimizer = self._edit_distances.argmin()
             self._optimum = self._edit_distances[self._optimizer]
-
-    def __len__(self):
-        return len(self._indices)
     
-    def __getitem__(self, _i: OutputIndex) -> Candidate:
-        i = self._indices[_i]
-        return self._candidates[i.pivot_index][i.boundary_index][i.affixes_index][i.candidate_index]
-    
-    def __iter__(self) -> list[Candidate]:
-        return (self[i] for i in self._indices)
-      
     def optimize(self) -> tuple[int, Candidate]:
         if self._n_indices == 0:
-            return 2 * len(self.peptide()), None
-        else:
+            return np.inf, None
+        elif self._n_indices > 0:
+            if self._optimum == None:
+                self._optimize()
             return self._optimum, self[self._optimizer]
-    
+        else:
+            return -1, None
+
     def peptide(self):
         return ''.join(self.residue_sequence)
 
-    def write(self, handle):
+    @classmethod
+    def _read(cls, handle):
+        return pickle.load(handle)
+    
+    @classmethod
+    def read(cls, filepath):
+        with open(filepath, 'rb') as handle:
+            ts = cls._read(handle)
+            ts.load_suffix_array()
+            return ts
+
+    def _write(self, handle):
         pickle.dump(self, handle)
+
+    def write(self, filepath):
+        self.unload_suffix_array()
+        self.autorun = False
+        with open(filepath, 'wb') as handle:
+            self._write(handle)
+
+class TestRecord:
+
+    def __init__(self, identifier: str):
+        self._id = identifier
+        self._test_spectra = []
+        self._times = []
+        self._sizes = []
+        self._optimizers = []
+        self._optima = []
+        self._n = 0
+        self._finalized = False
+    
+    def __len__(self):
+        return self._n
+
+    def add(self, ts: TestSpectrum):
+        if not self._finalized:
+            self._test_spectra.append(ts)
+            self._times.append(ts.times_as_vec())
+            self._sizes.append(ts.sizes_as_vec())
+            optimum, optimizer = ts.optimize()
+            self._optima.append(optimum)
+            self._optimizers.append(optimizer)
+            self._n += 1
+        else:
+            raise ValueError("this method cannot be run after `finalize(`")
+
+    def finalize(self):
+        # convert to numpy arrays=
+        self._test_spectra = np.array(self._test_spectra, dtype=TestSpectrum)
+        self._times = np.vstack(self._times)
+        self._sizes = np.vstack(self._sizes)
+        self._optimizers = np.array(self._optimizers)
+        self._optima = np.array(self._optima)
+        # construct masks for each class of TestSpectrum 
+        self._matches_mask = self._optima == 0
+        self._misses_mask = self._optima > 0
+        self._crashes_mask = self._optima == -1
+        self._time_outliers_mask = np.absolute(zscore(self._times.sum(axis = 1))) > 2
+        self._size_outliers_mask = np.absolute(zscore(self._sizes.sum(axis = 1))) > 2
+        self._size_outliers_mask = self._size_outliers_mask & ~self._time_outliers_mask
+        # store indices for class membership
+        ind = np.arange(self._n)
+        self._matches = ind[self._matches_mask]
+        self._misses = ind[self._misses_mask]
+        self._crashes = ind[self._crashes_mask]
+        self._time_outliers = ind[self._time_outliers_mask]
+        self._size_outliers = ind[self._size_outliers_mask]
+
+        self._finalized = True
+
+    def get_matches(self):
+        if self._finalized:
+            return list(self._test_spectra[self._matches])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_misses(self):
+        if self._finalized:
+            return list(self._test_spectra[self._misses])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_crashes(self):
+        if self._finalized:
+            return list(self._test_spectra[self._crashes])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_temporal_outliers(self):
+        if self._finalized:
+            return list(self._test_spectra[self._time_outliers])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+
+    def get_spatial_outliers(self):
+        if self._finalized:
+            return list(self._test_spectra[self._size_outliers])
+        else:
+            raise ValueError("this method must be run after `finalize(`")
+    
+    def save_matches(self, output_dir):
+        self._save_test_spectra(output_dir, "matches", self.get_matches())
+    
+    def save_misses(self, output_dir):
+        self._save_test_spectra(output_dir, "misses", self.get_misses())
+
+    def save_crashes(self, output_dir):
+        self._save_test_spectra(output_dir, "crashes", self.get_crashes())
+
+    def save_temporal_outliers(self, output_dir):
+        self._save_test_spectra(output_dir, "temporal-outliers", self.get_temporal_outliers())
+
+    def save_spatial_outliers(self, output_dir):
+        self._save_test_spectra(output_dir, "spatial-outliers", self.get_spatial_outliers())
+
+    def _save_test_spectra(self, output_dir: Path, tag: str, test_spectra: list[TestSpectrum]):
+        for (i, test_spectrum) in enumerate(test_spectra):
+            output_path = output_dir / f"{self._id}_{tag}_{i}.ts"
+            test_spectrum.write(output_path)
+
+    def print_summary(self):
+        n = len(self)
+        n_matches = len(self.get_matches())
+        n_misses = len(self.get_misses())
+        n_crashes = len(self.get_crashes())
+        n_time_outliers = len(self.get_temporal_outliers())
+        n_size_outliers = len(self.get_spatial_outliers())
+        print(f"\nsummary:\n>total\n\t{n}\n>matches\n\t{n_matches} ({n_matches / n})\n>misses\n\t{n_misses} ({n_misses / n})\n>crashes\n\t{n_crashes} ({n_crashes / n})\n>temporal outliers\n\t{n_time_outliers} ({n_time_outliers / n})\n>spatial outliers (without temporal outliers)\n\t{n_size_outliers} ({n_size_outliers / n})\n")
+    
+    def print_miss_distances(self):
+        miss_scores = self._optima[self._misses]
+        if len(miss_scores) > 0:
+            util.plot_hist(miss_scores, "miss distance distribution")
+        else:
+            print()
+
+    def _construct_complexity_table(self, mask):
+        times = self._times[mask].sum(axis = 0)
+        sizes = self._sizes[mask].sum(axis = 0)
+        pct_times = list((100 * times / times.sum()).round(2))
+        pct_sum = sum(pct_times)
+        raw_times = list(times.round(4))
+        step_sizes = list(sizes)
+        step_names = TestSpectrum.step_names()
+        table = [
+            ["step name", *step_names, "total"],
+            ["size", *step_sizes, sum(step_sizes)],
+            ["time", *raw_times, round(sum(raw_times), 4)],
+            ["time (pct)", *pct_times, f"100 (err: {round(pct_sum - 100, 4)})"],]
+        return tabulate(table)
+
+    def print_complexity_table(self):
+        #times = self._times[~self._outlier_mask].sum(axis = 0)
+        #sizes = self._sizes[~self._outlier_mask].sum(axis = 0)
+        #pct_times = list((100 * times / times.sum()).round(2))
+        #pct_sum = sum(pct_times)
+        #raw_times = list(times.round(4))
+        #step_sizes = list(sizes)
+        #step_names = TestSpectrum.step_names()
+        #table = [
+        #    ["step name", *step_names, "total"],
+        #    ["size", *step_sizes, ""],
+        #    ["time", *raw_times, round(sum(raw_times), 4)],
+        #    ["time (pct)", *pct_times, f"100 (err: {round(pct_sum - 100, 4)})"],]
+        time_mask = self._time_outliers_mask
+        size_mask = self._size_outliers_mask
+        normal_mask = ~(time_mask | size_mask)
+        normal_complexity_table = self._construct_complexity_table(normal_mask)
+        temporal_outlier_table = self._construct_complexity_table(time_mask)
+        spatial_outlier_table = self._construct_complexity_table(size_mask)
+        print(f"\ncomplexity (without outliers):\n{normal_complexity_table}")
+        print(f"complexity (temporal outliers):\n{temporal_outlier_table}")
+        print(f"complexity (spatial outliers without temporal outliers):\n{spatial_outlier_table}")

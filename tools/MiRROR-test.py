@@ -1,10 +1,8 @@
 from _tool_init import mirror, timed_op, argparse
 import numpy as np
-import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
-import matplotlib.pyplot as plt
-from copy import deepcopy
-from tabulate import tabulate
+from pathlib import Path
+import uuid
 
 def draw_graph(graph, title, gap_key):
     graph.remove_node(-1)
@@ -41,6 +39,8 @@ ARG_NAMES = [
     "boundary_padding",
     "gap_key",
     "verbosity",
+    "output_dir",
+    "session_id",
 ]
 ARG_TYPES = [
     str,
@@ -56,6 +56,8 @@ ARG_TYPES = [
     int,
     str,
     int,
+    str,
+    str,
 ]
 ARG_DEFAULTS = [
     None,
@@ -71,6 +73,8 @@ ARG_DEFAULTS = [
     mirror.util.BOUNDARY_PADDING,
     mirror.spectrum_graphs.GAP_KEY,
     0,
+    "./data/output/",
+    str(uuid.uuid4())[:8]
 ]
 
 def get_parser():
@@ -121,11 +125,7 @@ def main(args):
     printer(f"\ttryptic_peptides:\n\t{tryptic_peptides}\n", 1)
     tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
 
-    times = np.zeros(len(mirror.TestSpectrum.run_sequence()))
-    sizes = np.zeros(len(mirror.TestSpectrum.run_sequence()), dtype=int )
-    # pipeline
-    optimal_scores = []
-    optimal_candidates = []
+    test_record = mirror.TestRecord(args.session_id)
     for peptide_idx, true_sequence in enumerate(tryptic_peptides):
         peaks = mirror.util.simulate_peaks(true_sequence)
         printer(f"mz\n\t{peaks}", 2)
@@ -156,37 +156,22 @@ def main(args):
             occurrence_threshold = args.occurrence_threshold
         )
 
-        tvec = test_spectrum.times_as_vec()
-        svec = test_spectrum.sizes_as_vec()
-        times += tvec
-        sizes += svec
-        best_score, best_cand = test_spectrum.optimize()
-        optimal_scores.append(best_score)
-        optimal_candidates.append(best_cand)
+        test_record.add(test_spectrum)
 
-    # print match statistics
-    num_matches = sum(x == 0 for x in optimal_scores)
-    n = len(optimal_candidates)
-    print(f"\nmatch rate\n\t= {num_matches} / {n}\n\t= {100 * num_matches / n}%\n")
-    # print miss statistics
-    miss_scores = [x for x in optimal_scores if x != 0]
-    if num_matches < n:
-        mirror.util.plot_hist(miss_scores, "miss distance distribution")
-    # print timing statistics
-    pct_times = list((100 * times / times.sum()).round(2))
-    pct_sum = sum(pct_times)
-    raw_times = list(times.round(4))
-    step_sizes = list(sizes)
-    step_names = mirror.TestSpectrum.step_names()
-    table = [
-        ["step name", *step_names, "total"],
-        ["size", *step_sizes, ""],
-        ["time", *raw_times, round(sum(raw_times), 4)],
-        ["time (pct)", *pct_times, f"100 (err: {round(pct_sum - 100, 4)})"],]
-    print(f"\ntiming:\n{tabulate(table)}")
+    test_record.finalize()
+    
+    test_record.print_summary()
+    test_record.print_miss_distances()
+    test_record.print_complexity_table()
+
+    output_dir = Path(args.output_dir)
+    test_record.save_misses(output_dir / "misses/")
+    test_record.save_crashes(output_dir / "crashes/")
+    test_record.save_temporal_outliers(output_dir / "temporal_outliers/")
+    test_record.save_spatial_outliers(output_dir / "spatial_outliers/")
 
 if __name__ == "__main__":
     args = get_parser().parse_args()
     for (k,v) in vars(args).items():
-        print(f"{k} : {v}")
+        print(f"{k} {v}")
     main(args)

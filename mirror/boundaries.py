@@ -129,11 +129,6 @@ class Boundary:
         "Augments the peak array by restricting to the boundary index range and adding symmetric boundary conditions."
         return self._augmented_spectrum
     
-    def get_offset(self):
-        """The integer by which pivot index values are offset to match the augmented peak array:
-        for each i in pivot.indices(), original_spectrum[i] = augmented_spectrum[i + offset]."""
-        return self._offset
-    
     def get_augmented_pivot(self):
         """The pivot created by translating its pivot set by the offset value, so that the
         mz values relative to the augmented peaks are the same."""
@@ -143,6 +138,14 @@ class Boundary:
         """Finds all gaps in the augmented peaks, collecting and collapsing GapResult objects 
         into a flat list of integer 2-tuples."""
         return self._augmented_gaps
+    
+    def __eq__(self, other):
+        if isinstance(other, Boundary):
+            return (
+            (self.get_boundary_indices() == other.get_boundary_indices()) and 
+            (self.get_boundary_values() == other.get_boundary_values()) and 
+            (self.get_residues() == other.get_residues()))
+        return False
     
     def __repr__(self):
         return f"""Boundary(
