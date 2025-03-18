@@ -121,11 +121,7 @@ def main(args):
     printer(f"\ttryptic_peptides:\n\t{tryptic_peptides}\n", 1)
     tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
 
-    times = np.zeros(len(mirror.TestSpectrum.run_sequence()))
-    sizes = np.zeros(len(mirror.TestSpectrum.run_sequence()), dtype=int )
-    # pipeline
-    optimal_scores = []
-    optimal_candidates = []
+    test_record = mirror.TestRecord()
     for peptide_idx, true_sequence in enumerate(tryptic_peptides):
         peaks = mirror.util.simulate_peaks(true_sequence)
         printer(f"mz\n\t{peaks}", 2)
@@ -156,34 +152,13 @@ def main(args):
             occurrence_threshold = args.occurrence_threshold
         )
 
-        tvec = test_spectrum.times_as_vec()
-        svec = test_spectrum.sizes_as_vec()
-        times += tvec
-        sizes += svec
-        best_score, best_cand = test_spectrum.optimize()
-        optimal_scores.append(best_score)
-        optimal_candidates.append(best_cand)
+        test_record.add(test_spectrum)
 
-    # print match statistics
-    num_matches = sum(x == 0 for x in optimal_scores)
-    n = len(optimal_candidates)
-    print(f"\nmatch rate\n\t= {num_matches} / {n}\n\t= {100 * num_matches / n}%\n")
-    # print miss statistics
-    miss_scores = [x for x in optimal_scores if x != 0]
-    if num_matches < n:
-        mirror.util.plot_hist(miss_scores, "miss distance distribution")
-    # print timing statistics
-    pct_times = list((100 * times / times.sum()).round(2))
-    pct_sum = sum(pct_times)
-    raw_times = list(times.round(4))
-    step_sizes = list(sizes)
-    step_names = mirror.TestSpectrum.step_names()
-    table = [
-        ["step name", *step_names, "total"],
-        ["size", *step_sizes, ""],
-        ["time", *raw_times, round(sum(raw_times), 4)],
-        ["time (pct)", *pct_times, f"100 (err: {round(pct_sum - 100, 4)})"],]
-    print(f"\ntiming:\n{tabulate(table)}")
+    test_record.finalize()
+    
+    test_record.print_summary()
+    test_record.print_miss_distances()
+    test_record.print_complexity_table()
 
 if __name__ == "__main__":
     args = get_parser().parse_args()

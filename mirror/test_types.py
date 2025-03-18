@@ -7,6 +7,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 from scipy.stats import zscore
+from tabulate import tabulate
 
 from . import *
 
@@ -305,12 +306,12 @@ class TestSpectrum:
     def __len__(self):
         return len(self._indices)
     
-    def __getitem__(self, _i: OutputIndex) -> Candidate:
+    def __getitem__(self, _i: int) -> Candidate:
         i = self._indices[_i]
         return self._candidates[i.pivot_index][i.boundary_index][i.affixes_index][i.candidate_index]
     
     def __iter__(self) -> list[Candidate]:
-        return (self[i] for i in self._indices)
+        return (self[i] for i in range(len(self)))
     
     def _optimize(self):
         if self._n_indices > 0:
@@ -326,7 +327,7 @@ class TestSpectrum:
     
     def optimize(self) -> tuple[int, Candidate]:
         if self._n_indices == 0:
-            return 2 * len(self.peptide()), None
+            return np.inf, None
         elif self._n_indices > 0:
             if self._optimum == None:
                 self._optimize()
@@ -371,35 +372,39 @@ class TestRecord:
     def __len__(self):
         return self._n
 
-    def add_test_spectrum(self, ts: TestSpectrum):
-        self._test_spectra.append(ts)
-        self._times.append(ts.times_as_vec())
-        self._sizes.append(ts.sizes_as_vec())
-        optimum, optimizer = ts.optimize()
-        self._optima.append(optimum)
-        self._optimizers.append(optimizer)
-        self._n += 1
+    def add(self, ts: TestSpectrum):
+        if not self._finalized:
+            self._test_spectra.append(ts)
+            self._times.append(ts.times_as_vec())
+            self._sizes.append(ts.sizes_as_vec())
+            optimum, optimizer = ts.optimize()
+            self._optima.append(optimum)
+            self._optimizers.append(optimizer)
+            self._n += 1
+        else:
+            raise ValueError("this method cannot be run after `finalize(`")
 
     def finalize(self):
-        # convert to numpy arrays
-        self._test_spectra = np.array(self._test_spectra)
+        # convert to numpy arrays=
+        self._test_spectra = np.array(self._test_spectra, dtype=TestSpectrum)
         self._times = np.vstack(self._times)
         self._sizes = np.vstack(self._sizes)
         self._optimizers = np.array(self._optimizers)
         self._optima = np.array(self._optima)
         # construct masks for each class of TestSpectrum 
-        matches = self._optima == 0
-        misses = self._optima > 0
-        crashes = self._optima == -1
-        time_outliers = np.absolute(zscore(self._times.sum(axis = 1))) > 2
-        size_outliers = np.absolute(zscore(self._sizes.sum(axis = 1))) > 2
+        self._matches_mask = self._optima == 0
+        self._misses_mask = self._optima > 0
+        self._crashes_mask = self._optima == -1
+        self._time_outliers_mask = np.absolute(zscore(self._times.sum(axis = 1))) > 2
+        self._size_outliers_mask = np.absolute(zscore(self._sizes.sum(axis = 1))) > 2
+        self._size_outliers_mask = self._size_outliers_mask & ~self._time_outliers_mask
         # store indices for class membership
         ind = np.arange(self._n)
-        self._matches = ind[matches]
-        self._misses = ind[misses]
-        self._crashes = ind[crashes]
-        self._time_outliers = ind[time_outliers]
-        self._size_outliers = ind[size_outliers]
+        self._matches = ind[self._matches_mask]
+        self._misses = ind[self._misses_mask]
+        self._crashes = ind[self._crashes_mask]
+        self._time_outliers = ind[self._time_outliers_mask]
+        self._size_outliers = ind[self._size_outliers_mask]
 
         self._finalized = True
 
@@ -432,3 +437,57 @@ class TestRecord:
             return list(self._test_spectra[self._size_outliers])
         else:
             raise ValueError("this method must be run after `finalize(`")
+
+    def print_summary(self):
+        n = len(self)
+        n_matches = len(self.get_matches())
+        n_misses = len(self.get_misses())
+        n_crashes = len(self.get_crashes())
+        n_time_outliers = len(self.get_time_outliers())
+        n_size_outliers = len(self.get_size_outliers())
+        print(f"\nsummary:\n>total\n\t{n}\n>matches\n\t{n_matches} ({n_matches / n})\n>misses\n\t{n_misses} ({n_misses / n})\n>crashes\n\t{n_crashes} ({n_crashes / n})\n>temporal outliers\n\t{n_time_outliers} ({n_time_outliers / n})\n>spatial outliers (without temporal outliers)\n\t{n_size_outliers} ({n_size_outliers / n})\n")
+    
+    def print_miss_distances(self):
+        miss_scores = self._optima[self._misses]
+        if len(miss_scores) > 0:
+            util.plot_hist(miss_scores, "miss distance distribution")
+        else:
+            print()
+
+    def _construct_complexity_table(self, mask):
+        times = self._times[mask].sum(axis = 0)
+        sizes = self._sizes[mask].sum(axis = 0)
+        pct_times = list((100 * times / times.sum()).round(2))
+        pct_sum = sum(pct_times)
+        raw_times = list(times.round(4))
+        step_sizes = list(sizes)
+        step_names = TestSpectrum.step_names()
+        table = [
+            ["step name", *step_names, "total"],
+            ["size", *step_sizes, sum(step_sizes)],
+            ["time", *raw_times, round(sum(raw_times), 4)],
+            ["time (pct)", *pct_times, f"100 (err: {round(pct_sum - 100, 4)})"],]
+        return tabulate(table)
+
+    def print_complexity_table(self):
+        #times = self._times[~self._outlier_mask].sum(axis = 0)
+        #sizes = self._sizes[~self._outlier_mask].sum(axis = 0)
+        #pct_times = list((100 * times / times.sum()).round(2))
+        #pct_sum = sum(pct_times)
+        #raw_times = list(times.round(4))
+        #step_sizes = list(sizes)
+        #step_names = TestSpectrum.step_names()
+        #table = [
+        #    ["step name", *step_names, "total"],
+        #    ["size", *step_sizes, ""],
+        #    ["time", *raw_times, round(sum(raw_times), 4)],
+        #    ["time (pct)", *pct_times, f"100 (err: {round(pct_sum - 100, 4)})"],]
+        time_mask = self._time_outliers_mask
+        size_mask = self._size_outliers_mask
+        normal_mask = ~(time_mask | size_mask)
+        normal_complexity_table = self._construct_complexity_table(normal_mask)
+        temporal_outlier_table = self._construct_complexity_table(time_mask)
+        spatial_outlier_table = self._construct_complexity_table(size_mask)
+        print(f"\ncomplexity (without outliers):\n{normal_complexity_table}")
+        print(f"complexity (temporal outliers):\n{temporal_outlier_table}")
+        print(f"complexity (spatial outliers without temporal outliers):\n{spatial_outlier_table}")

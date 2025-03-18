@@ -15,4 +15,4 @@ from .spectrum_graphs import create_spectrum_graph_pair
 from .affixes import Affix, create_affix, find_affix_pairs, SuffixArray, filter_affixes
 from .candidates import Candidate, create_candidates, filter_candidate_sequences
 
-from .test_types import TestSpectrum
+from .test_types import TestSpectrum, TestRecord

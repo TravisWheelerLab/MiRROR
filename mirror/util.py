@@ -86,26 +86,36 @@ def plot_hist(x: list[int], header: str = None, width = 60):
     
     :x: a list of integers.
     :width: the maximum width of the histogram, in characters. Defaults to 60."""
-    left = min(x)
-    right = max(x)
-    vals = list(range(left, right + 1))
-    counts = [0 for _ in range(left, right + 1)]
-    for pt in x:
-        counts[pt - left] += 1
-    
-    lo = min(counts)
-    hi = max(counts)
-    rng = hi - lo + 1
+    n_inf = len([v for v in x if v == np.inf])
+    x = [int(v) for v in x if v != np.inf]
+
     print('=' * (width + 20))
     if header != None:
         print(header)
         print('-' * (width + 20))
-    for i in range(len(counts)):
-        frac = (counts[i] - lo) / rng
-        bars = int(width * frac)
-        if counts[i] > 0:
-            bars = max(bars, 1)
-        print(f"{vals[i]}\t|" + "o" * bars + f"  ({counts[i]})")
+    if len(x) > 0:
+        left = min(x)
+        right = max(x)
+        vals = list(range(left, right + 1))
+        counts = [0 for _ in range(left, right + 1)]
+        for pt in x:
+            counts[pt - left] += 1
+        
+        lo = min(counts)
+        hi = max(n_inf, max(counts))
+        rng = hi - lo + 1
+        for i in range(len(counts)):
+            frac = (counts[i] - lo) / rng
+            bars = int(width * frac)
+            if counts[i] > 0:
+                bars = max(bars, 1)
+            print(f"{vals[i]}\t|" + "o" * bars + f"  ({counts[i]})")
+        if n_inf > 0:
+            inf_frac = (n_inf - lo) / rng
+            inf_bars = max(int(width * inf_frac), 1)
+            print(f"\t|\n∞\t|" + "o" * inf_bars + f"  ({n_inf})")
+    else:
+        print(f"∞\t|" + "o" * (width // 2) + f"  ({n_inf})")
     print('=' * (width + 20))
 
 def comma_separated(items):
