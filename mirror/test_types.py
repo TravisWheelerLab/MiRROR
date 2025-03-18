@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import pickle
 from types import NoneType
 from time import time
+from pathlib import Path
 
 import networkx as nx
 import numpy as np
@@ -360,7 +361,8 @@ class TestSpectrum:
 
 class TestRecord:
 
-    def __init__(self):
+    def __init__(self, identifier: str):
+        self._id = identifier
         self._test_spectra = []
         self._times = []
         self._sizes = []
@@ -426,25 +428,45 @@ class TestRecord:
         else:
             raise ValueError("this method must be run after `finalize(`")
 
-    def get_time_outliers(self):
+    def get_temporal_outliers(self):
         if self._finalized:
             return list(self._test_spectra[self._time_outliers])
         else:
             raise ValueError("this method must be run after `finalize(`")
 
-    def get_size_outliers(self):
+    def get_spatial_outliers(self):
         if self._finalized:
             return list(self._test_spectra[self._size_outliers])
         else:
             raise ValueError("this method must be run after `finalize(`")
+    
+    def save_matches(self, output_dir):
+        self._save_test_spectra(output_dir, "matches", self.get_matches())
+    
+    def save_misses(self, output_dir):
+        self._save_test_spectra(output_dir, "misses", self.get_misses())
+
+    def save_crashes(self, output_dir):
+        self._save_test_spectra(output_dir, "crashes", self.get_crashes())
+
+    def save_temporal_outliers(self, output_dir):
+        self._save_test_spectra(output_dir, "temporal-outliers", self.get_temporal_outliers())
+
+    def save_spatial_outliers(self, output_dir):
+        self._save_test_spectra(output_dir, "spatial-outliers", self.get_spatial_outliers())
+
+    def _save_test_spectra(self, output_dir: Path, tag: str, test_spectra: list[TestSpectrum]):
+        for (i, test_spectrum) in enumerate(test_spectra):
+            output_path = output_dir / f"{self._id}_{tag}_{i}.ts"
+            test_spectrum.write(output_path)
 
     def print_summary(self):
         n = len(self)
         n_matches = len(self.get_matches())
         n_misses = len(self.get_misses())
         n_crashes = len(self.get_crashes())
-        n_time_outliers = len(self.get_time_outliers())
-        n_size_outliers = len(self.get_size_outliers())
+        n_time_outliers = len(self.get_temporal_outliers())
+        n_size_outliers = len(self.get_spatial_outliers())
         print(f"\nsummary:\n>total\n\t{n}\n>matches\n\t{n_matches} ({n_matches / n})\n>misses\n\t{n_misses} ({n_misses / n})\n>crashes\n\t{n_crashes} ({n_crashes / n})\n>temporal outliers\n\t{n_time_outliers} ({n_time_outliers / n})\n>spatial outliers (without temporal outliers)\n\t{n_size_outliers} ({n_size_outliers / n})\n")
     
     def print_miss_distances(self):

@@ -1,10 +1,8 @@
 from _tool_init import mirror, timed_op, argparse
 import numpy as np
-import networkx as nx
 from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
-import matplotlib.pyplot as plt
-from copy import deepcopy
-from tabulate import tabulate
+from pathlib import Path
+import uuid
 
 def draw_graph(graph, title, gap_key):
     graph.remove_node(-1)
@@ -41,6 +39,8 @@ ARG_NAMES = [
     "boundary_padding",
     "gap_key",
     "verbosity",
+    "output_dir",
+    "session_id",
 ]
 ARG_TYPES = [
     str,
@@ -56,6 +56,8 @@ ARG_TYPES = [
     int,
     str,
     int,
+    str,
+    str,
 ]
 ARG_DEFAULTS = [
     None,
@@ -71,6 +73,8 @@ ARG_DEFAULTS = [
     mirror.util.BOUNDARY_PADDING,
     mirror.spectrum_graphs.GAP_KEY,
     0,
+    "./data/output/",
+    str(uuid.uuid4())[:8]
 ]
 
 def get_parser():
@@ -121,7 +125,7 @@ def main(args):
     printer(f"\ttryptic_peptides:\n\t{tryptic_peptides}\n", 1)
     tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
 
-    test_record = mirror.TestRecord()
+    test_record = mirror.TestRecord(args.session_id)
     for peptide_idx, true_sequence in enumerate(tryptic_peptides):
         peaks = mirror.util.simulate_peaks(true_sequence)
         printer(f"mz\n\t{peaks}", 2)
@@ -160,8 +164,14 @@ def main(args):
     test_record.print_miss_distances()
     test_record.print_complexity_table()
 
+    output_dir = Path(args.output_dir)
+    test_record.save_misses(output_dir / "misses/")
+    test_record.save_crashes(output_dir / "crashes/")
+    test_record.save_temporal_outliers(output_dir / "temporal_outliers/")
+    test_record.save_spatial_outliers(output_dir / "spatial_outliers/")
+
 if __name__ == "__main__":
     args = get_parser().parse_args()
     for (k,v) in vars(args).items():
-        print(f"{k} : {v}")
+        print(f"{k} {v}")
     main(args)
