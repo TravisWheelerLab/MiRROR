@@ -138,3 +138,28 @@ def draw_graph_ascii(graph: nx.DiGraph, label, output_dir = Path("./data/output/
     # read and return the ascii string
     with open(plot_path, 'r') as f:
         return f.read()
+
+def draw_graph_pair_ascii(graph_pair: GraphPair):
+    labels = (".asc", ".desc")
+    asc_ascii, desc_ascii = [draw_graph_ascii(g, l) for (g, l) in zip(graph_pair, labels)]
+    asc_lines = asc_ascii.split('\n')
+    asc_max = max([len(l) for l in asc_lines])
+    desc_lines = desc_ascii.split('\n')
+    desc_max = max([len(l) for l in desc_lines])
+    max_lines = max(len(asc_lines), len(desc_lines))
+    for lines in (asc_lines, desc_lines):
+        for i in range(max_lines - len(lines)):
+            lines.append("")
+    return '\n'.join([f"{asc_line.ljust(asc_max)}\t{desc_line.ljust(desc_max)}" for (asc_line, desc_line) in zip(asc_lines, desc_lines)])
+
+def _test_graph_pair_ascii():
+    g = nx.DiGraph()
+    g.add_edge(1,2)
+    g.add_edge(2,3)
+    g.add_edge(1,3)
+    h = nx.DiGraph()
+    h.add_edge(-1,-2)
+    h.add_edge(-2,-3)
+    h.add_edge(-3,-4)
+    h.add_edge(-1,-4)
+    print(draw_graph_pair_ascii((g,h)))
