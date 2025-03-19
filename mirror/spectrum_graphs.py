@@ -107,3 +107,34 @@ def create_spectrum_graph_pair(
     )
     
     return (asc_graph, desc_graph)
+
+#=============================================================================#
+import subprocess
+from pathlib import Path
+
+import networkx as nx
+import graphviz as gvz
+
+def _draw_graph(graph, title, gap_key):
+    graph.remove_node(-1)
+    graph.graph['graph'] = {'rankdir':'LR'}
+    graph.graph['node'] = {'shape':'circle'}
+    graph.graph['edges'] = {'arrowsize':'4.0'}
+    A = to_agraph(graph)
+    for (i,j) in graph.edges:
+        truncated_weight = round(graph[i][j][gap_key],4)
+        res = mirror.util.residue_lookup(truncated_weight)
+        A.get_edge(i,j).attr['label'] = f"{res} [ {str(truncated_weight)} ]" 
+    A.layout('dot')
+    A.draw(title)
+
+def draw_graph_ascii(graph: nx.DiGraph, label, output_dir = Path("./data/output/plots/")):
+    # create the graph .dot file
+    dot_path = output_dir / f"{label}.dot"
+    nx.drawing.nx_pydot.write_dot(graph, dot_path)
+    # render the graph ascii with graph-easy
+    plot_path = output_dir / f"{label}.txt"
+    subprocess.run(["graph-easy", dot_path, plot_path])
+    # read and return the ascii string
+    with open(plot_path, 'r') as f:
+        return f.read()
