@@ -46,7 +46,7 @@ class TestSpectrum:
     # an array of affixes for each spectrum graph pair.
     _affixes: list[list[npt.NDArray[Affix]]] = None
     # a spectrum graph pair for each boundary.
-    _graph_pairs: list[list[tuple[nx.DiGraph,nx.DiGraph]]] = None
+    _spectrum_graphs: list[list[tuple[nx.DiGraph,nx.DiGraph]]] = None
     # an augmented spectrum, pivot, gap indices, and boundary peak indices for each boundary.
     _augmented_data: list[list[tuple[np.ndarray,Pivot,list[tuple[int,int]],list[int]]]] = None
     # a list of boundaries for each pivot.
@@ -107,7 +107,7 @@ class TestSpectrum:
             self._pivots, 
             self._boundaries, 
             self._augmented_data, 
-            self._graph_pairs, 
+            self._spectrum_graphs, 
             self._affixes, 
             self._affix_pairs]
 
@@ -407,7 +407,7 @@ class TestSpectrum:
     def read(cls, filepath):
         with open(filepath, 'rb') as handle:
             ts = cls._read(handle)
-            ts.load_suffix_array()
+            #ts.load_suffix_array()
             return ts
 
     def _write(self, handle):

@@ -1,21 +1,7 @@
 from _tool_init import mirror, timed_op, argparse
 import numpy as np
-from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
 from pathlib import Path
 import uuid
-
-def draw_graph(graph, title, gap_key):
-    graph.remove_node(-1)
-    graph.graph['graph'] = {'rankdir':'LR'}
-    graph.graph['node'] = {'shape':'circle'}
-    graph.graph['edges'] = {'arrowsize':'4.0'}
-    A = to_agraph(graph)
-    for (i,j) in graph.edges:
-        truncated_weight = round(graph[i][j][gap_key],4)
-        res = mirror.util.residue_lookup(truncated_weight)
-        A.get_edge(i,j).attr['label'] = f"{res} [ {str(truncated_weight)} ]" 
-    A.layout('dot')
-    A.draw(title)
 
 PROG = "𝕄 iℝ ℝ 𝕆 ℝ - test\n"
 DESC = """the test system for MiRROR;
