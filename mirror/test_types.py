@@ -32,8 +32,8 @@ class TestSpectrum:
     terminal_residues: list[str]
     boundary_padding: int
     gap_key: str
-    suffix_array_file: str
     occurrence_threshold: int
+    suffix_array: SuffixArray
 
     # test params:
     autorun: bool = True
@@ -347,18 +347,18 @@ class TestSpectrum:
         return sum(sum(self.n_affixes[i]) for i in range(self.n_pivots))
     
     def run_affixes_filter(self):
-        self._check_state("_pivots", "_boundaries", "_affixes", "_suffix_array")
-        self._unfilteredn_affixes = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
-        for p_idx in range(self.n_pivots):
-            for b_idx in range(self.n_boundaries[p_idx]):
-                self._unfilteredn_affixes[p_idx][b_idx] = self.n_affixes[p_idx][b_idx]
-                self._affixes[p_idx][b_idx] = filter_affixes(
-                    self._affixes[p_idx][b_idx], 
-                    self._suffix_array, 
-                    self.occurrence_threshold)
-                self.n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
-                #print(f"unfiltered {self._unfilteredn_affixes[p_idx][b_idx]} → filtered {self.n_affixes[p_idx][b_idx]}")
-        #print(self.n_affixes)
+        if self.suffix_array != None:
+            self._check_state("_pivots", "_boundaries", "_affixes")
+            self.n_unfiltered_affixes = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
+            #flat_affixes = []
+            for p_idx in range(self.n_pivots):
+                for b_idx in range(self.n_boundaries[p_idx]):
+                    self.n_unfiltered_affixes[p_idx][b_idx] = self.n_affixes[p_idx][b_idx]
+                    self._affixes[p_idx][b_idx] = filter_affixes(
+                        self._affixes[p_idx][b_idx], 
+                        self.suffix_array, 
+                        self.occurrence_threshold)
+                    self.n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
         return sum(sum(self.n_affixes[i]) for i in range(self.n_pivots))
 
     def run_affixes_pair(self):
@@ -411,28 +411,28 @@ class TestSpectrum:
         self.n_indices = len(self._indices)
         return self.n_indices
 
-    def load_suffix_array(self):
-        self._suffix_array = SuffixArray.read(self.suffix_array_file)
+    def set_suffix_array(self, suffix_array: SuffixArray):
+        self.suffix_array = suffix_array
     
-    def unload_suffix_array(self):
-        self._suffix_array = None
+    def delete_suffix_array(self):
+        self.suffix_array = None
 
     @classmethod
     def _read(cls, handle):
         return pickle.load(handle)
     
     @classmethod
-    def read(cls, filepath):
-        with open(filepath, 'rb') as handle:
+    def read(cls, ts_file, suffix_array_file = None):
+        with open(ts_file, 'rb') as handle:
             ts = cls._read(handle)
-            #ts.load_suffix_array()
-            return ts
+            if suffix_array_file != None:
+                ts.set_suffix_array(SuffixArray.read(suffix_array_file))
 
     def _write(self, handle):
         pickle.dump(self, handle)
 
     def write(self, filepath):
-        self.unload_suffix_array()
+        self.delete_suffix_array()
         self.autorun = False
         with open(filepath, 'wb') as handle:
             self._write(handle)
@@ -441,7 +441,6 @@ class TestSpectrum:
         # setup
         self._edit_distances = None
         self._optimizer = None
-        self.load_suffix_array()
         # construct candidates
         if self.autorun:
             self.run()

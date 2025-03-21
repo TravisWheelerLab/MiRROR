@@ -22,7 +22,7 @@ class SuffixArray:
         self._path = path_to_suffix_array
 
     @classmethod
-    def _builder_args(cls, path_to_fasta: str, path_to_suffix_array: str = None):
+    def _builder_args(cls, path_to_fasta: str, path_to_suffix_array: str = None, low_memory = False):
         if path_to_suffix_array == None:
             # if an output path wasn't passed, name the suffix array file after the fasta file.
             fasta_stem = pathlib.Path(path_to_fasta).stem
@@ -37,12 +37,14 @@ class SuffixArray:
             path_to_suffix_array,
             sequence_file_data.start_positions(),
             sequence_file_data.sequence_names(),
-            is_dna = False)
+            is_dna = False,
+            low_memory = low_memory,
+        )
         return sufr_builder_args, path_to_suffix_array
 
     @classmethod
-    def write(cls, path_to_fasta: str, path_to_suffix_array: str = None):
-        sufr_builder_args, path_to_suffix_array = cls._builder_args(path_to_fasta, path_to_suffix_array)
+    def write(cls, path_to_fasta: str, path_to_suffix_array: str = None, low_memory = False):
+        sufr_builder_args, path_to_suffix_array = cls._builder_args(path_to_fasta, path_to_suffix_array, low_memory = low_memory)
         return SufrSuffixArray.write(sufr_builder_args)
 
     @classmethod
@@ -53,10 +55,10 @@ class SuffixArray:
             path_to_suffix_array)
 
     @classmethod
-    def create(cls, path_to_fasta: str, path_to_suffix_array: str = None):
+    def create(cls, path_to_fasta: str, path_to_suffix_array: str = None, low_memory = False):
         """Create a suffix array from fasta records. 
         If no output path is given, the suffix array file will be named after the input fasta file."""
-        sufr_builder_args, path_to_suffix_array = cls._builder_args(path_to_fasta, path_to_suffix_array)
+        sufr_builder_args, path_to_suffix_array = cls._builder_args(path_to_fasta, path_to_suffix_array, low_memory = low_memory)
         return cls(
             SufrSuffixArray(sufr_builder_args),
             path_to_suffix_array)

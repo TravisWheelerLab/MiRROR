@@ -93,9 +93,11 @@ def main(args):
     
     # prepare suffix array
     if args.suffix_array_path == None:
+        suffix_array = None
+    if args.suffix_array_path == "::auto":
         temp_fasta_file = "_temp.fa"
         mirror.save_strings_as_fasta(temp_fasta_file, sequences)
-        args.suffix_array_path = mirror.SuffixArray.write(temp_fasta_file)
+        suffix_array = mirror.SuffixArray.create(temp_fasta_file)
 
     # create gap parameters
     if args.gap_params == "simple":
@@ -138,7 +140,8 @@ def main(args):
             terminal_residues = args.terminal_residues,
             boundary_padding = args.boundary_padding,
             gap_key = args.gap_key,
-            suffix_array_file = args.suffix_array_path,
+            #suffix_array = None,
+            suffix_array = suffix_array,
             occurrence_threshold = args.occurrence_threshold
         )
 
