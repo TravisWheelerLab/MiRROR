@@ -107,42 +107,6 @@ class TestSpectrum:
         else:
             self._edit_distances = np.inf
             self._optimizer = -1
-    
-    @classmethod
-    def run_sequence(cls):
-        RUN_SEQUENCE = [
-            ("gaps", cls.run_gaps),
-            ("y-term", cls.run_y_terminii),
-            ("pivots", cls.run_pivots),
-            ("boundaries", cls.run_boundaries),
-            ("augment", cls.run_augment),
-            ("topology", cls.run_spectrum_graphs),
-            ("affix", cls.run_affixes),
-            ("afx-filter", cls.run_affixes_filter),
-            ("afx-pair", cls.run_affixes_pair),
-            ("candidates", cls.run_candidates),
-            ("index", cls.run_indices),
-        ]
-        return RUN_SEQUENCE
-
-    @classmethod
-    def step_names(cls):
-        names, _ = zip(*cls.run_sequence())
-        return names
-
-    def run(self):
-        """Generate candidates, associated data structures, and output traces."""
-        self._size = dict()
-        self._time = dict()
-        for (tag, fn) in self.run_sequence():
-            try:
-                self._record_complexity(tag, fn, self)
-            except Exception as e:
-                print(f"[Warning] step {tag} crashed:\n{e}")
-                self.n_indices = -1
-                self._crash = [tag]
-                break
-        self._ran = True
 
     def get_peptide(self):
         return ''.join(self.residue_sequence)
@@ -345,12 +309,11 @@ class TestSpectrum:
                 self._affixes[p_idx][b_idx] = affixes
                 self.n_affixes[p_idx][b_idx] = len(affixes)
         return sum(sum(self.n_affixes[i]) for i in range(self.n_pivots))
-    
-    def run_affixes_filter(self):
+
+    """def run_affixes_filter(self):
         if self.suffix_array != None:
             self._check_state("_pivots", "_boundaries", "_affixes")
             self.n_unfiltered_affixes = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
-            #flat_affixes = []
             for p_idx in range(self.n_pivots):
                 for b_idx in range(self.n_boundaries[p_idx]):
                     self.n_unfiltered_affixes[p_idx][b_idx] = self.n_affixes[p_idx][b_idx]
@@ -358,6 +321,23 @@ class TestSpectrum:
                         self._affixes[p_idx][b_idx], 
                         self.suffix_array, 
                         self.occurrence_threshold)
+                    self.n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
+        return sum(sum(self.n_affixes[i]) for i in range(self.n_pivots))"""
+    
+    def run_affixes_filter(self):
+        if self.suffix_array != None:
+            self._check_state("_pivots", "_boundaries", "_affixes")
+            self.n_unfiltered_affixes = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
+
+            flat_affixes, index = util.recursive_collapse(self._affixes)
+            mask = mask_nonoccurring_affixes(flat_affixes, self.suffix_array, self.occurrence_threshold)
+            structured_mask = util.recursive_uncollapse(mask, index)
+
+            for p_idx in range(self.n_pivots):
+                for b_idx in range(self.n_boundaries[p_idx]):
+                    self.n_unfiltered_affixes[p_idx][b_idx] = self.n_affixes[p_idx][b_idx]
+                    local_mask = structured_mask[p_idx][b_idx]
+                    self._affixes[p_idx][b_idx] = self._affixes[p_idx][b_idx][local_mask]
                     self.n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
         return sum(sum(self.n_affixes[i]) for i in range(self.n_pivots))
 
@@ -410,6 +390,42 @@ class TestSpectrum:
                         ))
         self.n_indices = len(self._indices)
         return self.n_indices
+    
+    @classmethod
+    def run_sequence(cls):
+        RUN_SEQUENCE = [
+            ("gaps", cls.run_gaps),
+            ("y-term", cls.run_y_terminii),
+            ("pivots", cls.run_pivots),
+            ("boundaries", cls.run_boundaries),
+            ("augment", cls.run_augment),
+            ("topology", cls.run_spectrum_graphs),
+            ("affix", cls.run_affixes),
+            ("afx-filter", cls.run_affixes_filter),
+            ("afx-pair", cls.run_affixes_pair),
+            ("candidates", cls.run_candidates),
+            ("index", cls.run_indices),
+        ]
+        return RUN_SEQUENCE
+
+    @classmethod
+    def step_names(cls):
+        names, _ = zip(*cls.run_sequence())
+        return names
+
+    def run(self):
+        """Generate candidates, associated data structures, and output traces."""
+        self._size = dict()
+        self._time = dict()
+        for (tag, fn) in self.run_sequence():
+            try:
+                self._record_complexity(tag, fn, self)
+            except Exception as e:
+                print(f"[Warning] step {tag} crashed:\n{e}")
+                self.n_indices = -1
+                self._crash = [tag]
+                break
+        self._ran = True
 
     def set_suffix_array(self, suffix_array: SuffixArray):
         self.suffix_array = suffix_array

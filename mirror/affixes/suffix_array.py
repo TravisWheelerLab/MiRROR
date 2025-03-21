@@ -2,7 +2,7 @@ import uuid
 import pathlib
 
 from .affix_types import Affix
-from ..types import Iterator
+from ..types import Iterator, Iterable
 from ..util import mask_ambiguous_residues
 
 import numpy as np
@@ -85,19 +85,21 @@ def filter_affixes(
     :occurrence_threshold: int, any Affix with less than or equal to this value is filtered out. defaults to 0; any Affix that occurs in the suffix array is kept."""
     if len(affixes) == 0:
         return np.array([])
+    occurrence_mask = mask_nonoccurring_affixes(affixes, suffix_array, occurrence_threshold = occurrence_threshold)
+    return affixes[occurrence_mask]
+
+def mask_nonoccurring_affixes(
+    affixes: Iterable[Affix],
+    suffix_array: SuffixArray,
+    occurrence_threshold: int = 0,
+) -> np.ndarray:
+    if len(affixes) == 0:
+        return np.array([])
     # admits an affix as long as one of its translations occurs in the suffix array 
-    translations = np.array([afx.translate() for afx in affixes])
-    reverse_translations = np.array([afx.reverse_translate() for afx in affixes])
     calls = np.array([afx.call() for afx in affixes])
     rev_calls = np.array([afx.reverse_call() for afx in affixes])
     
-    asc_occ = np.array(suffix_array.count(translations[:, 0]))
-    desc_occ = np.array(suffix_array.count(translations[:, 1]))
     call_occ = np.array(suffix_array.count(calls))
-    
-    rev_asc_occ = np.array(suffix_array.count(reverse_translations[:, 0]))
-    rev_desc_occ = np.array(suffix_array.count(reverse_translations[:, 1]))
     rev_call_occ = np.array(suffix_array.count(rev_calls))
     
-    occurrence_mask = asc_occ + rev_asc_occ + desc_occ + rev_desc_occ + call_occ + rev_call_occ > 0
-    return affixes[occurrence_mask]
+    return (call_occ + rev_call_occ) > 0
