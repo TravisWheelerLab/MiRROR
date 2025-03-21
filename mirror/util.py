@@ -160,18 +160,15 @@ def _recursive_collapse(items, index, count):
 def recursive_collapse(items):
     return _recursive_collapse(items, [], -1)[:2]
 
-def _recursive_uncollapse(flat_items, index):
+def recursive_uncollapse(flat_items, index):
     if isinstance(index, Iterable):
         items = []
         for subindex in index:
-            new_item = _recursive_uncollapse(flat_items, subindex)
+            new_item = recursive_uncollapse(flat_items, subindex)
             items.append(new_item)
         return items
     else:
-        return flat_items[index]    
-
-def recursive_uncollapse(flat_items, index):
-    return _recursive_uncollapse(flat_items, index)
+        return flat_items[index]
 
 def test_collapse():
     x1 = 0
