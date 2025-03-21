@@ -1,5 +1,6 @@
 import itertools
 from enum import Enum
+from copy import deepcopy
 
 import networkx as nx
 
@@ -107,3 +108,67 @@ def create_spectrum_graph_pair(
     )
     
     return (asc_graph, desc_graph)
+
+#=============================================================================#
+import subprocess
+from pathlib import Path
+
+import graphviz as gvz
+import networkx as nx
+from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
+
+from .util import residue_lookup
+
+def _draw_graph(graph, gap_key = "gap"):
+    graph = deepcopy(graph)
+    graph.remove_node(-1)
+    #graph.graph['graph'] = {'rankdir':'LR'}
+    #graph.graph['node'] = {'shape':'circle'}
+    #graph.graph['edges'] = {'arrowsize':'4.0'}
+    A = to_agraph(graph)
+    for (i,j) in graph.edges:
+        truncated_weight = round(graph[i][j][gap_key],4)
+        res = residue_lookup(truncated_weight)
+        A.get_edge(i,j).attr['label'] = f"{res} [ {str(truncated_weight)} ]" 
+    return A
+
+def draw_graph_ascii(graph: nx.DiGraph, label, output_dir = Path("./data/output/plots/"), gap_key = "gap"):
+    # create agraph with node and edge weights
+    agraph = _draw_graph(graph, gap_key = gap_key)
+    # create the graph .dot file
+    dot_path = output_dir / f"{label}.dot"
+    agraph.layout('dot')
+    agraph.write(dot_path)
+    # render the graph ascii with graph-easy
+    plot_path = output_dir / f"{label}.txt"
+    subprocess.run(["graph-easy", dot_path, plot_path], stdout = subprocess.DEVNULL, stderr = subprocess.STDOUT)
+    # read and return the ascii string
+    with open(plot_path, 'r') as f:
+        return f.read()
+
+def draw_graph_pair_ascii(graph_pair: GraphPair, gap_key = "gap"):
+    labels = (".asc", ".desc")
+    asc_ascii, desc_ascii = [draw_graph_ascii(g, l, gap_key = gap_key) for (g, l) in zip(graph_pair, labels)]
+    asc_lines = asc_ascii.split('\n')
+    asc_max = max([len(l) for l in asc_lines])
+    desc_lines = desc_ascii.split('\n')
+    desc_max = max([len(l) for l in desc_lines])
+    max_lines = max(len(asc_lines), len(desc_lines))
+    for lines in (asc_lines, desc_lines):
+        for i in range(max_lines - len(lines)):
+            lines.append("")
+    graph_pair_ascii = '\n'.join([f"{asc_line.ljust(asc_max)}   {desc_line.ljust(desc_max)}" for (asc_line, desc_line) in zip(asc_lines, desc_lines)])
+    border = (' ' * (asc_max + desc_max + 5))
+    return '\n'.join([border, graph_pair_ascii, border])
+
+def _test_graph_pair_ascii():
+    g = nx.DiGraph()
+    g.add_edge(1,2)
+    g.add_edge(2,3)
+    g.add_edge(1,3)
+    h = nx.DiGraph()
+    h.add_edge(-1,-2)
+    h.add_edge(-2,-3)
+    h.add_edge(-3,-4)
+    h.add_edge(-1,-4)
+    print(draw_graph_pair_ascii((g,h)))

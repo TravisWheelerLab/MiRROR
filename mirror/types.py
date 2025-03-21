@@ -57,6 +57,9 @@ class OutputIndex:
     affixes_index: int
     candidate_index: int
 
+    def __call__(self):
+        return (self.pivot_index, self.boundary_index, self.affixes_index, self.candidate_index)
+
 @dataclass
 class RunParameters:
     gap_search_parameters: GapSearchParameters

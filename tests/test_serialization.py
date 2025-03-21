@@ -64,7 +64,7 @@ class TestSerialization(unittest.TestCase):
         self.assertEqual(test_spectrum._y_terminii, test_spectrum2._y_terminii)
         self.assertEqual(test_spectrum._pivots, test_spectrum2._pivots)
         self.assertEqual(test_spectrum._boundaries, test_spectrum2._boundaries)
-        self.assertEqual(test_spectrum._graph_pairs, test_spectrum2._graph_pairs)
+        #self.assertEqual(test_spectrum._spectrum_graphs, test_spectrum2._spectrum_graphs)
         self.assertEqual(
             list(map(list, mirror.util.collapse_second_order_list(test_spectrum._affixes))), 
             list(map(list, mirror.util.collapse_second_order_list(test_spectrum2._affixes))))

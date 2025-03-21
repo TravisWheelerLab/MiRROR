@@ -65,6 +65,9 @@ class Candidate:
             ' '.join(self._sequences[1])
         )
     
+    def call(self):
+        return self.sequences()[self.edit_distance()[1]]
+    
     def __eq__(self, other):
         if isinstance(other, Candidate):
             return (
