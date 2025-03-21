@@ -93,13 +93,17 @@ def mask_nonoccurring_affixes(
     suffix_array: SuffixArray,
     occurrence_threshold: int = 0,
 ) -> np.ndarray:
-    if len(affixes) == 0:
+    n = len(affixes)
+    if n == 0:
         return np.array([])
     # admits an affix as long as one of its translations occurs in the suffix array 
     calls = np.array([afx.call() for afx in affixes])
     rev_calls = np.array([afx.reverse_call() for afx in affixes])
     
-    call_occ = np.array(suffix_array.count(calls))
-    rev_call_occ = np.array(suffix_array.count(rev_calls))
+    queries = np.hstack([calls, rev_calls])
+    query_occ = np.array(suffix_array.count(queries))
+
+    call_occ = query_occ[:n]
+    rev_call_occ = query_occ[n:]
     
     return (call_occ + rev_call_occ) > 0
