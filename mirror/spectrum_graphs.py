@@ -141,7 +141,7 @@ def draw_graph_ascii(graph: nx.DiGraph, label, output_dir = Path("./data/output/
     agraph.write(dot_path)
     # render the graph ascii with graph-easy
     plot_path = output_dir / f"{label}.txt"
-    subprocess.run(["graph-easy", dot_path, plot_path])
+    subprocess.run(["graph-easy", dot_path, plot_path], stdout = subprocess.DEVNULL, stderr = subprocess.STDOUT)
     # read and return the ascii string
     with open(plot_path, 'r') as f:
         return f.read()
@@ -157,9 +157,9 @@ def draw_graph_pair_ascii(graph_pair: GraphPair, gap_key = "gap"):
     for lines in (asc_lines, desc_lines):
         for i in range(max_lines - len(lines)):
             lines.append("")
-    graph_pair_ascii = '\n'.join([f"{asc_line.ljust(asc_max)} | {desc_line.ljust(desc_max)}" for (asc_line, desc_line) in zip(asc_lines, desc_lines)])
-    border = ('-' * (asc_max + 1)) + '+' + ('-' * (desc_max + 1))
-    return '\n'.join([border, graph_pair_ascii])
+    graph_pair_ascii = '\n'.join([f"{asc_line.ljust(asc_max)}   {desc_line.ljust(desc_max)}" for (asc_line, desc_line) in zip(asc_lines, desc_lines)])
+    border = (' ' * (asc_max + desc_max + 5))
+    return '\n'.join([border, graph_pair_ascii, border])
 
 def _test_graph_pair_ascii():
     g = nx.DiGraph()
