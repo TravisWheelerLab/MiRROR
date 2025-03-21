@@ -144,6 +144,47 @@ def collapse_second_order_list(llist: list[list]):
     :llist: a second-order iterable."""
     return list(itertools.chain.from_iterable(llist))
 
+def _recursive_collapse(items, index, count):
+    if isinstance(items, Iterable):
+        new_items = []
+        new_index = []
+        for x in items:
+            new_x, new_i, count = _recursive_collapse(x, index, count)
+            new_items.append(new_x)
+            new_index.append(new_i)
+        return collapse_second_order_list(new_items), new_index, count
+    else:
+        count += 1
+        return [items], count, count
+
+def recursive_collapse(items):
+    return _recursive_collapse(items, [], -1)[:2]
+
+def _recursive_uncollapse(flat_items, index):
+    if isinstance(index, Iterable):
+        items = []
+        for subindex in index:
+            new_item = _recursive_uncollapse(flat_items, subindex)
+            items.append(new_item)
+        return items
+    else:
+        return flat_items[index]    
+
+def recursive_uncollapse(flat_items, index):
+    return _recursive_uncollapse(flat_items, index)
+
+def test_collapse():
+    x1 = 0
+    x2 = [0,1,2,3,4,5]
+    x3 = [[0,1],[2,3,4],[5]]
+    x4 = [[[0,1],[2]],[[3,4],[5]]]
+    X = [x1,x2,x3,x4]
+    for x in X:
+        flat_x, index = recursive_collapse(x)
+        new_x = recursive_uncollapse(flat_x, index)
+        print(f"{x} ↦ {flat_x} ↦ {new_x}\n")
+        assert x == new_x
+
 def log(message, prefix=""):
     print(prefix + f"⚙\t{message}")
 
