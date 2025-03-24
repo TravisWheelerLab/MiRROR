@@ -57,8 +57,8 @@ class OutputIndex:
     affixes_index: int
     candidate_index: int
 
-    def __call__(self):
-        return (self.pivot_index, self.boundary_index, self.affixes_index, self.candidate_index)
+    def __iter__(self):
+        return iter((self.pivot_index, self.boundary_index, self.affixes_index, self.candidate_index))
 
 @dataclass
 class RunParameters:

@@ -53,7 +53,41 @@ def main(args):
     while mode != "exit":
         mode = input("modes:\n\t'outputs' (default): print each candidate and its output stack.\n\t'iteration': prints each data structure in run-order.\n\t'topology': print ASCII representations for spectrum graph pairs.\n\t'exit': close the inspector.\n\n> ")
         if mode == "iteration":
-            pass
+            for p in range(test_spectrum.n_pivots):
+                print(p)
+                print(test_spectrum.get_pivot(p))
+                if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
+                    continue
+                for b in range(test_spectrum.n_boundaries[p]):
+                    print(p, b)
+                    print(test_spectrum.get_boundary(p, b))
+                    aug_spectrum, aug_pivot, aug_gaps, boundary_peaks = test_spectrum.get_augmented_data(p, b)
+                    print(aug_spectrum)
+                    print(aug_pivot)
+                    print(aug_gaps)
+                    print(boundary_peaks)
+                    print(mirror.spectrum_graphs.draw_graph_pair(test_spectrum.get_spectrum_graph_pair(p, b), "simple"))
+                    if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
+                        continue
+                    affixes = test_spectrum.get_affixes(p, b)
+                    for a in range(test_spectrum.n_affix_pairs[p][b]):
+                        afx1, afx2 = affixes[test_spectrum.get_affix_pair(p, b, a)]
+                        print(p, b, a)
+                        print(afx1)
+                        print(afx2)
+                        if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
+                            continue
+                        for c in range(test_spectrum.n_candidates[p][b][a]):
+                            print(p, b, a, c)
+                            cand = test_spectrum.get_candidate((p, b, a, c)) 
+                            distance, optimizer = cand.edit_distance(target_peptide)
+                            best_seq = ''.join(cand.sequences()[optimizer].split(' '))
+                            print(cand)
+                            print("Optimal Call:")
+                            print(distance, best_seq)
+                            if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
+                                continue
+                        
         elif mode == "" or mode == "outputs":
             outputs = list(enumerate(test_spectrum))
             outputs.sort(key = lambda x: test_spectrum._edit_distances[x[0]])

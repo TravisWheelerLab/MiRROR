@@ -140,8 +140,8 @@ class TestSpectrum:
     def get_affix_pair(self, p: int, b: int, a: int):
         return self._affix_pairs[p][b][a]
 
-    def get_candidate(self, index: OutputIndex):
-        p, b, a, c = index()
+    def get_candidate(self, index):
+        p, b, a, c = index
         return self._candidates[p][b][a][c]
     
     def get_output_stack(self, index: OutputIndex
@@ -154,7 +154,8 @@ class TestSpectrum:
         tuple[int, int], 
         Candidate
     ]:
-        p, b, a, c = index()
+        p, b, a, c = index
+        print(p,b,a,c)
         return (
             self.get_pivot(p),
             self.get_boundary(p, b),
