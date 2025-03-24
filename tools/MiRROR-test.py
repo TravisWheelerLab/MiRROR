@@ -27,6 +27,7 @@ ARG_NAMES = [
     "verbosity",
     "output_dir",
     "session_id",
+    "write_matches",
 ]
 ARG_TYPES = [
     str,
@@ -44,6 +45,7 @@ ARG_TYPES = [
     int,
     str,
     str,
+    bool,
 ]
 ARG_DEFAULTS = [
     None,
@@ -60,7 +62,8 @@ ARG_DEFAULTS = [
     mirror.spectrum_graphs.GAP_KEY,
     0,
     "./data/output/",
-    str(uuid.uuid4())[:8]
+    str(uuid.uuid4())[:8],
+    False,
 ]
 
 def get_parser():
@@ -158,6 +161,8 @@ def main(args):
     test_record.save_crashes(output_dir / "crashes/")
     test_record.save_temporal_outliers(output_dir / "temporal_outliers/")
     test_record.save_spatial_outliers(output_dir / "spatial_outliers/")
+    if args.write_matches:
+        test_record.save_matches(output_dir / "matches/")
 
 if __name__ == "__main__":
     args = get_parser().parse_args()
