@@ -280,28 +280,13 @@ def find_gaps(
             bins[match_residue].append(match)
         else:
             bins['X'].append(match)
-    # create 'annotated' peaks, subsetting dup_mz and restoring i<j order.
-#    annotated_mask = np.zeros_like(dup_mz, dtype = bool)
-#    annotated_idx = []
-#    for residue in residues + ['X']:
-#        for match in bins[residue]:
-#            for i in match.inner_index:
-#                annotated_mask[i] = True
-#                annotated_idx.append(i)
-#    annotated_idx = sorted(set(annotated_idx))
-#    annotated_idx = np.array(annotated_idx)
-#    annotated_peaks = dup_mz[annotated_mask]
-#    idx_position = np.full_like(dup_mz, -1, dtype=int)
-#    idx_position[annotated_mask] = np.arange(annotated_idx.size)
+    # 
     for residue in residues + ['X']:
         for match in bins[residue]:
             i, j = match.inner_index
-#            match.index_pair = (idx_position[i], idx_position[j])
             assert dup_mz[j] - dup_mz[i] > 0 
             match.index_pair = match.inner_index
     # construct GapResult objects
-#    return annotated_peaks, [GapResult(bins[residue]) for residue in residues + ['X']]
-
     return dup_mz, [GapResult(bins[residue]) for residue in residues + ['X']]
 
 def _find_gaps_tensor(

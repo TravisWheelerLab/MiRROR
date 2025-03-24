@@ -237,7 +237,7 @@ def _weighted_dual_simple_edge_paths(
             edge_itx = [((g_e[0], h_e[0]), (g_e[1], h_e[1])) 
                 for (g_e, g_w) in zip(g_edges, g_weights) 
                 for (h_e, h_w) in zip(h_edges, h_weights)
-                if weight_metric(g_w, h_w)]
+                if weight_metric(g_w, h_w, g_e, h_e)]
             stack.append(iter(edge_itx))
 
 #=============================================================================#

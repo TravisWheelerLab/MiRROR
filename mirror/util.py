@@ -75,6 +75,28 @@ def residue_lookup(
 #=============================================================================#
 # misc utilities
 
+def horizontal_panes(a_repr: str, b_repr: str):
+    a_lines = a_repr.split('\n')
+    b_lines = b_repr.split('\n')
+    
+    # vertically pad line lists
+    max_num_lines = max(len(a_lines), len(b_lines))
+    for lines in (a_lines, b_lines):
+        for i in range(max_num_lines - len(lines) - 1):
+            lines.append("")
+
+    # horizontally pad (ljust) each line
+    max_line_len = lambda L: max([len(l) for l in L])
+    a_max = max_line_len(a_lines)
+    b_max = max_line_len(b_lines)
+    graph_pair_aii = '\n'.join([f"[ {a_line.ljust(a_max)}  ][ {b_line.ljust(b_max)}  ]" for (a_line, b_line) in zip(a_lines, b_lines)])
+    
+    # render borders
+    make_border = lambda n: '[' + ('=' * (n + 3)) + ']'
+    border = make_border(a_max) + make_border(b_max)
+    
+    return '\n'.join([border, graph_pair_aii, border])
+
 def get_respectful_printer(args):
     def print_respectfully(msg, verbosity_level, arg_verbosity = args.verbosity):
         if arg_verbosity >= verbosity_level:

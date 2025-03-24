@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import networkx as nx
 
-from .util import GAP_TOLERANCE, INTERGAP_TOLERANCE
+from .util import horizontal_panes, GAP_TOLERANCE, INTERGAP_TOLERANCE
 from .pivots import Pivot
 from .graph_utils import *
 
@@ -13,8 +13,14 @@ from .graph_utils import *
 GAP_KEY = "gap"
 
 # todo - update for new gap annotations
-GAP_COMPARATOR = lambda x,y: (abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)
+GAP_COMPARATOR = lambda x,y,i,j: _compare_gaps(x, y, i, j) #(abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)
 
+def _compare_gaps(x, y, i, j):
+    is_eq = (abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)
+    #if is_eq:
+    #    print((i, x), "→", (j, y))
+    return is_eq
+    
 class SpectrumGraphOrientation(Enum):
     ASCENDING = 1
     DESCENDING = 2
@@ -119,7 +125,17 @@ from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
 
 from .util import residue_lookup
 
-def _draw_graph(graph, gap_key = "gap"):
+def draw_graph_simple(graph: nx.DiGraph, gap_key = "gap"):
+    graph = deepcopy(graph)
+    graph.remove_node(-1)
+    graph_repr = []
+    for (i, j) in graph.edges:
+        truncated_weight = round(graph[i][j][gap_key],4)
+        res = residue_lookup(truncated_weight)
+        graph_repr.append(f"{i} → {j} : res = {res}, mass = {truncated_weight}")
+    return '\n'.join(graph_repr)
+
+def _construct_agraph(graph: nx.DiGraph, gap_key = "gap"):
     graph = deepcopy(graph)
     graph.remove_node(-1)
     #graph.graph['graph'] = {'rankdir':'LR'}
@@ -129,12 +145,12 @@ def _draw_graph(graph, gap_key = "gap"):
     for (i,j) in graph.edges:
         truncated_weight = round(graph[i][j][gap_key],4)
         res = residue_lookup(truncated_weight)
-        A.get_edge(i,j).attr['label'] = f"{res} [ {str(truncated_weight)} ]" 
+        A.get_edge(i,j).attr['label'] = f"{j} {res} {str(truncated_weight)}" 
     return A
 
 def draw_graph_ascii(graph: nx.DiGraph, label, output_dir = Path("./data/output/plots/"), gap_key = "gap"):
     # create agraph with node and edge weights
-    agraph = _draw_graph(graph, gap_key = gap_key)
+    agraph = _construct_agraph(graph, gap_key = gap_key)
     # create the graph .dot file
     dot_path = output_dir / f"{label}.dot"
     agraph.layout('dot')
@@ -146,21 +162,17 @@ def draw_graph_ascii(graph: nx.DiGraph, label, output_dir = Path("./data/output/
     with open(plot_path, 'r') as f:
         return f.read()
 
-def draw_graph_pair_ascii(graph_pair: GraphPair, gap_key = "gap"):
+def draw_graph_pair(graph_pair: GraphPair, mode: str, gap_key = "gap"):
     labels = (".asc", ".desc")
-    asc_ascii, desc_ascii = [draw_graph_ascii(g, l, gap_key = gap_key) for (g, l) in zip(graph_pair, labels)]
-    asc_lines = asc_ascii.split('\n')
-    asc_max = max([len(l) for l in asc_lines])
-    desc_lines = desc_ascii.split('\n')
-    desc_max = max([len(l) for l in desc_lines])
-    max_lines = max(len(asc_lines), len(desc_lines))
-    for lines in (asc_lines, desc_lines):
-        for i in range(max_lines - len(lines)):
-            lines.append("")
-    graph_pair_ascii = '\n'.join([f"{asc_line.ljust(asc_max)}   {desc_line.ljust(desc_max)}" for (asc_line, desc_line) in zip(asc_lines, desc_lines)])
-    border = (' ' * (asc_max + desc_max + 5))
-    return '\n'.join([border, graph_pair_ascii, border])
-
+    if mode == "ascii":
+        asc_repr, desc_repr = [draw_graph_ascii(g, l, gap_key = gap_key) for (g, l) in zip(graph_pair, labels)]
+    else:
+        if mode != "simple":
+            print(f"Warning: unrecognized graph drawing mode {mode}; defaulting to 'simple'.")
+        asc_repr, desc_repr = [draw_graph_simple(g, gap_key = gap_key) for (g, l) in zip(graph_pair, labels)]
+    
+    return horizontal_panes(asc_repr, desc_repr)
+    
 def _test_graph_pair_ascii():
     g = nx.DiGraph()
     g.add_edge(1,2)

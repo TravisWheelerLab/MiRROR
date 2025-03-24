@@ -12,6 +12,8 @@ from tabulate import tabulate
 
 from . import *
 
+#=============================================================================#
+
 @dataclass
 class TestSpectrum:
     # true/target data:
@@ -300,7 +302,7 @@ class TestSpectrum:
         for p_idx in range(self.n_pivots):
             for b_idx in range(self.n_boundaries[p_idx]):
                 graph_pair = self._spectrum_graphs[p_idx][b_idx]
-                gap_comparator = lambda x, y: (abs(x - y) < self.intergap_tolerance) and (x != -1) and (y != -1)
+                gap_comparator = GAP_COMPARATOR
                 dual_paths = find_dual_paths(
                     *graph_pair,
                     self.gap_key,
@@ -310,20 +312,6 @@ class TestSpectrum:
                 self.n_affixes[p_idx][b_idx] = len(affixes)
         return sum(sum(self.n_affixes[i]) for i in range(self.n_pivots))
 
-    """def run_affixes_filter(self):
-        if self.suffix_array != None:
-            self._check_state("_pivots", "_boundaries", "_affixes")
-            self.n_unfiltered_affixes = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
-            for p_idx in range(self.n_pivots):
-                for b_idx in range(self.n_boundaries[p_idx]):
-                    self.n_unfiltered_affixes[p_idx][b_idx] = self.n_affixes[p_idx][b_idx]
-                    self._affixes[p_idx][b_idx] = filter_affixes(
-                        self._affixes[p_idx][b_idx], 
-                        self.suffix_array, 
-                        self.occurrence_threshold)
-                    self.n_affixes[p_idx][b_idx] = len(self._affixes[p_idx][b_idx])
-        return sum(sum(self.n_affixes[i]) for i in range(self.n_pivots))"""
-    
     def run_affixes_filter(self):
         if self.suffix_array != None:
             self._check_state("_pivots", "_boundaries", "_affixes")
@@ -443,6 +431,7 @@ class TestSpectrum:
             ts = cls._read(handle)
             if suffix_array_file != None:
                 ts.set_suffix_array(SuffixArray.read(suffix_array_file))
+            return ts
 
     def _write(self, handle):
         pickle.dump(self, handle)
@@ -462,6 +451,8 @@ class TestSpectrum:
             self.run()
         # compare to target
         self._optimize()
+
+#=============================================================================#
 
 class TestRecord:
 
