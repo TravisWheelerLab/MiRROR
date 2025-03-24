@@ -83,8 +83,8 @@ class TestSpectrum:
     def __len__(self):
         return len(self._indices)
     
-    def __getitem__(self, i: int) -> OutputIndex:
-        return self._indices[i]
+    #def __getitem__(self, i: int) -> OutputIndex:
+    #    return self._indices[i]
     
     def __iter__(self) -> list[OutputIndex]:
         return iter(self._indices)
@@ -489,7 +489,7 @@ class TestRecord:
             raise ValueError("this method cannot be run after `finalize(`")
 
     def finalize(self):
-        # convert to numpy arrays=
+        # convert to numpy arrays
         self._test_spectra = np.array(self._test_spectra, dtype=TestSpectrum)
         self._times = np.vstack(self._times)
         self._sizes = np.vstack(self._sizes)
