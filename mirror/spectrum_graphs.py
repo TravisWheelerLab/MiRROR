@@ -72,12 +72,9 @@ def _create_half_graph_from_gaps(
                 half_graph.remove_edge(j, i)
     
     for i in pivot.indices():
-        print(i)
         if (i in half_graph):
             outbound_edges = list(half_graph.out_edges(i))
-            print(outbound_edges)
             for (_, j) in outbound_edges:
-                print('\t',j)
                 half_graph.remove_edge(i, j)
     
     for i in list(half_graph.nodes):
