@@ -414,6 +414,7 @@ class TestSpectrum:
                 self.n_indices = -1
                 self._crash = [tag]
                 break
+        self._optimize()
         self._ran = True
 
     def set_suffix_array(self, suffix_array: SuffixArray):

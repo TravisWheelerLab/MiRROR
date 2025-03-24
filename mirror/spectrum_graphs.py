@@ -65,15 +65,24 @@ def _create_half_graph_from_gaps(
         half_graph.add_edge(i, j)
         half_graph[i][j][gap_key] = v
     
-    for i in list(half_graph.nodes):
-        half_graph.add_edge(i, -1)
-        half_graph[i][-1][gap_key] = -1
-    
     for i in boundaries:
         if (i in half_graph):
             inbound_edges = list(half_graph.in_edges(i))
             for (j, _) in inbound_edges:
                 half_graph.remove_edge(j, i)
+    
+    for i in pivot.indices():
+        print(i)
+        if (i in half_graph):
+            outbound_edges = list(half_graph.out_edges(i))
+            print(outbound_edges)
+            for (_, j) in outbound_edges:
+                print('\t',j)
+                half_graph.remove_edge(i, j)
+    
+    for i in list(half_graph.nodes):
+        half_graph.add_edge(i, -1)
+        half_graph[i][-1][gap_key] = -1
     
     return half_graph
 
