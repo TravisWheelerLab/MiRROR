@@ -13,7 +13,7 @@ from .graph_utils import *
 GAP_KEY = "gap"
 
 # todo - update for new gap annotations
-GAP_COMPARATOR = lambda x,y,i,j: _compare_gaps(x, y, i, j) #(abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)
+GAP_COMPARATOR = lambda x,y,i,j: (abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)
 
 def _compare_gaps(x, y, i, j):
     is_eq = (abs(x - y) < INTERGAP_TOLERANCE) and (x != -1) and (y != -1)

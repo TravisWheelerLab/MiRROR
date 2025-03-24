@@ -82,7 +82,7 @@ def horizontal_panes(a_repr: str, b_repr: str):
     # vertically pad line lists
     max_num_lines = max(len(a_lines), len(b_lines))
     for lines in (a_lines, b_lines):
-        for i in range(max_num_lines - len(lines) - 1):
+        for i in range(max_num_lines - len(lines)):
             lines.append("")
 
     # horizontally pad (ljust) each line

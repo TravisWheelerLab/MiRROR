@@ -51,15 +51,17 @@ def main(args):
     
     mode = ""
     while mode != "exit":
-        mode = input("modes:\n\t'outputs' (default): print each candidate and its output stack.\n\t'iteration': prints each data structure in run-order.\n\t'topology': print ASCII representations for spectrum graph pairs.\n\t'exit': close the inspector.\n\n> ")
-        if mode == "iteration":
+        mode = input("modes:\n\t'outputs' (default): print each candidate and its output stack.\n\t'iterate': prints each data structure in run-order.\n\t'topology': print representations for spectrum graph pairs.\n\t'exit': close the inspector.\n\n> ")
+        if mode == "iterate":
+            np = test_spectrum.n_pivots - 1
             for p in range(test_spectrum.n_pivots):
-                print(p)
+                print(f"({p} / {np})")
                 print(test_spectrum.get_pivot(p))
                 if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
                     continue
+                nb = test_spectrum.n_boundaries[p] - 1
                 for b in range(test_spectrum.n_boundaries[p]):
-                    print(p, b)
+                    print(f"[{p} ({b} / {nb})]")
                     print(test_spectrum.get_boundary(p, b))
                     aug_spectrum, aug_pivot, aug_gaps, boundary_peaks = test_spectrum.get_augmented_data(p, b)
                     print(aug_spectrum)
@@ -70,15 +72,17 @@ def main(args):
                     if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
                         continue
                     affixes = test_spectrum.get_affixes(p, b)
+                    na = test_spectrum.n_affix_pairs[p][b] - 1
                     for a in range(test_spectrum.n_affix_pairs[p][b]):
                         afx1, afx2 = affixes[test_spectrum.get_affix_pair(p, b, a)]
-                        print(p, b, a)
+                        print(f"[{p} {b} ({a} / {na})]")
                         print(afx1)
                         print(afx2)
                         if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
                             continue
+                        nc = test_spectrum.n_candidates[p][b][a] - 1
                         for c in range(test_spectrum.n_candidates[p][b][a]):
-                            print(p, b, a, c)
+                            print(f"[{p} {b} {a} ({c} / {nc})]")
                             cand = test_spectrum.get_candidate((p, b, a, c)) 
                             distance, optimizer = cand.edit_distance(target_peptide)
                             best_seq = ''.join(cand.sequences()[optimizer].split(' '))
@@ -87,7 +91,6 @@ def main(args):
                             print(distance, best_seq)
                             if input("press enter to descend, enter anything else to skip to the next item at this level.") != "":
                                 continue
-                        
         elif mode == "" or mode == "outputs":
             outputs = list(enumerate(test_spectrum))
             outputs.sort(key = lambda x: test_spectrum._edit_distances[x[0]])
@@ -130,7 +133,7 @@ def main(args):
             for p in range(test_spectrum.n_pivots):
                 for b in range(test_spectrum.n_boundaries[p]):
                     graph_pair = test_spectrum.get_spectrum_graph_pair(p, b)
-                    graph_repr = mirror.spectrum_graphs.draw_graph_pair(graph_pair, mode = "ascii")
+                    graph_repr = mirror.spectrum_graphs.draw_graph_pair(graph_pair, mode = "simple")
                     input(graph_repr)
 
 if __name__ == "__main__":
