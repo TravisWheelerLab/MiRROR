@@ -440,7 +440,7 @@ def find_initial_b_ion(
     # starting at the pivot, scan the upper half of the spectrum
     return _generate_extremal_ions(
         spectrum, 
-        range(hi - 1, -1, -1), 
+        range(hi - 1, lo, -1), 
         _get_b_ion_transform(center),
     )
 

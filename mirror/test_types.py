@@ -413,6 +413,7 @@ class TestSpectrum:
                 print(f"[Warning] step {tag} crashed:\n{e}")
                 self.n_indices = -1
                 self._crash = [tag]
+                raise e
                 break
         self._optimize()
         self._ran = True

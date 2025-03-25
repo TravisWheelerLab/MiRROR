@@ -26,7 +26,11 @@ def _create_augmented_spectrum_and_pivot(
     
     # augment the spectrum
     n = len(spectrum)
-    subspectrum = spectrum[max(0, y_idx - padding):min(n - 1, b_idx + padding + 1)]
+    pivot_lo = min(pivot.indices())
+    pivot_hi = max(pivot.indices())
+    bound_lo = max(0, y_idx - padding)
+    bound_hi = min(n - 1, b_idx + padding + 1)
+    subspectrum = spectrum[min(pivot_lo, bound_lo): max(pivot_hi, bound_hi)]
     augmented_spectrum = SortedList(subspectrum)
     boundaries = []
     for val in [b_mz, y_mz]:
@@ -44,7 +48,6 @@ def _create_augmented_spectrum_and_pivot(
                 boundaries.append(aug_peak)
             else:
                 boundaries.append(closest_peak)
-
     # shift the pivot
     peak_pairs = pivot.peak_pairs()
     shifted_index_pairs = [(augmented_spectrum.index(mz1), augmented_spectrum.index(mz2)) for (mz1, mz2) in peak_pairs]
