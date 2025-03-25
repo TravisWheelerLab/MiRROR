@@ -28,6 +28,7 @@ ARG_NAMES = [
     "output_dir",
     "session_id",
     "write_matches",
+    "simulation_mode"
 ]
 ARG_TYPES = [
     str,
@@ -46,6 +47,7 @@ ARG_TYPES = [
     str,
     str,
     bool,
+    str,
 ]
 ARG_DEFAULTS = [
     None,
@@ -64,6 +66,7 @@ ARG_DEFAULTS = [
     "./data/output/",
     str(uuid.uuid4())[:8],
     False,
+    "simple",
 ]
 
 def get_parser():
@@ -95,12 +98,14 @@ def main(args):
         tryptic_peptides = mirror.util.enumerate_tryptic_peptides(sequences)
     
     # prepare suffix array
-    if args.suffix_array_path == None:
+    if args.suffix_array_path == None or args.suffix_array_path == "None":
         suffix_array = None
-    if args.suffix_array_path == "::auto":
+    elif args.suffix_array_path == "::auto":
         temp_fasta_file = "_temp.fa"
         mirror.save_strings_as_fasta(temp_fasta_file, sequences)
         suffix_array = mirror.SuffixArray.create(temp_fasta_file)
+    else:
+        suffix_array = mirror.SuffixArray.read(args.suffix_array_path)
 
     # create gap parameters
     if args.gap_params == "simple":
@@ -112,13 +117,19 @@ def main(args):
     printer(f"alphabet:", 2)
     for (res, grp) in zip(gap_params.residues, gap_params.masses):
         printer(f"{res}: {grp}", 2)
+    
+    # parametize peak simulator
+    if args.simulation_mode == "simple":
+        simulation_param = mirror.util.DEFAULT_PARAM
+    elif args.simulation_mode == "complex":
+        simulation_param = mirror.util.ADVANCED_PARAM
 
     printer(f"\ttryptic_peptides:\n\t{tryptic_peptides}\n", 1)
     tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
 
     test_record = mirror.TestRecord(args.session_id)
     for peptide_idx, true_sequence in enumerate(tryptic_peptides):
-        peaks = mirror.util.simulate_peaks(true_sequence)
+        peaks = mirror.util.simulate_peaks(true_sequence, param = simulation_param)
         printer(f"mz\n\t{peaks}", 2)
         
         residue_seq = np.array([r for r in true_sequence])
@@ -143,7 +154,6 @@ def main(args):
             terminal_residues = args.terminal_residues,
             boundary_padding = args.boundary_padding,
             gap_key = args.gap_key,
-            #suffix_array = None,
             suffix_array = suffix_array,
             occurrence_threshold = args.occurrence_threshold
         )
