@@ -48,10 +48,10 @@ class SuffixArray:
         return SufrSuffixArray.write(sufr_builder_args)
 
     @classmethod
-    def read(cls, path_to_suffix_array: str):
+    def read(cls, path_to_suffix_array: str, low_memory = False):
         """Read a suffix array from its file."""
         return cls(
-            SufrSuffixArray.read(path_to_suffix_array),
+            SufrSuffixArray.read(path_to_suffix_array, low_memory),
             path_to_suffix_array)
 
     @classmethod
