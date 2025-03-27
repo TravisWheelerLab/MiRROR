@@ -296,10 +296,10 @@ class TestSpectrum:
                 )
         return sum(asc.size() + desc.size() for (asc, desc) in self._spectrum_graphs[p_idx] for p_idx in range(self.n_pivots))
     
-    def run_affixes(self):
+    def run_dual_paths(self):
         self._check_state("_pivots", "_boundaries", "_spectrum_graphs", "gap_key")
-        self._affixes = [[None  for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
-        self.n_affixes = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
+        self._dual_paths = [[None  for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
+        self.n_dual_paths = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
         for p_idx in range(self.n_pivots):
             for b_idx in range(self.n_boundaries[p_idx]):
                 graph_pair = self._spectrum_graphs[p_idx][b_idx]
@@ -308,6 +308,18 @@ class TestSpectrum:
                     *graph_pair,
                     self.gap_key,
                     gap_comparator)
+                self._dual_paths[p_idx][b_idx] = dual_paths
+                self.n_dual_paths[p_idx][b_idx] = len(dual_paths)
+        return sum(sum(self.n_dual_paths[i]) for i in range(self.n_pivots))
+
+    def run_affixes(self):
+        self._check_state("_pivots", "_boundaries", "_spectrum_graphs", "_dual_paths")
+        self._affixes = [[None  for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
+        self.n_affixes = [[-1 for _ in range(self.n_boundaries[p_idx])] for p_idx in range(self.n_pivots)]
+        for p_idx in range(self.n_pivots):
+            for b_idx in range(self.n_boundaries[p_idx]):
+                dual_paths = self._dual_paths[p_idx][b_idx]
+                graph_pair = self._spectrum_graphs[p_idx][b_idx]
                 affixes = np.array([create_affix(dp, graph_pair) for dp in dual_paths])
                 self._affixes[p_idx][b_idx] = affixes
                 self.n_affixes[p_idx][b_idx] = len(affixes)
@@ -389,8 +401,9 @@ class TestSpectrum:
             ("boundaries", cls.run_boundaries),
             ("augment", cls.run_augment),
             ("topology", cls.run_spectrum_graphs),
+            ("pathspace", cls.run_dual_paths),
             ("affix", cls.run_affixes),
-            ("afx-filter", cls.run_affixes_filter),
+        #    ("afx-filter", cls.run_affixes_filter),
             ("afx-pair", cls.run_affixes_pair),
             ("candidates", cls.run_candidates),
             ("index", cls.run_indices),
