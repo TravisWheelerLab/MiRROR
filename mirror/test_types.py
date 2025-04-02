@@ -105,7 +105,7 @@ class TestSpectrum:
         t = time()
         self._size[tag] = fn(*args, **kwargs)
         self._time[tag] = time() - t
-        print(tag, self._size[tag])
+        #print(tag, self._size[tag])
 
     def _optimize(self):
         if self.n_indices > 0:
@@ -162,7 +162,6 @@ class TestSpectrum:
         Candidate
     ]:
         p, b, a, c = index
-        print(p,b,a,c)
         return (
             self.get_pivot(p),
             self.get_augmented_data(p, b),
@@ -293,7 +292,6 @@ class TestSpectrum:
         for p_idx in range(self.n_pivot_clusters):
             center, pivot_indices = self._pivot_clusters[p_idx]
             pivots = [self._pivots[pivot_idx] for pivot_idx in pivot_indices]
-            print(self.gap_search_parameters)
             augmented_data = list(create_augmented_data(
                 self._annotated_peaks,
                 self._y_terminii,
@@ -381,23 +379,22 @@ class TestSpectrum:
         self._check_state("_pivots", "_augmented_data", "_affixes", "_affix_pairs")
         self._candidates = [[[None for _ in range(self.n_affix_pairs[p_idx][b_idx])] for b_idx in range(self.n_augmented_data[p_idx])] for p_idx in range(self.n_pivot_clusters)]
         self.n_candidates = [[[-1 for _ in range(self.n_affix_pairs[p_idx][b_idx])] for b_idx in range(self.n_augmented_data[p_idx])] for p_idx in range(self.n_pivot_clusters)]
-        for p_idx, (_, pivot_indices) in enumerate(self._pivot_clusters):
-            for pivot_idx in pivot_indices:
-                pivot_residue = self._pivots[pivot_idx].residue()
-                for b_idx, augmented_data in enumerate(self._augmented_data[p_idx]):
-                    boundary_residues = augmented_data.get_boundary_residues()
-                    augmented_peaks = augmented_data.spectrum
-                    graph_pair = self._spectrum_graphs[p_idx][b_idx]
-                    affixes = self._affixes[p_idx][b_idx]
-                    for a_idx, affix_pair in enumerate(self._affix_pairs[p_idx][b_idx]):
-                        self._candidates[p_idx][b_idx][a_idx] = create_candidates(
-                            augmented_peaks,
-                            graph_pair,
-                            affixes[affix_pair],
-                            boundary_residues,
-                            pivot_residue
-                        )
-                        self.n_candidates[p_idx][b_idx][a_idx] = len(self._candidates[p_idx][b_idx][a_idx])
+        for p_idx in range(self.n_pivot_clusters):
+            for b_idx, augmented_data in enumerate(self._augmented_data[p_idx]):
+                boundary_residues = augmented_data.get_boundary_residues()
+                augmented_peaks = augmented_data.spectrum
+                pivot_residue = augmented_data.pivot.residue()
+                graph_pair = self._spectrum_graphs[p_idx][b_idx]
+                affixes = self._affixes[p_idx][b_idx]
+                for a_idx, affix_pair in enumerate(self._affix_pairs[p_idx][b_idx]):
+                    self._candidates[p_idx][b_idx][a_idx] = create_candidates(
+                        augmented_peaks,
+                        graph_pair,
+                        affixes[affix_pair],
+                        boundary_residues,
+                        pivot_residue
+                    )
+                    self.n_candidates[p_idx][b_idx][a_idx] = len(self._candidates[p_idx][b_idx][a_idx])
         return sum(sum(self.n_candidates[p][b]) for p in range(self.n_pivot_clusters) for b in range(self.n_augmented_data[p]))
    
     def run_indices(self):
@@ -452,6 +449,7 @@ class TestSpectrum:
                 self.n_indices = -1
                 self._crash = [tag]
                 if self.crash:
+                    print("peptide", self.get_peptide())
                     raise e
                 else:
                     break

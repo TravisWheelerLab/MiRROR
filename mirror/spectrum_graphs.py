@@ -97,7 +97,6 @@ def create_spectrum_graph_pair(
     :gap_indices: a list of integer 2-tuples which index into `spectrum`.
     :pivot: a Pivot object indexing into `spectrum`.
     :gap_key: the key to retrieve edge weights from the spectrum graph pair."""
-    print(f"spectrum\n\t{augmented_data.spectrum}\ngaps\n\t{augmented_data.gaps}")
     # build the descending graph on the lower half of the spectrum
     desc_graph = _create_half_graph_from_gaps(
         augmented_data.spectrum,

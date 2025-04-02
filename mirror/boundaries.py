@@ -31,7 +31,6 @@ def create_augmented_spectrum(
     y_mz = spectrum[y_idx]
     b_mz = spectrum[b_idx]
     augmented_spectrum = SortedList(spectrum[bound_lo: bound_hi])
-    #print("peak window", augmented_spectrum)
     boundary_values = []
     boundary_indices = []
     boundary_residues = []
@@ -41,8 +40,6 @@ def create_augmented_spectrum(
         for query_peak in [boundary_peak, reflected_peak]:
             left_idx = augmented_spectrum.bisect_left(query_peak - tolerance)
             right_idx = augmented_spectrum.bisect_right(query_peak + tolerance)
-            #print("query", query_peak)
-            #print("bisect", (left_idx, right_idx))
             # determine whether the mirrored peak exists in the spectrum
             min_dif = np.inf
             closest_peak = (None, None)
@@ -64,7 +61,6 @@ def create_augmented_spectrum(
     # re-index boundary peaks
     for peak in boundary_values:
         idx = augmented_spectrum.index(peak)
-        #print("boundary:", peak, idx)
         boundary_indices.append(idx)
 
     return augmented_spectrum, boundary_values, boundary_indices, boundary_residues
@@ -87,7 +83,6 @@ def create_augmented_gaps(
     augmented_gaps = collapse_second_order_list(r.get_index_pairs() for r in augmented_gap_results)
     augmented_gaps = list(set(augmented_gaps))
     augmented_gaps.sort(key = lambda x: x[0] + x[1] / 1000)
-    print(f"\taugmented_spectrum {augmented_spectrum}\naugmented_gaps {augmented_gaps}")
     return augmented_gaps
 
 #=============================================================================#
@@ -113,8 +108,6 @@ class BoundedSpectrum:
         self._precision = precision
         self._epsilon = 10**-precision
         terminal_y, initial_b = boundary_pair
-        #print("terminal y", terminal_y)
-        #print("initial b", initial_b)
         (self._augmented_peak_list, 
             self._augmented_boundary_values, 
             self._augmented_boundary_indices, 
@@ -148,14 +141,9 @@ class BoundedSpectrum:
         return self._augmented_gaps
 
     def augmentable(self, pivot: Pivot):
-        aug_idx = self.get_augmented_boundary_indices()
-        #print("aug indx", aug_idx)
-        #print("pivot idx", pivot.indices())
-        L = min(aug_idx) <= pivot.outer_left()
-        R = max(aug_idx) >= pivot.outer_right()
-        C = abs(pivot.center() - self._center) < self._epsilon
-        #print(f"L {L} R {R} C {C}")
-        return (L and R and C)
+        present = all([mz in self._augmented_peak_list for mz in pivot.peaks()])
+        centered = abs(pivot.center() - self._center) < self._epsilon
+        return centered and present
 
     def augment_pivot(self, pivot: Pivot):
         if not self.augmentable(pivot):
@@ -188,7 +176,8 @@ class AugmentedData:
         return iter((self.spectrum, self.boundary, self.gaps, self.pivot))
 
     def get_boundary_residues(self):
-        return list(set(self.boundary_residues))
+        l, _, _, r = self.boundary_residues
+        return [l, r]
 
 def create_augmented_data(
     spectrum: np.ndarray,
@@ -202,7 +191,6 @@ def create_augmented_data(
 ) -> Iterator[AugmentedData]:
     """"""
     for boundary_pair in product(terminal_y_ions, initial_b_ions):
-        #print("boundary pair", boundary_pair)
         bounded_spectrum = BoundedSpectrum(
             spectrum,
             boundary_pair,

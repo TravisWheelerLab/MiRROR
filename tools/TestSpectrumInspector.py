@@ -94,15 +94,14 @@ def main(args):
             outputs = list(enumerate(test_spectrum))
             outputs.sort(key = lambda x: test_spectrum._edit_distances[x[0]])
             for (i, idx) in outputs:
-                pivot, boundary, augmented_data, graph_pair, affixes, affix_pair, candidate = test_spectrum.get_output_stack(idx)
+                pivot, augmented_data, graph_pair, affixes, affix_pair, candidate = test_spectrum.get_output_stack(idx)
                 graph_repr = mirror.spectrum_graphs.draw_graph_pair(graph_pair, mode = "simple")
                 paths = [afx.path() for afx in affixes[affix_pair]]
                 translations = [afx.translate() for afx in affixes[affix_pair]]
-                augmented_peaks, augmented_pivot, augmented_gaps, _ = augmented_data
+                augmented_peaks, boundary_repr, augmented_gaps, augmented_pivot = augmented_data
                 augmented_peaks = list(augmented_peaks)
                 pivot_repr = trim_repr(pivot)
                 augmented_pivot_repr = trim_repr(augmented_pivot)
-                boundary_repr = trim_repr(boundary)
                 cand_repr = trim_repr(candidate)
                 distance, optimizer = candidate.edit_distance(target_peptide)
                 best_seq = ''.join(candidate.sequences()[optimizer].split(' '))
