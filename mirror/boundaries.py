@@ -107,6 +107,8 @@ class BoundedSpectrum:
         gap_params: GapSearchParameters,
         padding: int = 3,
     ):
+        self._gap_params = deepcopy(gap_params)
+        self._gap_params.charges = np.array([])
         self._center = center
         self._precision = precision
         self._epsilon = 10**-precision
@@ -130,7 +132,7 @@ class BoundedSpectrum:
 
         self._augmented_gaps = create_augmented_gaps(
             self._augmented_spectrum,
-            gap_params,
+            self._gap_params,
         )
     
     def get_augmented_spectrum(self):
