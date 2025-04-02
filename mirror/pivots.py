@@ -3,7 +3,7 @@ from statistics import mode
 import numpy as np
 
 from .gaps import GapResult, _find_gaps_without_targets
-from .util import collapse_second_order_list, mass_error, count_mirror_symmetries, residue_lookup, reflect, find_initial_b_ion, find_terminal_y_ion
+from .util import collapse_second_order_list, count_mirror_symmetries, residue_lookup
 
 #=============================================================================#
 

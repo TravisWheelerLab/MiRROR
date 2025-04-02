@@ -375,7 +375,7 @@ class GapSearchParameters:
         ]
 
 SIMPLE_GAP_SEARCH_PARAMETERS = GapSearchParameters(
-    "tensor",
+    "bisect",
     RESIDUES,
     MONO_MASSES,
     np.array([]),
@@ -385,7 +385,7 @@ SIMPLE_GAP_SEARCH_PARAMETERS = GapSearchParameters(
 )
 
 UNCHARGED_GAP_SEARCH_PARAMETERS = GapSearchParameters(
-    "tensor",
+    "bisect",
     RESIDUES,
     MONO_MASSES,
     LOSSES,
@@ -395,7 +395,7 @@ UNCHARGED_GAP_SEARCH_PARAMETERS = GapSearchParameters(
 )
 
 DEFAULT_GAP_SEARCH_PARAMETERS = GapSearchParameters(
-    "tensor",
+    "bisect",
     RESIDUES,
     MONO_MASSES,
     LOSSES,

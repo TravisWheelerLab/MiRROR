@@ -6,6 +6,7 @@ import networkx as nx
 
 from .util import horizontal_panes, GAP_TOLERANCE, INTERGAP_TOLERANCE
 from .pivots import Pivot
+from .boundaries import AugmentedData
 from .graph_utils import *
 
 #=============================================================================#
@@ -84,10 +85,7 @@ def _create_half_graph_from_gaps(
     return half_graph
 
 def create_spectrum_graph_pair(
-    spectrum,
-    gaps: list[tuple[int,int]],
-    pivot: Pivot,
-    boundaries: list[int],
+    augmented_data: AugmentedData,
     gap_key = GAP_KEY,
 ) -> GraphPair:
     """Constructs a pair of spectrum graphs. The ascending graph contains all gaps
@@ -99,22 +97,23 @@ def create_spectrum_graph_pair(
     :gap_indices: a list of integer 2-tuples which index into `spectrum`.
     :pivot: a Pivot object indexing into `spectrum`.
     :gap_key: the key to retrieve edge weights from the spectrum graph pair."""
+    print(f"spectrum\n\t{augmented_data.spectrum}\ngaps\n\t{augmented_data.gaps}")
     # build the descending graph on the lower half of the spectrum
     desc_graph = _create_half_graph_from_gaps(
-        spectrum,
-        gaps,
-        pivot,
-        boundaries,
+        augmented_data.spectrum,
+        augmented_data.gaps,
+        augmented_data.pivot,
+        augmented_data.boundary,
         gap_key,
         SpectrumGraphOrientation.DESCENDING
     )
     
     # build the ascending graph on the upper half of the spectrum
     asc_graph = _create_half_graph_from_gaps(
-        spectrum,
-        gaps,
-        pivot,
-        boundaries,
+        augmented_data.spectrum,
+        augmented_data.gaps,
+        augmented_data.pivot,
+        augmented_data.boundary,
         gap_key,
         SpectrumGraphOrientation.ASCENDING
     )

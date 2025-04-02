@@ -32,12 +32,11 @@ def trim_repr(obj):
 def main(args):
     print(f"TestSpectrumInspector\n{args}")
     test_spectrum_file, rerun, *_ = args
-    rerun = bool(rerun)
 
     # read the test spectrum
     session_id, output_class, num = Path(test_spectrum_file).stem.split('_')
     test_spectrum = mirror.TestSpectrum.read(test_spectrum_file)
-    if rerun:
+    if rerun.lower() == "true":
         test_spectrum.run()
     target_peptide = test_spectrum.get_peptide()
     print(f"target peptide:\n\t{target_peptide}")

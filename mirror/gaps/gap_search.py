@@ -285,7 +285,7 @@ def find_gaps(
         for match in bins[residue]:
             i, j = match.inner_index
             assert dup_mz[j] - dup_mz[i] > 0 
-            match.index_pair = match.inner_index
+            match.index_pair = (i, j)
     # construct GapResult objects
     return dup_mz, [GapResult(bins[residue]) for residue in residues + ['X']]
 

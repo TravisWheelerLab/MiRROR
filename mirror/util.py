@@ -401,8 +401,7 @@ def expected_num_mirror_symmetries(arr: np.array, tolerance = 0.01):
 def _generate_extremal_ions(
     spectrum: np.ndarray,
     index_range: Iterable,
-    mass_transform,
-    max_query_mass = MAX_MASS
+    mass_transform
 ):
     for i in index_range:
         corrected_mass = mass_transform(spectrum[i])
@@ -438,15 +437,17 @@ def find_initial_b_ion(
     :hi: the largest index to consider.
     :center: the point around which putative peaks are reflected."""
     # starting at the pivot, scan the upper half of the spectrum
-    return _generate_extremal_ions(
+    b_ions = list(_generate_extremal_ions(
         spectrum, 
         range(hi - 1, lo, -1), 
         _get_b_ion_transform(center),
-    )
+    ))
+    return b_ions 
 
 def find_terminal_y_ion(
-    spectrum, 
+    spectrum,
     hi,
+    terminal_residues: list[str] = TERMINAL_RESIDUES,
 ):
     """Returns a generator of (index, residue) pairs. Each index corresponds to an m/z value 
     (peak) in the spectrum which, upon translation by the typical y ion offset, matches the 
@@ -455,11 +456,14 @@ def find_terminal_y_ion(
     :param spectrum: a sorted one-dimensional numeric array.
     :hi: the largest index to consider. Iteration descends from this value."""
     # starting at the pivot, scan the lower half of the spectrum
-    return _generate_extremal_ions(
-        spectrum,
-        range(hi),
-        _y_ion_transform,
-    )
+    y_ions = list(filter(
+        lambda x: x[1] in terminal_residues,
+        _generate_extremal_ions(
+            spectrum,
+            range(hi),
+            _y_ion_transform,
+    )))
+    return y_ions
 
 #=============================================================================#
 # disjoint pairs

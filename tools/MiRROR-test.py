@@ -17,6 +17,7 @@ ARG_NAMES = [
     "suffix_array_path",
     "gap_tolerance",
     "intergap_tolerance",
+    "pivot_precision",
     "symmetry_factor",
     "occurrence_threshold",
     "alignment_threshold",
@@ -28,7 +29,8 @@ ARG_NAMES = [
     "output_dir",
     "session_id",
     "write_matches",
-    "simulation_mode"
+    "simulation_mode",
+    "crash",
 ]
 ARG_TYPES = [
     str,
@@ -36,6 +38,7 @@ ARG_TYPES = [
     str,
     float,
     float,
+    int,
     float,
     int,
     float,
@@ -48,6 +51,7 @@ ARG_TYPES = [
     str,
     bool,
     str,
+    bool,
 ]
 ARG_DEFAULTS = [
     None,
@@ -55,6 +59,7 @@ ARG_DEFAULTS = [
     None,
     mirror.util.GAP_TOLERANCE,
     mirror.util.INTERGAP_TOLERANCE,
+    4,
     5.0,
     0,
     -1,
@@ -67,6 +72,7 @@ ARG_DEFAULTS = [
     str(uuid.uuid4())[:8],
     False,
     "simple",
+    False,
 ]
 
 def get_parser():
@@ -92,6 +98,8 @@ def main(args):
         n_seqs = int(n_seqs)
         seq_len = int(seq_len)
         sequences = tryptic_peptides = [mirror.util.generate_random_tryptic_peptide(seq_len) for _ in range(n_seqs)]
+        if n_seqs == 1:
+            print("peptide", sequences[0])
     else:
         # parse from sequences arg
         sequences = args.sequences.split(",")
@@ -150,12 +158,14 @@ def main(args):
             target_pivot = None,
             gap_search_parameters = gap_params,
             intergap_tolerance = args.intergap_tolerance,
+            pivot_precision = args.pivot_precision,
             symmetry_factor = args.symmetry_factor,
             terminal_residues = args.terminal_residues,
             boundary_padding = args.boundary_padding,
             gap_key = args.gap_key,
             suffix_array = suffix_array,
-            occurrence_threshold = args.occurrence_threshold
+            occurrence_threshold = args.occurrence_threshold,
+            crash = args.crash,
         )
 
         test_record.add(test_spectrum)
