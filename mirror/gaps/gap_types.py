@@ -331,7 +331,7 @@ class GapResult:
             mod_id != -1
         ])
         complexity = sum(unweighted_bools)
-        # a gap is legigible if it's not an X
+        # a gap is legible if it's not an X
         res = self.residue(i)
         illegibility = res == 'X'
         # a gap is degenerate if its topological indices are equal, meaning that 

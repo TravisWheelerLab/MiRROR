@@ -6,7 +6,7 @@ from editdistance import eval as edit_distance
 
 from .affixes import Affix, AffixPair
 from .spectral_alignment import score_sequence_to_spectrum
-from .util import mask_ambiguous_residues, residue_lookup, disjoint_pairs
+from .util import mask_ambiguous_residues, residue_lookup, disjoint_pairs, sequence_mass
 from .pivots import Pivot
 from .graph_utils import path_to_edges, unzip_dual_path, extend_truncated_paths, GraphPair
 
@@ -64,6 +64,9 @@ class Candidate:
             ' '.join(self._sequences[0]),
             ' '.join(self._sequences[1])
         )
+    
+    def mass(self):
+        return sequence_mass(self._sequences[0])
     
     def call(self):
         return self.sequences()[self.edit_distance()[1]]

@@ -14,6 +14,9 @@ from .gaps.gap_types import DEFAULT_GAP_SEARCH_PARAMETERS, RESIDUES, MONO_MASSES
 
 MAX_MASS = max(MONO_MASSES.max(), MASSES.max()) + LOSSES.max() + MODIFICATIONS.max() + LOOKUP_TOLERANCE
 
+def sequence_mass(sequence: list[str], mass_table = RESIDUE_MONO_MASSES):
+    return sum(mass_table[res] for res in sequence)
+
 def generate_random_residues(length: int, alphabet = RESIDUES):
     """
         np.random.choice(alphabet, length, replace=True)"""
