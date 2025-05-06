@@ -78,13 +78,6 @@ class MultiDAG(DAG):
             weight_key = count_weight_key,
         )
 
-def AssociationMetaGraph(DiGraph):
-    """A bipartite graph associating between the edges of two graphs."""
-    def __init__(self,
-        edge_pairs: Iterator[tuple[tuple[int, int],tuple[int, int]]]
-    ):
-        pass
-
 @dataclass
 class ProductDAG(ABC, DAG):
     first_graph: DAG
