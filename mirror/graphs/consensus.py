@@ -3,14 +3,42 @@ from itertools import pairwise, chain
 from functools import reduce
 from operator import eq, ne
 
-from .graph_types import ProductDAG, MultiDAG, BipartiteGraph
-from .consensus_types import *
+from .graph_types import ProductDAG
+from .align_types import CostModel
+from .consensus_types import BipartiteGraph
+
+from numpy import inf
+from networkx import connected_components
+
+def realign_fragments(
+    aligned_fragments: Iterator[list[tuple[int, int]]],
+    cost_model: CostModel,
+    threshold = inf,
+    precision = 10,
+):
+    # unzip alignments, reduce each projection to a unique set of paths.
+    first_fragments, second_fragments = map(
+        unique,
+        zip(*aligned_fragments))
+    n = len(first_fragments)
+
+    # construct the fragment intersection graph
+    #fragment_itx = 
+
+    # from each component in the intersection graph
+    # construct a topological order
+    fragment_orders = map(
+        construct_fragment_preorder,
+        connected_components(fragment_itx))
+    
+    # find the maximal paths of each topological order
+    
 
 def _filter_loops(
     edges: Iterator[tuple[Any, Any]],
 ):
     return filter(
-        lambda x: ne(*x),
+        lambda x: ne(x[0], x[1]),
         edges)
 
 def _collect_edges(
@@ -71,5 +99,8 @@ def maximal_associated_consensus_paths(
     product_graph: ProductDAG,
     aligned_paths: Iterator[list[tuple[int, int]]],
 ):
+    # frequency-weighted subgraphs of each factor of the product
     first_consensus, second_consensus = consensus_graphs(aligned_paths)
-    associated_edges = associate_matched_edges(product_graph, aligned_paths)
+    # frequency-weighted bipartite graph from the edges of the first factor to the edges of the second factor
+    # 
+    associated_edges, associated_paths = associate_matched_edges(product_graph, aligned_paths)

@@ -3,17 +3,7 @@ from typing import Iterator, Any
 from abc import ABC, abstractmethod
 from itertools import chain, product
 
-from networkx import DiGraph, is_directed_acyclic_graph, is_bipartite
-
-class BipartiteGraph(DiGraph):
-    def __init__(self,
-        edges = Iterator[tuple[Any,Any]],
-    ):
-        graph = DiGraph(edges)
-        if is_bipartite(graph):
-            super(BipartiteGraph, self).__init__(incoming_graph_data = graph)
-        else:
-            raise ValueError("not a bipartite graph!")
+from networkx import DiGraph, is_directed_acyclic_graph
 
 class DAG:
     def __init__(self,
@@ -57,26 +47,6 @@ class DAG:
     
     def sources(self) -> list[int]:
         return self._sources
-
-class MultiDAG(DAG):
-    """A directed acyclic graph that allows multiple edges between a pair
-    of nodes. A multi-edge comprising `n` edges is represented as a single 
-    edge with integer weight `n`. Constructed from an iterable of edges.
-    To change the weight key, set the `count_weight_key` kwarg."""
-    def __init__(self,
-        edges: Iterator[tuple[int, int]],
-        count_weight_key = "count"
-    ):
-        multigraph = DiGraph()
-        for (i, j) in edges:
-            multigraph.add_edge(i,j)
-            if count_weight_key not in multigraph[i][j]:
-                multigraph[i][j][count_weight_key] = 0
-            multigraph[i][j][count_weight_key] += 1
-        super(MultiDAG, self).__init__(
-            graph = multigraph,
-            weight_key = count_weight_key,
-        )
 
 @dataclass
 class ProductDAG(ABC, DAG):
