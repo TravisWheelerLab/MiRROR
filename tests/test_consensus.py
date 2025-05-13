@@ -67,7 +67,41 @@ class TestConsensus(unittest.TestCase):
             fragment_weights = [(first.weight_out(x1, y1), second.weight_out(x2, y2)) for ((x1, x2), (y1, y2)) in pairwise(fragment)]
             print(f"{score}\t{fragment}\n\t{fragment_weights}")
     
-    def test_examples(self):
+    def test_fragment_itx(self):
+        dag1 = self._get_dag_1()
+        dag2 = self._get_dag_2()
+        aln12 = self._align(dag1, dag2)
+        frag_itx = FragmentIntersectionGraph(
+            alignments = aln12,
+            product_graph = StrongProductDAG(dag1, dag2),
+            cost_model = LocalCostModel()
+        )
+        print("alignment 12:")
+        self._print_alignment(aln12, dag1, dag2)
+        print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
+        dag3 = self._get_dag_3()
+        aln32 = self._align(dag3, dag2)
+        frag_itx = FragmentIntersectionGraph(
+            alignments = aln32,
+            product_graph = StrongProductDAG(dag3, dag2),
+            cost_model = LocalCostModel()
+        )
+        print("alignment 32:")
+        self._print_alignment(aln32, dag3, dag2)
+        print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
+
+        dag4 = self._get_dag_4()
+        aln34 = self._align(dag3, dag4)
+        frag_itx = FragmentIntersectionGraph(
+            alignments = aln34,
+            product_graph = StrongProductDAG(dag3, dag4),
+            cost_model = LocalCostModel()
+        )
+        print("alignment 32:")
+        self._print_alignment(aln34, dag3, dag4)
+        print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
+
+    def _test_examples(self):
         dag1 = self._get_dag_1()
         dag2 = self._get_dag_2()
         dag3 = self._get_dag_3()

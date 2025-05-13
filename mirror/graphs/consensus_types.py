@@ -1,45 +1,53 @@
 from typing import Iterator, Any
-from .graph_types import DiGraph, DAG
-from networkx import is_bipartite
+from itertools import chain
+from .graph_types import DiGraph, DAG, StrongProductDAG
+from .align_types import CostModel
+from networkx import Graph, is_bipartite
 
-class MultiGraph(DiGraph):
-    """A digraph that allows multiple edges between a pair
-    of nodes. A multi-edge comprising `n` edges is represented as a single 
-    edge with integer weight `n`. Constructed from an iterable of edges.
-    To change the weight key, set the `count_weight_key` kwarg."""
-    def __init__(self,
-        edges: Iterator[tuple[Any, Any]],
-        count_weight_key = "count"
-    ):
-        multigraph = DiGraph()
-        for (i, j) in edges:
-            multigraph.add_edge(i,j)
-            if count_weight_key not in multigraph[i][j]:
-                multigraph[i][j][count_weight_key] = 0
-            multigraph[i][j][count_weight_key] += 1
-        super(MultiGraph, self).__init__(incoming_graph_data = multigraph)
+class FragmentIntersectionGraph(Graph):
+    """A bipartite graph over aligned fragments.."""
 
-class BipartiteGraph(DiGraph):
     def __init__(self,
-        edges = Iterator[tuple[Any, Any]],
+        alignments: Iterator[tuple[float, list[tuple[int, int]]]],
+        product_graph: StrongProductDAG,
+        cost_model: CostModel,
+        weight_key = "score",
     ):
-        graph = MultiGraph(edges)
-        if is_bipartite(graph):
-            super(BipartiteGraph, self).__init__(incoming_graph_data = graph)
-        else:
-            raise ValueError("not a bipartite graph!")
+        n = 0
+        fragment_index = dict()
+        first_fragments = dict()
+        second_fragments = dict()
+        fragment_pairs = list()
+        for score, aligned_fragment in alignments:
+            fragment1, fragment2 = zip(*aligned_fragment)
+            # index the first fragment
+            key1 = (1, tuple(fragment1))
+            if key1 not in fragment_index:
+                fragment_index[key1] = n
+                first_fragments[n] = fragment1
+                n += 1
+            index1 = fragment_index[key1]
+            # index the second fragment
+            key2 = (2, tuple(fragment2))
+            if key2 not in fragment_index:
+                fragment_index[key2] = n
+                second_fragments[n] = fragment2
+                n += 1
+            index2 = fragment_index[key2]
+            # create a weighted edge between the fragment indices
+            fragment_pairs.append((index1, index2, {weight_key : score}))
+        self._fragment_index = fragment_index
+        self._first_fragments = first_fragments
+        self._second_fragments = second_fragments
+        super(FragmentIntersectionGraph, self).__init__(incoming_graph_data = fragment_pairs)
+    
+    def get_first_fragment(self, i: int):
+        return self._first_fragments[i]
 
-class MultiDAG(DAG):
-    """A directed acyclic graph that allows multiple edges between a pair
-    of nodes. A multi-edge comprising `n` edges is represented as a single 
-    edge with integer weight `n`. Constructed from an iterable of edges.
-    To change the weight key, set the `count_weight_key` kwarg."""
-    def __init__(self,
-        edges: Iterator[tuple[Any, Any]],
-        count_weight_key = "count"
-    ):
-        super(MultiDAG, self).__init__(
-            graph = MultiGraph(edges),
-            weight_key = count_weight_key,
-        )
+    def get_second_fragment(self, i: int):
+        return self._second_fragments[i]
+
+
+class FragmentPairGraph(DAG):
+    """A directed acyclic dag over pairs of aligned fragments."""
 
