@@ -1,3 +1,5 @@
+from mirror.graphs.minimal_nodes import *
+from mirror.graphs.minimal_paths import *
 from mirror.graphs.graph_types import *
 from mirror.graphs.align_types import *
 from mirror.graphs.align import *
@@ -71,40 +73,54 @@ class TestConsensus(unittest.TestCase):
             fragment_weights = [(first.weight_out(x1, y1), second.weight_out(x2, y2)) for ((x1, x2), (y1, y2)) in pairwise(fragment)]
             print(f"{score}\t{fragment}\n\t{fragment_weights}")
     
+    def _test_fragment_itx(self, first_dag, second_dag, tag):
+        # alignment
+        aln = self._align(first_dag, second_dag)
+        # fragment consensus
+        frag_itx = FragmentIntersectionGraph(
+            alignments = aln,
+        )
+        assert is_bipartite(frag_itx)
+        component = list(connected_components(frag_itx))[0]
+        frag_pair = FragmentPairGraph(frag_itx, component, LocalCostModel())
+        fragment_consensii = []
+        for src in frag_pair.sources():
+            nc = propagate(
+                topology = frag_pair,
+                cost = lambda _, x: x,
+                threshold = 1000,
+                source = src
+            )
+            for snk in frag_pair.sinks():
+                minimal_paths = backtrace(
+                    topology = frag_pair,
+                    cost = lambda _, x: x,
+                    node_cost = nc,
+                    threshold = 1000,
+                    source = src,
+                    sink = snk,
+                )
+                fragment_consensii.extend(minimal_paths)
+        print(f"\nalignment {tag}:\n{aln}")
+        print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
+        print("fragment consensus:")
+        for consensus_idx, (score, alignment_sequence) in enumerate(fragment_consensii):
+            print(f"consensus[{consensus_idx}]\nscore: {score}\nseq: {alignment_sequence}")
+            for alignment_idx in alignment_sequence:
+                print(frag_itx.get_alignment(alignment_idx))
+            print('-'*20)
+        
+
     def test_fragment_itx(self):
         dag1 = self._get_dag_1()
         dag2 = self._get_dag_2()
-        aln12 = self._align(dag1, dag2)
-        frag_itx = FragmentIntersectionGraph(
-            alignments = aln12,
-        )
-        assert is_bipartite(frag_itx)
-        print(f"alignment 12:\n{aln12}")
-        print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
-        component = list(connected_components(frag_itx))[0]
-        FragmentPairGraph(frag_itx, component, LocalCostModel())
+        self._test_fragment_itx(dag1, dag2, "12")
 
         dag3 = self._get_dag_3()
-        aln32 = self._align(dag3, dag2)
-        frag_itx = FragmentIntersectionGraph(
-            alignments = aln32,
-        )
-        assert is_bipartite(frag_itx)
-        print(f"alignment 32:\n{aln32}")
-        print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
-        component = list(connected_components(frag_itx))[0]
-        FragmentPairGraph(frag_itx, component, LocalCostModel())
-
+        self._test_fragment_itx(dag3, dag2, "32")
+        
         dag4 = self._get_dag_4()
-        aln34 = self._align(dag3, dag4)
-        frag_itx = FragmentIntersectionGraph(
-            alignments = aln34,
-        )
-        assert is_bipartite(frag_itx)
-        print(f"alignment 34:\n{aln34}")
-        print(f"fragment itx:\n-{frag_itx}\n-{frag_itx.edges(data = True)}\n-{frag_itx._fragment_index}")
-        component = list(connected_components(frag_itx))[0]
-        FragmentPairGraph(frag_itx, component, LocalCostModel())
+        self._test_fragment_itx(dag3, dag4, "34")
 
     def _test_examples(self):
         dag1 = self._get_dag_1()
