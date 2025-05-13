@@ -75,6 +75,13 @@ class TestConsensus(unittest.TestCase):
         print(f"alignment 1 - 2:")
         aln12 = self._align(dag1, dag2)
         self._print_alignment(aln12, dag1, dag2)
+        score, aligned_fragments = zip(*aln12)
+        realign_fragments(
+            aligned_fragments, 
+            StrongProductDAG(dag1, dag2),
+            LocalCostModel())
+        return
+
         print(f"alignment 3 - 2:")
         aln32 = self._align(dag3, dag2)
         self._print_alignment(aln32, dag3, dag2)
