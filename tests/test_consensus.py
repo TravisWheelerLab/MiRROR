@@ -4,6 +4,8 @@ from mirror.graphs.align import *
 from mirror.graphs.consensus_types import *
 from mirror.graphs.consensus import *
 
+from random import shuffle
+
 import unittest
 
 class TestConsensus(unittest.TestCase):
@@ -60,10 +62,12 @@ class TestConsensus(unittest.TestCase):
             product_graph = StrongProductDAG(first, second),
             cost_model = LocalCostModel(),
             threshold = 0)
-        return [(score, fragment) for (score, fragment) in aln if (not self._all_skips(fragment))]
+        return [aligned_path for aligned_path in aln if (not self._all_skips(aligned_path.alignment))]
 
     def _print_alignment(self, alignment, first, second):
-        for (score, fragment) in alignment:
+        for aligned_path in alignment:
+            score = aligned_path.score
+            fragment = aligned_path.alignment
             fragment_weights = [(first.weight_out(x1, y1), second.weight_out(x2, y2)) for ((x1, x2), (y1, y2)) in pairwise(fragment)]
             print(f"{score}\t{fragment}\n\t{fragment_weights}")
     
@@ -73,33 +77,37 @@ class TestConsensus(unittest.TestCase):
         aln12 = self._align(dag1, dag2)
         frag_itx = FragmentIntersectionGraph(
             alignments = aln12,
-            product_graph = StrongProductDAG(dag1, dag2),
-            cost_model = LocalCostModel()
         )
+        assert is_bipartite(frag_itx)
         print("alignment 12:")
         self._print_alignment(aln12, dag1, dag2)
         print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
+        component = list(connected_components(frag_itx))[0]
+        FragmentPairGraph(frag_itx, component, LocalCostModel())
+
         dag3 = self._get_dag_3()
         aln32 = self._align(dag3, dag2)
         frag_itx = FragmentIntersectionGraph(
             alignments = aln32,
-            product_graph = StrongProductDAG(dag3, dag2),
-            cost_model = LocalCostModel()
         )
+        assert is_bipartite(frag_itx)
         print("alignment 32:")
         self._print_alignment(aln32, dag3, dag2)
         print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
+        component = list(connected_components(frag_itx))[0]
+        FragmentPairGraph(frag_itx, component, LocalCostModel())
 
         dag4 = self._get_dag_4()
         aln34 = self._align(dag3, dag4)
         frag_itx = FragmentIntersectionGraph(
             alignments = aln34,
-            product_graph = StrongProductDAG(dag3, dag4),
-            cost_model = LocalCostModel()
         )
-        print("alignment 32:")
+        assert is_bipartite(frag_itx)
+        print("alignment 34:")
         self._print_alignment(aln34, dag3, dag4)
-        print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
+        print(f"fragment itx:\n-{frag_itx}\n-{frag_itx.edges(data = True)}\n-{frag_itx._fragment_index}")
+        component = list(connected_components(frag_itx))[0]
+        FragmentPairGraph(frag_itx, component, LocalCostModel())
 
     def _test_examples(self):
         dag1 = self._get_dag_1()

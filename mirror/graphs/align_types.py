@@ -1,7 +1,57 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Any
 
 from .graph_types import ProductDAG
+
+class AlignedPath(list[tuple[Any, Any]]):
+    @classmethod
+    def _not_none_interval(cls, seq: list[Any]):
+        """very naiive implementation to find the interval of non-none values.
+        not optimized for long sequences!"""
+        none_seq = [s is None for s in seq]
+        return none_seq.index(False), len(seq) - 1 - none_seq[::-1].index(False)
+    
+    @classmethod
+    def _remove_none_and_stationary(cls, seq: list[Any]):
+        """also naiive and unoptimized. does what the name says. removes None, and removes repeated values."""
+        prev_char = ''
+        for char in seq:
+            if (char == None) or (char == prev_char):
+                continue
+            else:
+                yield char
+            prev_char = char
+
+    def __init__(self, score: float, alignment: list[tuple[Any, Any]]):
+        # private fields
+        self._first_sequence, self._second_sequence = zip(*alignment)
+        self._first_interval = self._not_none_interval(self._first_sequence)
+        self._second_interval = self._not_none_interval(self._second_sequence)
+        self._first_fragment = list(self._remove_none_and_stationary(self._first_sequence))
+        self._second_fragment = list(self._remove_none_and_stationary(self._second_sequence))
+        # public fields
+        self.score = score
+        self.alignment = alignment
+
+        super(AlignedPath, self).__init__(alignment)
+    
+    def first_interval(self):
+        return self._first_interval
+    
+    def second_interval(self):
+        return self._second_interval
+
+    def first_fragment(self):
+        return self._first_fragment
+    
+    def second_fragment(self):
+        return self._second_fragment
+
+    def fragments(self):
+        return (
+            self.first_fragment(), 
+            self.second_fragment())
+
 
 CostFunction = Callable[[tuple, tuple], float]
 CostModel = Callable[[ProductDAG], CostFunction]

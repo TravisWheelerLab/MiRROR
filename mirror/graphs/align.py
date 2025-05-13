@@ -1,4 +1,4 @@
-from .align_types import CostModel
+from .align_types import AlignedPath, CostModel
 from .graph_types import DAG, StrongProductDAG
 from .minimal_nodes import propagate
 from .minimal_paths import backtrace
@@ -11,7 +11,7 @@ def align(
     cost_model: CostModel,
     threshold = inf,
     precision = 10,
-) -> list[list[tuple[int, int]]]:
+) -> list[AlignedPath]:
     sources = list(product_graph.sources())
     sinks = list(product_graph.sinks())
     cost_fn = cost_model(product_graph)
@@ -31,7 +31,7 @@ def align(
                 source = source,
                 sink = sink))
     return list(map(
-        lambda x: (
+        lambda x: AlignedPath(
             round(x[0], precision), 
             [product_graph.unravel(v) for v in x[1][::-1]]),
         aligned_paths))
