@@ -79,8 +79,7 @@ class TestConsensus(unittest.TestCase):
             alignments = aln12,
         )
         assert is_bipartite(frag_itx)
-        print("alignment 12:")
-        self._print_alignment(aln12, dag1, dag2)
+        print(f"alignment 12:\n{aln12}")
         print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
         component = list(connected_components(frag_itx))[0]
         FragmentPairGraph(frag_itx, component, LocalCostModel())
@@ -91,8 +90,7 @@ class TestConsensus(unittest.TestCase):
             alignments = aln32,
         )
         assert is_bipartite(frag_itx)
-        print("alignment 32:")
-        self._print_alignment(aln32, dag3, dag2)
+        print(f"alignment 32:\n{aln32}")
         print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
         component = list(connected_components(frag_itx))[0]
         FragmentPairGraph(frag_itx, component, LocalCostModel())
@@ -103,8 +101,7 @@ class TestConsensus(unittest.TestCase):
             alignments = aln34,
         )
         assert is_bipartite(frag_itx)
-        print("alignment 34:")
-        self._print_alignment(aln34, dag3, dag4)
+        print(f"alignment 34:\n{aln34}")
         print(f"fragment itx:\n-{frag_itx}\n-{frag_itx.edges(data = True)}\n-{frag_itx._fragment_index}")
         component = list(connected_components(frag_itx))[0]
         FragmentPairGraph(frag_itx, component, LocalCostModel())

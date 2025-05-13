@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable, Any
+from itertools import chain, pairwise
+from math import floor, ceil
 
 from .graph_types import ProductDAG
 
@@ -22,18 +24,73 @@ class AlignedPath(list[tuple[Any, Any]]):
                 yield char
             prev_char = char
 
-    def __init__(self, score: float, alignment: list[tuple[Any, Any]]):
+    def __init__(self, score: float, alignment: list[tuple[Any, Any]], aligned_weights: list[tuple[Any, Any]]):
         # private fields
-        self._first_sequence, self._second_sequence = zip(*alignment)
-        self._first_interval = self._not_none_interval(self._first_sequence)
-        self._second_interval = self._not_none_interval(self._second_sequence)
-        self._first_fragment = list(self._remove_none_and_stationary(self._first_sequence))
-        self._second_fragment = list(self._remove_none_and_stationary(self._second_sequence))
+        ## node sequence
+        self._first_nodes, self._second_nodes = zip(*alignment)
+        self._first_fragment = list(self._remove_none_and_stationary(self._first_nodes))
+        self._second_fragment = list(self._remove_none_and_stationary(self._second_nodes))
+        ## weight sequence
+        self._first_weights, self._second_weights = zip(*aligned_weights)
+        self._first_interval = self._not_none_interval(self._first_weights)
+        self._second_interval = self._not_none_interval(self._second_weights)
         # public fields
         self.score = score
         self.alignment = alignment
+        self.aligned_weights = aligned_weights
 
         super(AlignedPath, self).__init__(alignment)
+    
+    def __repr__(self):
+        header = f"\nscore: {self.score}\n"
+        # construct the alignment representation
+        first_nodes = []
+        first_weights = []
+        horizontal_separator = []
+        second_weights = []
+        second_nodes = []
+        for (((first_node_left, second_node_left), (first_node_right, second_node_right)), (first_weight, second_weight)) in zip(pairwise(self.alignment), self.aligned_weights):
+            if first_weight is None:
+                first_nodes.append('...')
+                first_weights.append('')
+                horizontal_separator.append('')
+                second_weights.append(str(second_weight))
+                second_nodes.append(f"{second_node_left}-{second_node_right}")
+            elif second_weight is None:
+                first_nodes.append(f"{first_node_left}-{first_node_right}")
+                first_weights.append(str(first_weight))
+                horizontal_separator.append('')
+                second_weights.append('')
+                second_nodes.append('...')
+            else:
+                first_nodes.append(f"{first_node_left}-{first_node_right}")
+                first_weights.append(str(first_weight))
+                horizontal_separator.append('|')
+                second_weights.append(str(second_weight))
+                second_nodes.append(f"{second_node_left}-{second_node_right}")
+        # left-justify the alignment representation 
+        pad_len = max(map(
+            len, 
+            chain(first_nodes, first_weights, horizontal_separator, second_weights, second_nodes)))
+        left_pad_len = ceil(pad_len / 2)
+        fill_char = ' '
+        first_nodes, second_nodes = map(
+                lambda symbols: map(
+                    lambda s: s.ljust(pad_len, fill_char),
+                    symbols),
+                [first_nodes, second_nodes])
+        first_weights, horizontal_separator, second_weights = map(
+                lambda symbols: map(
+                    lambda s: s.rjust(left_pad_len, fill_char).ljust(pad_len, fill_char),
+                    symbols),
+                [first_weights, horizontal_separator, second_weights])
+        # set the footer
+        footer = '\n' + ((len(self) + 1) * pad_len * '-')
+        # done 
+        return header + '\n'.join(map(
+            lambda symbols: ' '.join(symbols),
+            [first_nodes, first_weights, horizontal_separator, second_weights, second_nodes]
+        )) + footer
     
     def first_interval(self):
         return self._first_interval

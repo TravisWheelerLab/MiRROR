@@ -1,3 +1,5 @@
+from itertools import pairwise
+
 from .align_types import AlignedPath, CostModel
 from .graph_types import DAG, StrongProductDAG
 from .minimal_nodes import propagate
@@ -33,5 +35,6 @@ def align(
     return list(map(
         lambda x: AlignedPath(
             round(x[0], precision), 
-            [product_graph.unravel(v) for v in x[1][::-1]]),
+            [product_graph.unravel(v) for v in x[1][::-1]],
+            [product_graph.weight_out(v, w) for (v, w) in pairwise(x[1][::-1])]),
         aligned_paths))
