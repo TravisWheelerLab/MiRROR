@@ -123,24 +123,113 @@ class FragmentChain:
     ):
         # public fields
         self.score = score
-        self.chain = alignment_chain
+        self.alignment_chain = alignment_chain
         # private fields
-        n_aln = len(alignment_chain)
-        first_fragments, second_fragments = zip(*map(lambda aln: aln.fragments(), alignment_chain))
-        first_fragment_idx = list(range(n_aln))
-        second_fragment_idx = list(range(n_aln))
-        print("before filtering")
-        print(f"first fragments:\n{first_fragments}\n{first_fragment_idx}\nsecond fragments:\n{second_fragments}\n{second_fragment_idx}\n")
-        if alignment_chain[0].first_fragment() == alignment_chain[1].first_fragment():
-            first_fragments = first_fragments[1:]
-            first_fragment_idx = first_fragment_idx[1:]
-        elif alignment_chain[0].second_fragment() == alignment_chain[1].second_fragment():
-            second_fragments = second_fragments[1:]
-            second_fragments_idx = second_fragments_idx[1:]
-        else:
-            raise ValueError("broken chain")
-        first_fragments = [first_fragments[0]] + [first_fragments[i] for i in range(1, len(first_fragments), 2)]
-        first_fragment_idx = [first_fragment_idx[0]] + [first_fragment_idx[i] for i in range(1, len(first_fragment_idx), 2)]
-        second_fragments = [second_fragments[0]] + [second_fragments[i] for i in range(1, len(second_fragments), 2)]
-        second_fragment_idx = [second_fragment_idx[0]] + [second_fragment_idx[i] for i in range(1, len(second_fragment_idx), 2)]
-        print(f"first fragments:\n{first_fragments}\n{first_fragment_idx}\nsecond fragments:\n{second_fragments}\n{second_fragment_idx}\n")
+        ## 1.   determine the correct fragment sequence
+        
+        self._left_fragment_sequence = []
+        self._right_fragment_sequence = []
+        prev_left = None
+        prev_right = None
+        for (i, aln) in enumerate(self.alignment_chain):
+            curr_left, curr_right = aln.fragments()
+            if curr_left != prev_left:
+                self._left_fragment_sequence.append(i)
+            if curr_right != prev_right:
+                self._right_fragment_sequence.append(i)
+            prev_left = curr_left
+            prev_right = curr_right
+        print(f"chain decomposition index:\nleft - {self._left_fragment_sequence}\nright - {self._right_fragment_sequence}")
+        
+        ## 2.   parametize concatenations with a truncation value: 
+        ##      an integer that is negative if the left term is truncated, 
+        ##      positive if the right term is truncated,
+        ##      and zero if neither are truncated,
+        ##      as well as a padding value:
+        ##      if no truncation is occurring, but there is a gap between the intervals,
+        ##      the padding value determines how many gap edges are inserted.
+        self._left_truncation_sequence = []
+        self._left_padding_sequence = []
+        for (curr_i, next_i) in pairwise(self._left_fragment_sequence):
+            curr_interval = self.alignment_chain[curr_i].first_interval()
+            next_interval = self.alignment_chain[next_i].first_interval()
+            ### parametize the truncation
+            interval_gap = curr_interval[1] - next_interval[0]
+            print(f"LEFT: pair [{curr_i} {next_i}] gap = {interval_gap}")
+            if interval_gap > 0:
+                overlap_interval = (next_interval[0], curr_interval[1])
+                curr_subscore = self.alignment_chain[curr_i].subscore(left_sub_interval = overlap_interval)
+                next_subscore = self.alignment_chain[next_i].subscore(left_sub_interval = overlap_interval)
+                truncator = interval_gap + 1
+                if next_subscore > curr_subscore:
+                    # truncate curr_fragment
+                    self._left_truncation_sequence.append(-truncator)
+                    self._left_padding_sequence.append(0)
+                else:
+                    # truncate next_fragment - how can this be implemented?
+                    self._left_truncation_sequence.append(truncator)
+                    self._left_padding_sequence.append(0)
+            else:
+                # no truncation
+                self._left_truncation_sequence.append(0)
+                self._left_padding_sequence.append(-(interval_gap + 1))
+        self._right_truncation_sequence = []
+        self._right_padding_sequence = []
+        for (curr_i, next_i) in pairwise(self._right_fragment_sequence):
+            curr_interval = self.alignment_chain[curr_i].second_interval()
+            next_interval = self.alignment_chain[next_i].second_interval()
+            ### parametize the truncation
+            interval_gap = curr_interval[1] - next_interval[0]
+            print(f"RIGHT: pair [{curr_i} {next_i}] gap = {interval_gap}")
+            if interval_gap > 0:
+                overlap_interval = (next_interval[0], curr_interval[1])
+                curr_subscore = self.alignment_chain[curr_i].subscore(right_sub_interval = overlap_interval)
+                next_subscore = self.alignment_chain[next_i].subscore(right_sub_interval = overlap_interval)
+                truncator = interval_gap + 1
+                if next_subscore > curr_subscore:
+                    # truncate curr_fragment
+                    self._right_truncation_sequence.append(-truncator)
+                    self._right_padding_sequence.append(0)
+                else:
+                    # truncate next_fragment - how can this be implemented?
+                    self._right_truncation_sequence.append(truncator)
+                    self._right_padding_sequence.append(0)
+            else:
+                # no truncation
+                self._right_truncation_sequence.append(0)
+                self._right_padding_sequence.append(-(interval_gap + 1))
+        print(f"chain truncators:\nleft - {self._left_truncation_sequence}\nright - {self._right_truncation_sequence}")
+        
+        ## 3.   construct the truncated decomposition.
+        self._left_sequence_decomposition = [self.alignment_chain[self._left_fragment_sequence[0]].first_fragment()]
+        for prev_position, (truncator, padding, aln_idx) in enumerate(zip(self._left_truncation_sequence, self._left_padding_sequence, self._left_fragment_sequence[1:])):
+            fragment = self.alignment_chain[aln_idx].first_fragment()
+            if truncator > 0:
+                self._left_sequence_decomposition.append(fragment[truncator:])
+            else:
+                if truncator < 0:
+                    prev_fragment = self._left_sequence_decomposition[prev_position]
+                    self._left_sequence_decomposition[prev_position] = prev_fragment[:truncator]
+                elif padding > 0:
+                    prev_fragment = self._left_sequence_decomposition[prev_position]
+                    self._left_sequence_decomposition[prev_position] = prev_fragment + [prev_fragment[-1]] * padding
+                self._left_sequence_decomposition.append(fragment)
+        self._right_sequence_decomposition = [self.alignment_chain[self._right_fragment_sequence[0]].second_fragment()]
+        for prev_position, (truncator, padding, aln_idx) in enumerate(zip(self._right_truncation_sequence, self._right_padding_sequence, self._right_fragment_sequence[1:])):
+            fragment = self.alignment_chain[aln_idx].second_fragment()
+            if truncator > 0:
+                self._right_sequence_decomposition.append(fragment[truncator:])
+            else:
+                if truncator < 0:
+                    prev_fragment = self._right_sequence_decomposition[prev_position]
+                    self._right_sequence_decomposition[prev_position] = prev_fragment[:truncator]
+                elif padding > 0:
+                    prev_fragment = self._right_sequence_decomposition[prev_position]
+                    self._right_sequence_decomposition[prev_position] = prev_fragment + [prev_fragment[-1]] * padding
+                self._right_sequence_decomposition.append(fragment)
+        print(f"chain sequence decomposition:\nleft - {self._left_sequence_decomposition}\nright - {self._right_sequence_decomposition}")
+
+        ## 4.   finally, construct the sequence.
+        self._left_edge_sequence = list(chain.from_iterable(map(pairwise, self._left_sequence_decomposition)))
+        self._right_edge_sequence = list(chain.from_iterable(map(pairwise, self._right_sequence_decomposition)))
+        print(f"chain edge sequence:\nleft - {self._left_edge_sequence}\nright - {self._right_edge_sequence}")

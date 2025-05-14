@@ -34,7 +34,8 @@ def align(
                 sink = sink))
     return list(map(
         lambda x: AlignedPath(
-            round(x[0], precision), 
-            [product_graph.unravel(v) for v in x[1]],
-            [product_graph.weight_out(v, w) for (v, w) in pairwise(x[1])]),
+            score = round(x[0], precision), 
+            alignment = [product_graph.unravel(v) for v in x[1]],
+            aligned_weights = [product_graph.weight_out(v, w) for (v, w) in pairwise(x[1])],
+            cost_model = cost_model),
         aligned_paths))
