@@ -1,11 +1,11 @@
 from typing import Iterator, Any
-from itertools import chain
+from itertools import chain, pairwise
 from .graph_types import DiGraph, DAG, StrongProductDAG
-from .align_types import CostModel
+from .align_types import AlignedPath, CostModel
 from networkx import Graph, is_bipartite, connected_components
 
 class FragmentIntersectionGraph(Graph):
-    """A bipartite graph over aligned fragments.."""
+    """A bipartite graph over aligned fragments."""
 
     def __init__(self,
         alignments: Iterator[tuple[float, list[tuple[int, int]]]],
@@ -104,13 +104,43 @@ class FragmentPairGraph(DAG):
                             raise ValueError(f"indices and edges should be the same")
                         # determine edge direction
                         if interval_a1 < interval_a2:
-                            gap_len = max(0, interval_a2[0] - interval_a1[1])
+                            gap_len = max(0, interval_a2[0] - interval_a1[1] - 1)
                             cost = alignment2.score + (cost_model.gap * gap_len)
                             pair_graph.add_edge(alignment_index1, alignment_index2)
                             pair_graph[alignment_index1][alignment_index2][cost_key] = cost
                         elif interval_a2 < interval_a1:
-                            gap_len = max(0, interval_a1[0] - interval_a2[1])
+                            gap_len = max(0, interval_a1[0] - interval_a2[1] - 1)
                             cost = alignment1.score + (cost_model.gap * gap_len)
                             pair_graph.add_edge(alignment_index2, alignment_index1)
                             pair_graph[alignment_index2][alignment_index1][cost_key] = cost
         super(FragmentPairGraph, self).__init__(pair_graph, cost_key)
+
+class FragmentChain:
+
+    def __init__(self,
+        score: float,
+        alignment_chain: list[AlignedPath],
+    ):
+        # public fields
+        self.score = score
+        self.chain = alignment_chain
+        # private fields
+        n_aln = len(alignment_chain)
+        first_fragments, second_fragments = zip(*map(lambda aln: aln.fragments(), alignment_chain))
+        first_fragment_idx = list(range(n_aln))
+        second_fragment_idx = list(range(n_aln))
+        print("before filtering")
+        print(f"first fragments:\n{first_fragments}\n{first_fragment_idx}\nsecond fragments:\n{second_fragments}\n{second_fragment_idx}\n")
+        if alignment_chain[0].first_fragment() == alignment_chain[1].first_fragment():
+            first_fragments = first_fragments[1:]
+            first_fragment_idx = first_fragment_idx[1:]
+        elif alignment_chain[0].second_fragment() == alignment_chain[1].second_fragment():
+            second_fragments = second_fragments[1:]
+            second_fragments_idx = second_fragments_idx[1:]
+        else:
+            raise ValueError("broken chain")
+        first_fragments = [first_fragments[0]] + [first_fragments[i] for i in range(1, len(first_fragments), 2)]
+        first_fragment_idx = [first_fragment_idx[0]] + [first_fragment_idx[i] for i in range(1, len(first_fragment_idx), 2)]
+        second_fragments = [second_fragments[0]] + [second_fragments[i] for i in range(1, len(second_fragments), 2)]
+        second_fragment_idx = [second_fragment_idx[0]] + [second_fragment_idx[i] for i in range(1, len(second_fragment_idx), 2)]
+        print(f"first fragments:\n{first_fragments}\n{first_fragment_idx}\nsecond fragments:\n{second_fragments}\n{second_fragment_idx}\n")

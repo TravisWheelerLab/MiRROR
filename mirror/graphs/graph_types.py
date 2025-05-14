@@ -97,8 +97,16 @@ class ProductDAG(ABC, DAG):
         """given `i`, return an iterator of nodes `j` such that `(i, j)` is an edge"""
     
     @abstractmethod
+    def sinks(self) -> Iterator[int]:
+        """nodes with no outgoing edges."""
+    
+    @abstractmethod
     def adj_in(self, i: int) -> Iterator[int]:
         """given `i`, return an iterator of nodes `j` such that `(j, i)` is an edge"""
+
+    @abstractmethod
+    def sources(self) -> Iterator[int]:
+        """nodes with no incoming edges."""
 
 @dataclass
 class DirectProductDAG(ProductDAG):

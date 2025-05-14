@@ -24,7 +24,7 @@ def backtrace(
             if minimum_potential_score > threshold:
                 continue
             elif current_node == source:
-                yield path_cost, path_nodes + [current_node]
+                yield path_cost, list(reversed(path_nodes + [current_node]) )
             else:
                 for preceeding_node in topology.adj_in(current_node):
                     edge = (current_node, preceeding_node)

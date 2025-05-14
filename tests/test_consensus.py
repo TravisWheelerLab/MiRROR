@@ -11,46 +11,60 @@ from random import shuffle
 import unittest
 
 class TestConsensus(unittest.TestCase):
+    
+    def _construct_dag(self, edges, weights, weight_key = "weight"):
+        g = DiGraph()
+        g.add_edges_from(
+            (i,j, {weight_key: w})
+            for ((i, j), w) in zip(edges, weights))
+        return DAG(g, weight_key)
 
     def _get_dag_1(self):
-        g = DiGraph()
         g_edges = [(0, 2), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (5, 7)]
         g_weights = ['a','b','c','d','e','f','g']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i,j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        return DAG(g, g_weight_key)
+        return self._construct_dag(g_edges, g_weights)
 
     def _get_dag_2(self):
-        g = DiGraph()
         g_edges = [(0, 2), (1, 2), (2, 3), (4, 5), (5, 6), (5, 7)]
         g_weights = ['a','b','c','e','f','g']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i,j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        return DAG(g, g_weight_key)
+        return self._construct_dag(g_edges, g_weights)
 
     def _get_dag_3(self):
-        g = DiGraph()
         g_edges = [(0, 2), (1, 2), (2, 3), (3, 4), (5, 6), (5, 7)]
         g_weights = ['a','b','c','d','f','g']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i,j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        return DAG(g, g_weight_key)
+        return self._construct_dag(g_edges, g_weights)
 
     def _get_dag_4(self):
-        g = DiGraph()
         g_edges = [(0, 2), (1, 2), (3, 4), (4, 5), (5, 6), (5, 7)]
         g_weights = ['a','b','d','e','f','g']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i,j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        return DAG(g, g_weight_key)
+        return self._construct_dag(g_edges, g_weights)
+    
+    def _get_dag_5(self):
+        g_edges = [(0, 2), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (7, 8), (7,9)]
+        g_weights = ['a','b','c','c','d','e','f','g']
+        return self._construct_dag(g_edges, g_weights)
+    
+    def _get_non_ladder_ex(self):
+        dag1 = self._construct_dag(
+            edges = pairwise(range(6)),
+            weights = map(chr, range(ord('a'),ord('a') + 5)))
+        dag2 = self._construct_dag(
+            edges = [(0,1),(2,3),(4,5)],
+            weights = ['a','c','e'])
+        return dag1, dag2
+
+    def _get_overlap_ex(self):
+        dag1 = self._construct_dag(
+            edges = pairwise(range(5)),
+            weights = map(chr, range(ord('a'),ord('a') + 4)))
+        dag2 = self._construct_dag(
+            edges = [
+                (0,1),(1,2),(2,3),
+                (4,5),(5,6),(6,7)],
+            weights = [
+                'a','b','c',
+                'b','c','d'])
+        return dag1, dag2
     
     def _all_skips(self, fragment: list[tuple[int, int]]):
         fragment_edges = pairwise(fragment)
@@ -77,30 +91,8 @@ class TestConsensus(unittest.TestCase):
         # alignment
         aln = self._align(first_dag, second_dag)
         # fragment consensus
-        frag_itx = FragmentIntersectionGraph(
-            alignments = aln,
-        )
-        assert is_bipartite(frag_itx)
-        component = list(connected_components(frag_itx))[0]
-        frag_pair = FragmentPairGraph(frag_itx, component, LocalCostModel())
-        fragment_consensii = []
-        for src in frag_pair.sources():
-            nc = propagate(
-                topology = frag_pair,
-                cost = lambda _, x: x,
-                threshold = 1000,
-                source = src
-            )
-            for snk in frag_pair.sinks():
-                minimal_paths = backtrace(
-                    topology = frag_pair,
-                    cost = lambda _, x: x,
-                    node_cost = nc,
-                    threshold = 1000,
-                    source = src,
-                    sink = snk,
-                )
-                fragment_consensii.extend(minimal_paths)
+        frag_itx = FragmentIntersectionGraph(aln)
+        fragment_consensii = chain_fragment_pairs(frag_itx, LocalCostModel(), 1000)
         print(f"\nalignment {tag}:\n{aln}")
         print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
         print("fragment consensus:")
@@ -109,7 +101,13 @@ class TestConsensus(unittest.TestCase):
             for alignment_idx in alignment_sequence:
                 print(frag_itx.get_alignment(alignment_idx))
             print('-'*20)
-        
+        fragment_chains = fragment_consensus(aln, LocalCostModel, 1000)
+    
+    def test_non_ladder(self):
+        self._test_fragment_itx(*self._get_non_ladder_ex(), "non-ladder")
+    
+    def test_overlap(self):
+        self._test_fragment_itx(*self._get_overlap_ex(), "overlap")
 
     def test_fragment_itx(self):
         dag1 = self._get_dag_1()
@@ -122,6 +120,10 @@ class TestConsensus(unittest.TestCase):
         dag4 = self._get_dag_4()
         self._test_fragment_itx(dag3, dag4, "34")
 
+        dag1 = self._get_dag_1()
+        dag5 = self._get_dag_5()
+        self._test_fragment_itx(dag1, dag5, "15")
+        
     def _test_examples(self):
         dag1 = self._get_dag_1()
         dag2 = self._get_dag_2()
