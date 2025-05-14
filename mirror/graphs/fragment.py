@@ -2,7 +2,7 @@ from typing import Iterator
 from .minimal_nodes import propagate
 from .minimal_paths import backtrace
 from .align_types import AlignedPath, CostModel
-from .consensus_types import FragmentIntersectionGraph, FragmentPairGraph, FragmentChain
+from .fragment_types import FragmentIntersectionGraph, FragmentPairGraph, FragmentChain
 from networkx import is_bipartite, connected_components
 
 def chain_fragment_pairs(
@@ -39,7 +39,7 @@ def chain_fragment_pairs(
                 fragment_pair_chains.extend(minimal_paths)
     return fragment_pair_chains
 
-def fragment_consensus(
+def collate_fragments(
     alignments: Iterator[AlignedPath],
     cost_model: CostModel,
     threshold: float,

@@ -94,7 +94,7 @@ class AlignedPath(list[tuple[Any, Any]]):
         self._first_fragment = list(self._remove_none_and_stationary(self._first_nodes))
         self._second_fragment = list(self._remove_none_and_stationary(self._second_nodes))
         ## weight sequence
-        self._first_weights, self._second_weights = zip(*aligned_weights)
+        self._first_weights, self._second_weights = map(list, zip(*aligned_weights))
         self._first_interval = self._not_none_interval(self._first_weights)
         self._second_interval = self._not_none_interval(self._second_weights)
         # public fields
@@ -221,11 +221,17 @@ class AlignedPath(list[tuple[Any, Any]]):
     def first_weights(self):
         return self._first_weights
     
+    def first_aligned_weights(self):
+        return list(filter(lambda x: x is not None, self._first_weights))
+    
     def second_fragment(self):
         return self._second_fragment
 
     def second_weights(self):
         return self._second_weights
+    
+    def second_aligned_weights(self):
+        return list(filter(lambda x: x is not None, self._second_weights))
 
     def fragments(self):
         return (

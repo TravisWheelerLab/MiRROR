@@ -3,14 +3,14 @@ from mirror.graphs.minimal_paths import *
 from mirror.graphs.graph_types import *
 from mirror.graphs.align_types import *
 from mirror.graphs.align import *
-from mirror.graphs.consensus_types import *
-from mirror.graphs.consensus import *
+from mirror.graphs.fragment_types import *
+from mirror.graphs.fragment import *
 
 from random import shuffle
 
 import unittest
 
-class TestConsensus(unittest.TestCase):
+class TestFragment(unittest.TestCase):
     
     def _construct_dag(self, edges, weights, weight_key = "weight"):
         g = DiGraph()
@@ -101,7 +101,7 @@ class TestConsensus(unittest.TestCase):
             for alignment_idx in alignment_sequence:
                 print(frag_itx.get_alignment(alignment_idx))
             print('-'*20)
-        fragment_chains = fragment_consensus(aln, LocalCostModel, 1000)
+        fragment_chains = collate_fragments(aln, LocalCostModel, 1000)
     
     def test_non_ladder(self):
         self._test_fragment_itx(*self._get_non_ladder_ex(), "non-ladder")
