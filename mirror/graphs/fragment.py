@@ -58,6 +58,8 @@ def collate_fragments(
         cost_model = cost_model,
         threshold = threshold,
     )
+    # construct the FragmentChain objects, associating each fragment pair chain
+    # to a single alignment-like structure.
     return list(map(
         lambda x: FragmentChain(
             score = x[0],

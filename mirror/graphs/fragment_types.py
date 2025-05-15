@@ -1,4 +1,4 @@
-from typing import Iterator, Any
+from typing import Callable, Iterator, Any
 from itertools import chain, pairwise
 from .graph_types import DiGraph, DAG, StrongProductDAG
 from .align_types import AlignedPath, CostModel
@@ -117,6 +117,100 @@ class FragmentPairGraph(DAG):
 
 class FragmentChain:
 
+    @classmethod
+    def _sequence_fragments(cls,
+        alignment_chain: list[AlignedPath],
+    ) -> tuple[list[int],list[int]]:
+        left_fragment_sequence = []
+        right_fragment_sequence = []
+        prev_left = None
+        prev_right = None
+        for (i, aln) in enumerate(alignment_chain):
+            curr_left, curr_right = aln.fragments()
+            if curr_left != prev_left:
+                left_fragment_sequence.append(i)
+            if curr_right != prev_right:
+                right_fragment_sequence.append(i)
+            prev_left = curr_left
+            prev_right = curr_right
+        return left_fragment_sequence, right_fragment_sequence
+    
+    @classmethod
+    def _parametize_concatenations(cls,
+        alignment_chain: list[AlignedPath],
+        fragment_sequence: list[int],
+        get_interval: Callable[[AlignedPath], tuple[int, int]],
+        score_interval: Callable[[AlignedPath, tuple[int, int]], float],
+    ) -> tuple[list[int], list[int]]:
+        truncation_sequence = []
+        padding_sequence = []
+        for (curr_i, next_i) in pairwise(fragment_sequence):
+            curr_interval = get_interval(alignment_chain[curr_i])
+            next_interval = get_interval(alignment_chain[next_i])
+            ### parametize the truncation
+            interval_gap = curr_interval[1] - next_interval[0]
+            print(f"curr {curr_interval}\nnext {next_interval}\ngap {interval_gap}")
+            if interval_gap > 0:
+                overlap_interval = (next_interval[0], curr_interval[1])
+                print(f"ovlp {overlap_interval}")
+                curr_subscore = score_interval(alignment_chain[curr_i], overlap_interval)
+                next_subscore = score_interval(alignment_chain[next_i], overlap_interval)
+                truncator = interval_gap + 1
+                if next_subscore > curr_subscore:
+                    # truncate curr_fragment
+                    truncation_sequence.append(-truncator)
+                    padding_sequence.append(0)
+                else:
+                    # truncate next_fragment - how can this be implemented?
+                    truncation_sequence.append(truncator)
+                    padding_sequence.append(0)
+            else:
+                # no truncation
+                truncation_sequence.append(0)
+                padding_sequence.append(-(interval_gap + 1))
+        return truncation_sequence, padding_sequence
+    
+    @classmethod
+    def _decompose_pad_truncate(cls,
+        alignment_chain: list[AlignedPath],
+        fragment_sequence: list[int],
+        padding: list[int],
+        truncations: list[int],
+        get_fragment: Callable[[AlignedPath], list[int]],
+        get_weights: Callable[[AlignedPath], list[Any]]
+    ) -> tuple[list[list[int]], list[list[Any]]]:
+        sequence_decomposition = [get_fragment(alignment_chain[fragment_sequence[0]])]
+        weight_sequence = [get_weights(alignment_chain[fragment_sequence[0]])]
+        for prev_position, (truncator, padding, aln_idx) in enumerate(zip(truncations, padding, fragment_sequence[1:])):
+            fragment = get_fragment(alignment_chain[aln_idx])
+            weights = get_weights(alignment_chain[aln_idx])
+            if truncator > 0:
+                sequence_decomposition.append(fragment[truncator:])
+                weight_sequence.append(weights[truncator:])
+            else:
+                if truncator < 0:
+                    prev_fragment = sequence_decomposition[prev_position]
+                    sequence_decomposition[prev_position] = prev_fragment[:truncator]
+                    prev_weight = weight_sequence[prev_position]
+                    weight_sequence[prev_position] = prev_weight[:truncator]
+                elif padding > 0:
+                    prev_fragment = sequence_decomposition[prev_position]
+                    sequence_decomposition[prev_position] = prev_fragment + [prev_fragment[-1]] * padding
+                    prev_weight = weight_sequence[prev_position]
+                    weight_sequence[prev_position] = prev_weight + ['None'] * padding
+                sequence_decomposition.append(fragment)
+                weight_sequence.append(weights)
+        return sequence_decomposition, weight_sequence
+    
+    @classmethod
+    def _concatenate_decomposed_sequences(cls,
+        edge_decomposition: list[list[tuple[int, int]]],
+        weight_decomposition: list[list[Any]],
+    ) -> tuple[list[tuple[int, int]], list[Any]]:
+        return (
+            list(chain.from_iterable(map(pairwise, edge_decomposition))),
+            list(chain.from_iterable(weight_decomposition)))
+
     def __init__(self,
         score: float,
         alignment_chain: list[AlignedPath],
@@ -127,18 +221,8 @@ class FragmentChain:
         
         # private fields
         ## 1.   determine the correct fragment sequence
-        self._left_fragment_sequence = []
-        self._right_fragment_sequence = []
-        prev_left = None
-        prev_right = None
-        for (i, aln) in enumerate(self.alignment_chain):
-            curr_left, curr_right = aln.fragments()
-            if curr_left != prev_left:
-                self._left_fragment_sequence.append(i)
-            if curr_right != prev_right:
-                self._right_fragment_sequence.append(i)
-            prev_left = curr_left
-            prev_right = curr_right
+        self._left_fragment_sequence, self._right_fragment_sequence = self._sequence_fragments(
+            alignment_chain = self.alignment_chain)
         
         ## 2.   parametize concatenations with a truncation value: 
         ##      an integer that is negative if the left term is truncated, 
@@ -147,104 +231,40 @@ class FragmentChain:
         ##      as well as a padding value:
         ##      if no truncation is occurring, but there is a gap between the intervals,
         ##      the padding value determines how many gap edges are inserted.
-        self._left_truncation_sequence = []
-        self._left_padding_sequence = []
-        for (curr_i, next_i) in pairwise(self._left_fragment_sequence):
-            curr_interval = self.alignment_chain[curr_i].first_interval()
-            next_interval = self.alignment_chain[next_i].first_interval()
-            ### parametize the truncation
-            interval_gap = curr_interval[1] - next_interval[0]
-            if interval_gap > 0:
-                overlap_interval = (next_interval[0], curr_interval[1])
-                curr_subscore = self.alignment_chain[curr_i].subscore(left_sub_interval = overlap_interval)
-                next_subscore = self.alignment_chain[next_i].subscore(left_sub_interval = overlap_interval)
-                truncator = interval_gap + 1
-                if next_subscore > curr_subscore:
-                    # truncate curr_fragment
-                    self._left_truncation_sequence.append(-truncator)
-                    self._left_padding_sequence.append(0)
-                else:
-                    # truncate next_fragment - how can this be implemented?
-                    self._left_truncation_sequence.append(truncator)
-                    self._left_padding_sequence.append(0)
-            else:
-                # no truncation
-                self._left_truncation_sequence.append(0)
-                self._left_padding_sequence.append(-(interval_gap + 1))
-        self._right_truncation_sequence = []
-        self._right_padding_sequence = []
-        for (curr_i, next_i) in pairwise(self._right_fragment_sequence):
-            curr_interval = self.alignment_chain[curr_i].second_interval()
-            next_interval = self.alignment_chain[next_i].second_interval()
-            ### parametize the truncation
-            interval_gap = curr_interval[1] - next_interval[0]
-            if interval_gap > 0:
-                overlap_interval = (next_interval[0], curr_interval[1])
-                curr_subscore = self.alignment_chain[curr_i].subscore(right_sub_interval = overlap_interval)
-                next_subscore = self.alignment_chain[next_i].subscore(right_sub_interval = overlap_interval)
-                truncator = interval_gap + 1
-                if next_subscore > curr_subscore:
-                    # truncate curr_fragment
-                    self._right_truncation_sequence.append(-truncator)
-                    self._right_padding_sequence.append(0)
-                else:
-                    # truncate next_fragment - how can this be implemented?
-                    self._right_truncation_sequence.append(truncator)
-                    self._right_padding_sequence.append(0)
-            else:
-                # no truncation
-                self._right_truncation_sequence.append(0)
-                self._right_padding_sequence.append(-(interval_gap + 1))
+        self._left_truncation_sequence, self._left_padding_sequence = self._parametize_concatenations(
+            alignment_chain = self.alignment_chain,
+            fragment_sequence = self._left_fragment_sequence,
+            get_interval = lambda aligned_path: aligned_path.first_interval(),
+            score_interval = lambda aligned_path, interval: aligned_path.subscore(left_sub_interval = interval))
+        self._right_truncation_sequence, self._right_padding_sequence = self._parametize_concatenations(
+            alignment_chain = self.alignment_chain,
+            fragment_sequence = self._right_fragment_sequence,
+            get_interval = lambda aligned_path: aligned_path.second_interval(),
+            score_interval = lambda aligned_path, interval: aligned_path.subscore(right_sub_interval = interval))
         
         ## 3.   construct the truncated decomposition.
-        self._left_sequence_decomposition = [self.alignment_chain[self._left_fragment_sequence[0]].first_fragment()]
-        self._left_weight_sequence = [self.alignment_chain[self._left_fragment_sequence[0]].first_aligned_weights()]
-        for prev_position, (truncator, padding, aln_idx) in enumerate(zip(self._left_truncation_sequence, self._left_padding_sequence, self._left_fragment_sequence[1:])):
-            fragment = self.alignment_chain[aln_idx].first_fragment()
-            weights = self.alignment_chain[aln_idx].first_aligned_weights()
-            if truncator > 0:
-                self._left_sequence_decomposition.append(fragment[truncator:])
-                self._left_weight_sequence.append(weights[truncator:])
-            else:
-                if truncator < 0:
-                    prev_fragment = self._left_sequence_decomposition[prev_position]
-                    self._left_sequence_decomposition[prev_position] = prev_fragment[:truncator]
-                    prev_weight = self._left_weight_sequence[prev_position]
-                    self._left_weight_sequence[prev_position] = prev_weight[:truncator]
-                elif padding > 0:
-                    prev_fragment = self._left_sequence_decomposition[prev_position]
-                    self._left_sequence_decomposition[prev_position] = prev_fragment + [prev_fragment[-1]] * padding
-                    prev_weight = self._left_weight_sequence[prev_position]
-                    self._left_weight_sequence[prev_position] = prev_weight + ['None'] * padding
-                self._left_sequence_decomposition.append(fragment)
-                self._left_weight_sequence.append(weights)
-        self._right_sequence_decomposition = [self.alignment_chain[self._right_fragment_sequence[0]].second_fragment()]
-        self._right_weight_sequence = [self.alignment_chain[self._right_fragment_sequence[0]].second_aligned_weights()]
-        for prev_position, (truncator, padding, aln_idx) in enumerate(zip(self._right_truncation_sequence, self._right_padding_sequence, self._right_fragment_sequence[1:])):
-            fragment = self.alignment_chain[aln_idx].second_fragment()
-            weights = self.alignment_chain[aln_idx].second_aligned_weights()
-            if truncator > 0:
-                self._right_sequence_decomposition.append(fragment[truncator:])
-                self._right_weight_sequence.append(weights[truncator:])
-            else:
-                if truncator < 0:
-                    prev_fragment = self._right_sequence_decomposition[prev_position]
-                    self._right_sequence_decomposition[prev_position] = prev_fragment[:truncator]
-                    prev_weight = self._right_weight_sequence[prev_position]
-                    self._right_weight_sequence[prev_position] = prev_weight[:truncator]
-                elif padding > 0:
-                    prev_fragment = self._right_sequence_decomposition[prev_position]
-                    self._right_sequence_decomposition[prev_position] = prev_fragment + [prev_fragment[-1]] * padding
-                    prev_weight = self._right_weight_sequence[prev_position]
-                    self._right_weight_sequence[prev_position] = prev_weight + ['None'] * padding
-                self._right_sequence_decomposition.append(fragment)
-                self._right_weight_sequence.append(weights)
+        self._left_edge_decomposition, self._left_weight_decomposition = self._decompose_pad_truncate(
+            alignment_chain = self.alignment_chain,
+            fragment_sequence = self._left_fragment_sequence,
+            padding = self._left_padding_sequence,
+            truncations = self._left_truncation_sequence,
+            get_fragment = lambda aligned_path: aligned_path.first_fragment(),
+            get_weights = lambda aligned_path: aligned_path.first_aligned_weights())
+        self._right_edge_decomposition, self._right_weight_decomposition = self._decompose_pad_truncate(
+            alignment_chain = self.alignment_chain,
+            fragment_sequence = self._right_fragment_sequence,
+            padding = self._right_padding_sequence,
+            truncations = self._right_truncation_sequence,
+            get_fragment = lambda aligned_path: aligned_path.second_fragment(),
+            get_weights = lambda aligned_path: aligned_path.second_aligned_weights())
 
         ## 4.   finally, construct the sequence.
-        self._left_edge_sequence = list(chain.from_iterable(map(pairwise, self._left_sequence_decomposition)))
-        self._left_weight_sequence = list(chain.from_iterable(self._left_weight_sequence))
-        self._right_edge_sequence = list(chain.from_iterable(map(pairwise, self._right_sequence_decomposition)))
-        self._right_weight_sequence = list(chain.from_iterable(self._right_weight_sequence))
+        self._left_edge_sequence, self._left_weight_sequence = self._concatenate_decomposed_sequences(
+            edge_decomposition = self._left_edge_decomposition,
+            weight_decomposition = self._left_weight_decomposition)
+        self._right_edge_sequence, self._right_weight_sequence = self._concatenate_decomposed_sequences(
+            edge_decomposition = self._right_edge_decomposition,
+            weight_decomposition = self._right_weight_decomposition)
 
     def first_edges(self):
         return self._left_edge_sequence
@@ -269,3 +289,11 @@ class FragmentChain:
     
     def second_aligned_weights(self):
         return list(filter(lambda x: x is not None, self._right_weight_sequence))
+    
+    def __repr__(self):
+        return f"""FragmentChain
+first edges\t{self.first_edges()}
+first weights\t{self.first_weights()}
+second edges\t{self.second_weights()}
+second weights\t{self.second_edges()}
+"""

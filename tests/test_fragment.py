@@ -102,6 +102,7 @@ class TestFragment(unittest.TestCase):
                 print(frag_itx.get_alignment(alignment_idx))
             print('-'*20)
         fragment_chains = collate_fragments(aln, LocalCostModel, 1000)
+        print(fragment_chains)
     
     def test_non_ladder(self):
         self._test_fragment_itx(*self._get_non_ladder_ex(), "non-ladder")
