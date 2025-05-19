@@ -4,8 +4,8 @@ from copy import deepcopy
 import networkx as nx
 import numpy as np
 
-from .types import Edge, SingularPath, DualPath, GraphPair
-from .util import disjoint_pairs
+from ..types import Edge, SingularPath, DualPath, GraphPair
+from ..util import disjoint_pairs
 
 #=============================================================================#
 

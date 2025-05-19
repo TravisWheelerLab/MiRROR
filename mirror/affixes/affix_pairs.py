@@ -1,5 +1,5 @@
 from .affix_types import Affix
-from ..graph_utils import find_edge_disjoint_dual_path_pairs
+from ..graphs.graph_utils import find_edge_disjoint_dual_path_pairs
 
 import numpy as np
 

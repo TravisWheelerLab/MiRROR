@@ -1,12 +1,16 @@
 import itertools
+import subprocess
+from pathlib import Path
 from enum import Enum
 from copy import deepcopy
 
+import graphviz as gvz
 import networkx as nx
+from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
 
-from .util import horizontal_panes, GAP_TOLERANCE, INTERGAP_TOLERANCE
-from .pivots import Pivot
-from .boundaries import AugmentedData
+from ..util import horizontal_panes, residue_lookup, GAP_TOLERANCE, INTERGAP_TOLERANCE
+from ..pivots import Pivot
+from ..boundaries import AugmentedData
 from .graph_utils import *
 
 #=============================================================================#
@@ -120,14 +124,6 @@ def create_spectrum_graph_pair(
     return (asc_graph, desc_graph)
 
 #=============================================================================#
-import subprocess
-from pathlib import Path
-
-import graphviz as gvz
-import networkx as nx
-from networkx.drawing.nx_agraph import graphviz_layout, to_agraph
-
-from .util import residue_lookup
 
 def draw_graph_simple(graph: nx.DiGraph, gap_key = "gap"):
     graph = deepcopy(graph)

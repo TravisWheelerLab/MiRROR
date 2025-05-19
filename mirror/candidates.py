@@ -8,7 +8,7 @@ from .affixes import Affix, AffixPair
 from .spectral_alignment import score_sequence_to_spectrum
 from .util import mask_ambiguous_residues, residue_lookup, disjoint_pairs, sequence_mass
 from .pivots import Pivot
-from .graph_utils import path_to_edges, unzip_dual_path, extend_truncated_paths, GraphPair
+from .graphs.graph_utils import path_to_edges, unzip_dual_path, extend_truncated_paths, GraphPair
 
 #=============================================================================#
 

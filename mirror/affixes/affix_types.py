@@ -1,6 +1,6 @@
 from ..util import residue_lookup
-from ..graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges
-from ..spectrum_graphs import GAP_KEY
+from ..graphs.graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges
+from ..graphs.spectrum_graphs import GAP_KEY
 
 #=============================================================================#
 
