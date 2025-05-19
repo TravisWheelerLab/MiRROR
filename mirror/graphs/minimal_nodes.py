@@ -1,10 +1,11 @@
 from .graph_types import DAG
+from .align_types import CostFunction
 from typing import Callable
 from heapq import heappop, heappush
 
 def propagate(
     topology: DAG,
-    cost: Callable,
+    cost: CostFunction,
     threshold: float,
     source: int,
 ) -> dict[int, float]:

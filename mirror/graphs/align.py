@@ -13,6 +13,7 @@ def align(
     cost_model: CostModel,
     threshold = inf,
     precision = 10,
+    path_filter = lambda x: True,
 ) -> list[AlignedPath]:
     sources = list(product_graph.sources())
     sinks = list(product_graph.sinks())
@@ -31,7 +32,8 @@ def align(
                 node_cost = node_cost,
                 threshold = threshold,
                 source = source,
-                sink = sink))
+                sink = sink,
+                path_filter = path_filter))
     return list(map(
         lambda x: AlignedPath(
             score = round(x[0], precision), 

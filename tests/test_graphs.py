@@ -10,49 +10,38 @@ import unittest
 from random import shuffle
 
 class TestGraphTypes(unittest.TestCase):
+    
+    @classmethod
+    def _construct_dag(cls, edges, weights, weight_key = "weight"):
+        g = DiGraph()
+        g.add_edges_from(
+            (i,j, {weight_key: w})
+            for ((i, j), w) in zip(edges, weights))
+        return DAG(g, weight_key)
 
     def test_dag(self):
-        g = DiGraph()
-        g_edges = [(0,1),(0,2),(1,3),(2,3)]
-        g_weights = ['a','b','c','d']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i,j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        dag = DAG(g, g_weight_key)
+        dag = self._construct_dag(
+            edges = [(0,1),(0,2),(1,3),(2,3)],
+            weights = ['a','b','c','d'])
 
         try:
-            g = DiGraph()
-            g_edges = [(0,1),(0,2),(1,3),(3,0)]
-            g_weights = ['a','b','c','d']
-            g_weight_key = "weight"
-            g.add_edges_from(
-                (i,j, {g_weight_key: w})
-                for ((i, j), w) in zip(g_edges, g_weights))
-            dag = DAG(g, g_weight_key)
+            dag = self._construct_dag(
+                edges = [(0,1),(0,2),(1,3),(3,0)],
+                weights = ['a','b','c','d'])
         except ValueError as e:
             self.assertEqual(str(e), "not a directed acyclic graph!")
 
     def test_products(self):
         # construct DAGs
-        g = DiGraph()
-        g_edges = [(0,1),(0,2),(1,3),(2,3)]
-        g_weights = ['a','b','c','d']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i,j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        dag = DAG(g, g_weight_key)
+        dag = self._construct_dag(
+            edges = [(0,1),(0,2),(1,3),(2,3)],
+            weights = ['a','b','c','d'])
 
-        h = DiGraph()
-        h_edges = [(0,1),(1,3),(2,3)]
-        h_weights = ['a','b','d']
-        h_weight_key = "weight2"
-        h.add_edges_from(
-            (i, j, {h_weight_key: w}) 
-            for ((i, j), w) in zip(h_edges, h_weights))
-        dag2 = DAG(h, h_weight_key)
-
+        dag2 = self._construct_dag(
+            edges = [(0,1),(1,3),(2,3)],
+            weights = ['a','b','d'],
+            weight_key = "weight2")
+        
         # construct, verify direct product
         d_prod = DirectProductDAG(dag, dag2)
         d_prod_neighbors = [d_prod.unravel(i) for i in d_prod.adj_out(0)]
@@ -90,23 +79,13 @@ class TestGraphTypes(unittest.TestCase):
 class TestMinimalNodes(unittest.TestCase):
     
     def test_minimal_nodes(self):
-        g = DiGraph()
-        g_edges = [(0,1),(0,2),(1,3),(2,3)]
-        g_weights = ['a','b','c','d']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i,j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        dag = DAG(g, g_weight_key)
+        dag = TestGraphTypes._construct_dag(
+            edges = [(0,1),(0,2),(1,3),(2,3)],
+            weights = ['a','b','c','d'])
 
-        h = DiGraph()
-        h_edges = [(0,1),(1,3),(2,3)]
-        h_weights = ['a','c','d']
-        h_weight_key = "weight2"
-        h.add_edges_from(
-            (i, j, {h_weight_key: w}) 
-            for ((i, j), w) in zip(h_edges, h_weights))
-        dag2 = DAG(h, h_weight_key)
+        dag2 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,3),(2,3)],
+            weights = ['a','c','d'])
 
         s_prod = StrongProductDAG(dag, dag2)
 
@@ -142,23 +121,13 @@ class TestMinimalNodes(unittest.TestCase):
 class TestMinimalPaths(unittest.TestCase):
     
     def test1_minimal_paths(self):
-        g = DiGraph()
-        g_edges = [(0,1),(0,2),(1,3),(2,3)]
-        g_weights = ['a','b','c','d']
-        g_weight_key = "weight"
-        g.add_edges_from(
-            (i, j, {g_weight_key: w})
-            for ((i, j), w) in zip(g_edges, g_weights))
-        dag = DAG(g, g_weight_key)
+        dag = TestGraphTypes._construct_dag(
+            edges = [(0,1),(0,2),(1,3),(2,3)],
+            weights = ['a','b','c','d'])
 
-        h = DiGraph()
-        h_edges = [(0,1),(1,3),(2,3)]
-        h_weights = ['a','c','d']
-        h_weight_key = "weight2"
-        h.add_edges_from(
-            (i, j, {h_weight_key: w}) 
-            for ((i, j), w) in zip(h_edges, h_weights))
-        dag2 = DAG(h, h_weight_key)
+        dag2 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,3),(2,3)],
+            weights = ['a','c','d'])
 
         s_prod = StrongProductDAG(dag, dag2)
 
@@ -204,21 +173,13 @@ class TestMinimalPaths(unittest.TestCase):
     def test2_substitution(self):
         weight_key = 'weight'
 
-        dag3_edges = [(0,1),(1,2),(2,3),(3,4)]
-        dag3_weights = ['a','b','c','d']
-        dag3_edge_data = [(i, j, {weight_key: w}) for ((i, j), w) in zip(dag3_edges, dag3_weights)]
-        dag3 = DAG(
-            graph = DiGraph(incoming_graph_data = dag3_edge_data),
-            weight_key = weight_key,
-        )
+        dag3 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(2,3),(3,4)],
+            weights = ['a','b','c','d'])
 
-        dag4_edges = [(0,1),(1,2),(2,3),(3,4)]
-        dag4_weights = ['a','b','e','d']
-        dag4_edge_data = [(i, j, {weight_key: w}) for ((i, j), w) in zip(dag4_edges, dag4_weights)]
-        dag4 = DAG(
-            graph = DiGraph(incoming_graph_data = dag4_edge_data),
-            weight_key = weight_key,
-        )
+        dag4 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(2,3),(3,4)],
+            weights = ['a','b','e','d'])
 
         s_prod = StrongProductDAG(dag3, dag4)
 
@@ -257,22 +218,13 @@ class TestMinimalPaths(unittest.TestCase):
     
     def test3_gaps(self):
         weight_key = 'weight'
+        dag3 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(0,2),(1,3),(2,3)],
+            weights = ['a','b','c','d'])
 
-        dag3_edges = [(0,1),(1,2),(2,3),(3,4)]
-        dag3_weights = ['a','b','c','d']
-        dag3_edge_data = [(i, j, {weight_key: w}) for ((i, j), w) in zip(dag3_edges, dag3_weights)]
-        dag3 = DAG(
-            graph = DiGraph(incoming_graph_data = dag3_edge_data),
-            weight_key = weight_key,
-        )
-
-        dag5_edges = [(0,1),(1,2),(3,4)]
-        dag5_weights = ['a','b','d']
-        dag5_edge_data = [(i, j, {weight_key: w}) for ((i, j), w) in zip(dag5_edges, dag5_weights)]
-        dag5 = DAG(
-            graph = DiGraph(incoming_graph_data = dag5_edge_data),
-            weight_key = weight_key,
-        )
+        dag5 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,3),(2,3)],
+            weights = ['a','b','d'])
 
         s_prod = StrongProductDAG(dag3, dag5)
 
@@ -310,26 +262,47 @@ class TestMinimalPaths(unittest.TestCase):
             path_len = len(path_nodes)
             path_str = ''.join(str(s_prod.weight_out(path_nodes[i], path_nodes[i + 1])) for i in range(path_len - 1))
             print(f"{path_score}\t{[s_prod.unravel(x) for x in path_nodes]}\n\t{path_str}\n")
+    
+    def test4_filter_parity(self):
+        unit_cost_graph = TestGraphTypes._construct_dag(
+            edges = [(0,1),(0,2),(1,2),(1,3),(2,4),(3,4),(3,5),(4,6),(5,6)],
+            weights = [0.] * 9)
+        source = 0
+        sink = 6
+
+        weight_id = lambda _, w: w
+        node_cost_table = propagate(
+            topology = unit_cost_graph,
+            cost = weight_id,
+            threshold = 0.,
+            source = source,
+        )
+
+        path_parity_filter = lambda p: (len(p) % 2) == 0
+        paths = list(backtrace(
+            topology = unit_cost_graph,
+            cost = weight_id,
+            node_cost = node_cost_table,
+            threshold = 0.,
+            source = source,
+            sink = sink,
+            path_filter = path_parity_filter
+        ))
+
+        for score, path in paths:
+            self.assertEqual(score == len(path))
+            self.assertEqual(score % 2, 0)
 
 class TestAlign(unittest.TestCase):
 
     def test_align(self):
-        d = DiGraph()
-        d.add_edge(0,1,weight='x')
-        d.add_edge(1,2,weight='a')
-        d.add_edge(2,3,weight='b')
-        d.add_edge(3,4,weight='c')
-        dag1 = DAG(d, "weight")
+        dag1 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(2,3),(3,4)],
+            weights = ['x','a','b','c'])
         
-        e = DiGraph()
-        e.add_edge(0,1,weight='a')
-        e.add_edge(1,2,weight='b')
-        e.add_edge(0,3,weight='a')
-        e.add_edge(3,4,weight='b')
-        e.add_edge(4,5,weight='c')
-        e.add_edge(4,6,weight='x')
-        e.add_edge(6,7,weight='c')
-        dag2 = DAG(e, "weight")
+        dag2 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(0,3),(3,4),(4,5),(4,6),(6,7)],
+            weights = ['a','b','a','b','c','x','c'])
 
         product_graph = StrongProductDAG(
             first_graph = dag1,
@@ -352,54 +325,82 @@ class TestAlign(unittest.TestCase):
             dual = [w1 if w1 == w2 else f"{w1}/{w2}" for (w1, w2) in zip(sequence1, sequence2)] 
             print(f"{score}\t{path}\n\t{dual}\n")
 
+    def test2_filtered_align(self):
+        aaaa_graph = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(2,3),(3,4)],
+            weights = list('aaaa'))
+        
+        bbaa_graph = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(2,3),(3,4)],
+            weights = list('bbaa'))
+        
+        product_graph = StrongProductDAG(
+            first_graph = aaaa_graph,
+            second_graph = bbaa_graph)
+        
+        only_a_filter = ProductPathWeightFilter(
+            weight_sequence_filter = lambda weights: all(w == 'a' for w in weights),
+            graph = product_graph)
+
+        filtered_aln = align(
+            product_graph = product_graph,
+            cost_model = LocalCostModel(),
+            threshold = 10.,
+            path_filter = only_a_filter)
+        
+        for aligned_path in filtered_aln:
+            score = aligned_path.score
+            path = aligned_path.alignment
+            sequence1 = list(map(
+                lambda x: '_' if x == None else x,
+                ((aaaa_graph.weight_out(path[i][0], path[i + 1][0])) for i in range(len(path) - 1))))
+            sequence2 = list(map(
+                lambda x: '_' if x == None else x,
+                ((bbaa_graph.weight_out(path[i][1], path[i + 1][1])) for i in range(len(path) - 1))))
+            dual = [w1 if w1 == w2 else f"{w1}/{w2}" for (w1, w2) in zip(sequence1, sequence2)] 
+            print(f"{score}\t{path}\n\t{dual}\n")
+
 class TestFragment(unittest.TestCase):
-    
-    def _construct_dag(self, edges, weights, weight_key = "weight"):
-        g = DiGraph()
-        g.add_edges_from(
-            (i,j, {weight_key: w})
-            for ((i, j), w) in zip(edges, weights))
-        return DAG(g, weight_key)
 
     def _get_dag_1(self):
         g_edges = [(0, 2), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (5, 7)]
         g_weights = ['a','b','c','d','e','f','g']
-        return self._construct_dag(g_edges, g_weights)
+        return TestGraphTypes._construct_dag(g_edges, g_weights)
 
     def _get_dag_2(self):
         g_edges = [(0, 2), (1, 2), (2, 3), (4, 5), (5, 6), (5, 7)]
         g_weights = ['a','b','c','e','f','g']
-        return self._construct_dag(g_edges, g_weights)
+        return TestGraphTypes._construct_dag(g_edges, g_weights)
 
     def _get_dag_3(self):
         g_edges = [(0, 2), (1, 2), (2, 3), (3, 4), (5, 6), (5, 7)]
         g_weights = ['a','b','c','d','f','g']
-        return self._construct_dag(g_edges, g_weights)
+        return TestGraphTypes._construct_dag(g_edges, g_weights)
 
     def _get_dag_4(self):
         g_edges = [(0, 2), (1, 2), (3, 4), (4, 5), (5, 6), (5, 7)]
         g_weights = ['a','b','d','e','f','g']
-        return self._construct_dag(g_edges, g_weights)
+        return TestGraphTypes._construct_dag(g_edges, g_weights)
     
     def _get_dag_5(self):
         g_edges = [(0, 2), (1, 2), (2, 3), (4, 5), (5, 6), (6, 7), (7, 8), (7,9)]
         g_weights = ['a','b','c','c','d','e','f','g']
-        return self._construct_dag(g_edges, g_weights)
+        return TestGraphTypes._construct_dag(g_edges, g_weights)
     
     def _get_non_ladder_ex(self):
-        dag1 = self._construct_dag(
+        dag1 = TestGraphTypes._construct_dag(
             edges = pairwise(range(6)),
             weights = map(chr, range(ord('a'),ord('a') + 5)))
-        dag2 = self._construct_dag(
+        dag2 = TestGraphTypes._construct_dag(
             edges = [(0,1),(2,3),(4,5)],
             weights = ['a','c','e'])
         return dag1, dag2
 
     def _get_overlap_ex(self):
-        dag1 = self._construct_dag(
+        dag1 = TestGraphTypes._construct_dag(
             edges = pairwise(range(5)),
             weights = map(chr, range(ord('a'),ord('a') + 4)))
-        dag2 = self._construct_dag(
+        dag2 = TestGraphTypes._construct_dag(
             edges = [
                 (0,1),(1,2),(2,3),
                 (4,5),(5,6),(6,7)],
@@ -409,10 +410,10 @@ class TestFragment(unittest.TestCase):
         return dag1, dag2
 
     def _get_overlap_ex1(self):
-        dag1 = self._construct_dag(
+        dag1 = TestGraphTypes._construct_dag(
             edges = pairwise(range(5)),
             weights = map(chr, range(ord('a'),ord('a') + 4)))
-        dag2 = self._construct_dag(
+        dag2 = TestGraphTypes._construct_dag(
             edges = [
                 (0,1),(1,2),(2,3),
                 (4,5),(5,6)],
@@ -475,4 +476,3 @@ class TestFragment(unittest.TestCase):
         dag1 = self._get_dag_1()
         dag5 = self._get_dag_5()
         self._test_fragment_itx(dag1, dag5, "15")
-    

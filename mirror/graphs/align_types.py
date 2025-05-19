@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Any
+from typing import Iterable, Callable, Any
 from itertools import chain, pairwise
 from math import floor, ceil
 from abc import ABC, abstractmethod
@@ -62,6 +62,30 @@ class LocalCostModel(CostModel):
             else:
                 raise ValueError(f"both edges are stationary! {edge} {weight}")
         return cost_function
+
+class ProductPathWeightFilter(Callable[[Iterable[int]], bool]):
+    def __init__(self,
+        weight_sequence_filter: Callable[[list[Any]], bool],
+        graph: ProductDAG,
+    ):
+        self._filter = weight_sequence_filter
+        self._graph = graph
+    
+    def _weight_sequences(self, path_nodes: Iterable[int]):
+        first_weights, second_weights = zip(*map(
+            lambda edge: self._graph.weight_out(*edge),
+            pairwise(path_nodes)))
+        return first_weights, second_weights
+    
+    def __call__(self, path_nodes: Iterable[int]):
+        path_nodes = list(path_nodes)
+        if len(path_nodes) < 2:
+            return True
+        else:
+            first_weights, second_weights = self._weight_sequences(path_nodes)
+            first_filter = self._filter(first_weights)
+            second_filter = self._filter(second_weights)
+            return first_filter or second_filter
 
 class AlignedPath(list[tuple[Any, Any]]):
     @classmethod
