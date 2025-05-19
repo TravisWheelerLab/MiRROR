@@ -149,10 +149,10 @@ class FragmentChain:
             next_interval = get_interval(alignment_chain[next_i])
             ### parametize the truncation
             interval_gap = curr_interval[1] - next_interval[0]
-            print(f"curr {curr_interval}\nnext {next_interval}\ngap {interval_gap}")
-            if interval_gap > 0:
+            #print(f"curr {curr_interval}\nnext {next_interval}\ngap {interval_gap}")
+            if interval_gap >= 0:
                 overlap_interval = (next_interval[0], curr_interval[1])
-                print(f"ovlp {overlap_interval}")
+                #print(f"ovlp {overlap_interval}")
                 curr_subscore = score_interval(alignment_chain[curr_i], overlap_interval)
                 next_subscore = score_interval(alignment_chain[next_i], overlap_interval)
                 truncator = interval_gap + 1
@@ -218,11 +218,14 @@ class FragmentChain:
         # public fields
         self.score = score
         self.alignment_chain = alignment_chain
+        #print(f"alignment chain {self.alignment_chain}")
         
         # private fields
         ## 1.   determine the correct fragment sequence
         self._left_fragment_sequence, self._right_fragment_sequence = self._sequence_fragments(
             alignment_chain = self.alignment_chain)
+        #print(f"left fragment sequence {self._left_fragment_sequence}")
+        #print(f"right fragment sequence {self._right_fragment_sequence}")
         
         ## 2.   parametize concatenations with a truncation value: 
         ##      an integer that is negative if the left term is truncated, 
@@ -241,7 +244,9 @@ class FragmentChain:
             fragment_sequence = self._right_fragment_sequence,
             get_interval = lambda aligned_path: aligned_path.second_interval(),
             score_interval = lambda aligned_path, interval: aligned_path.subscore(right_sub_interval = interval))
-        
+        #print(f"left trunc {self._left_truncation_sequence}\nleft pad {self._left_padding_sequence}")
+        #print(f"right trunc {self._right_truncation_sequence}\nright pad {self._right_padding_sequence}")
+
         ## 3.   construct the truncated decomposition.
         self._left_edge_decomposition, self._left_weight_decomposition = self._decompose_pad_truncate(
             alignment_chain = self.alignment_chain,
