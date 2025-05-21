@@ -3,7 +3,7 @@ from typing import Iterator, Any
 from abc import ABC, abstractmethod
 from itertools import chain, product
 
-from networkx import DiGraph, is_directed_acyclic_graph
+from networkx import DiGraph, is_directed_acyclic_graph, relabel_nodes
 
 class DAG:
     def __init__(self,
@@ -47,6 +47,30 @@ class DAG:
     
     def sources(self) -> list[int]:
         return self._sources
+
+class NodeLabeledDAG(DAG):
+    def __init__(self,
+        graph: DiGraph,
+        weight_key: str,
+    ):
+        self._original_graph = graph
+        self._node_labels = list(graph.nodes)
+        self._node_dict = {label: idx for (idx, label) in enumerate(self._node_labels)}
+        relabeled_graph = relabel_nodes(
+            G = self._original_graph,
+            mapping = self._node_dict
+        )
+        super(NodeLabeledDAG, self).__init__(relabeled_graph, weight_key)
+    
+    def get_node_idx(self,
+        node_label,
+    ) -> int:
+        return self._node_dict[node_label]
+    
+    def get_node_label(self,
+        node_idx: int
+    ) -> Any:
+        return self._node_labels[node_idx]
 
 @dataclass
 class ProductDAG(ABC, DAG):

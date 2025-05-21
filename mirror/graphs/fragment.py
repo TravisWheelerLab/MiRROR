@@ -43,7 +43,7 @@ def collate_fragments(
     alignments: Iterator[AlignedPath],
     cost_model: CostModel,
     threshold: float,
-):
+) -> list[FragmentChain]:
     # construct the fragment intersection
     frag_itx = FragmentIntersectionGraph(
         alignments = alignments,

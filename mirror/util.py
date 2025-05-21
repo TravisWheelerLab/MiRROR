@@ -62,7 +62,7 @@ def residue_lookup(
     :tolerance: a float; the maximum permissible difference between the gap and the best match.
     :unknown: the return value for gaps whose best match differs by more than the tolerance, or gaps == -1.
     :nan: the value returned for gaps == -2."""
-    if gap == -1:
+    if gap == -1 or gap is None:
         return unknown
     elif gap == -2:
         return nan

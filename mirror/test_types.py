@@ -109,8 +109,10 @@ class TestSpectrum:
 
     def _optimize(self):
         if self.n_indices > 0:
-            self._edit_distances = np.array([self.get_candidate(index).edit_distance(self.residue_sequence)[0] for index in self])
+            candidates = [self.get_candidate(index) for index in self]
+            self._edit_distances = np.array([cand.edit_distance(self.residue_sequence)[0] for cand in candidates])
             self._optimizer = self._edit_distances.argmin()
+            #print(candidates[self._optimizer])
         else:
             self._edit_distances = np.inf
             self._optimizer = -1
@@ -324,11 +326,16 @@ class TestSpectrum:
         for p_idx in range(self.n_pivot_clusters):
             for b_idx in range(self.n_augmented_data[p_idx]):
                 graph_pair = self._spectrum_graphs[p_idx][b_idx]
-                gap_comparator = GAP_COMPARATOR
-                dual_paths = find_dual_paths(
-                    *graph_pair,
-                    self.gap_key,
-                    gap_comparator)
+                if 0 in map(lambda x: x.order(), graph_pair):
+                    dual_paths = []
+                else:
+                    dual_paths = graphs.spectrum_graphs.align_spectrum_graphs(
+                        spectrum_graph_pair = graph_pair,
+                        threshold = 0.,
+                    )
+                #    *graph_pair,
+                #    self.gap_key,
+                #    gap_comparator)
                 self._dual_paths[p_idx][b_idx] = dual_paths
                 self.n_dual_paths[p_idx][b_idx] = len(dual_paths)
         return sum(sum(self.n_dual_paths[i]) for i in range(self.n_pivot_clusters))
@@ -339,11 +346,12 @@ class TestSpectrum:
         self.n_affixes = [[-1 for _ in range(self.n_augmented_data[p_idx])] for p_idx in range(self.n_pivot_clusters)]
         for p_idx in range(self.n_pivot_clusters):
             for b_idx in range(self.n_augmented_data[p_idx]):
-                dual_paths = self._dual_paths[p_idx][b_idx]
                 graph_pair = self._spectrum_graphs[p_idx][b_idx]
-                affixes = np.array([create_affix(dp, graph_pair) for dp in dual_paths])
-                self._affixes[p_idx][b_idx] = affixes
-                self.n_affixes[p_idx][b_idx] = len(affixes)
+                dual_paths = self._dual_paths[p_idx][b_idx]
+                affixes_arr = np.array([affixes.affix_types.create_affix_from_aligned_path(ap) for ap in dual_paths])# + [affixes.affix_types.create_affix_from_fragment_chain(fc) for fc in fragment_chains])
+                #affixes_arr = np.array([affixes.affix_types.create_affix(dp, graph_pair) for dp in dual_paths])
+                self._affixes[p_idx][b_idx] = affixes_arr
+                self.n_affixes[p_idx][b_idx] = len(affixes_arr)
         return sum(sum(self.n_affixes[i]) for i in range(self.n_pivot_clusters))
 
     def run_affixes_filter(self):

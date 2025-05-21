@@ -95,7 +95,7 @@ def main(args):
             outputs.sort(key = lambda x: test_spectrum._edit_distances[x[0]])
             for (i, idx) in outputs:
                 pivot, augmented_data, graph_pair, affixes, affix_pair, candidate = test_spectrum.get_output_stack(idx)
-                graph_repr = mirror.spectrum_graphs.draw_graph_pair(graph_pair, mode = "simple")
+                graph_repr = mirror.graphs.spectrum_graphs.draw_graph_pair(graph_pair, mode = "simple")
                 paths = [afx.path() for afx in affixes[affix_pair]]
                 translations = [afx.translate() for afx in affixes[affix_pair]]
                 augmented_peaks, boundary_repr, augmented_gaps, augmented_pivot = augmented_data
@@ -131,7 +131,7 @@ def main(args):
             for p in range(test_spectrum.n_pivots):
                 for b in range(test_spectrum.n_boundaries[p]):
                     graph_pair = test_spectrum.get_spectrum_graph_pair(p, b)
-                    graph_repr = mirror.spectrum_graphs.draw_graph_pair(graph_pair, mode = "simple")
+                    graph_repr = mirror.graphs.spectrum_graphs.draw_graph_pair(graph_pair, mode = "simple")
                     input(graph_repr)
 
 if __name__ == "__main__":

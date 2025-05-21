@@ -2,6 +2,7 @@ from _tool_init import mirror, timed_op, argparse
 import numpy as np
 from pathlib import Path
 import uuid
+from time import time
 
 PROG = "𝕄 iℝ ℝ 𝕆 ℝ - test\n"
 DESC = """the test system for MiRROR;
@@ -66,7 +67,7 @@ ARG_DEFAULTS = [
     "",
     mirror.util.TERMINAL_RESIDUES,
     mirror.util.BOUNDARY_PADDING,
-    mirror.spectrum_graphs.GAP_KEY,
+    mirror.graphs.spectrum_graphs.GAP_KEY,
     0,
     "./data/output/",
     str(uuid.uuid4())[:8],
@@ -136,6 +137,7 @@ def main(args):
     tryptic_peptides = mirror.util.add_tqdm(list(tryptic_peptides))
 
     test_record = mirror.TestRecord(args.session_id)
+    time_start = time()
     for peptide_idx, true_sequence in enumerate(tryptic_peptides):
         peaks = mirror.util.simulate_peaks(true_sequence, param = simulation_param)
         printer(f"mz\n\t{peaks}", 2)
@@ -169,7 +171,7 @@ def main(args):
         )
 
         test_record.add(test_spectrum)
-
+    time_elapsed = time() - time_start
     test_record.finalize()
     
     test_record.print_summary()
@@ -183,6 +185,7 @@ def main(args):
     test_record.save_spatial_outliers(output_dir / "spatial_outliers/")
     if args.write_matches:
         test_record.save_matches(output_dir / "matches/")
+    print("RUNTIME:", time_elapsed)
 
 if __name__ == "__main__":
     args = get_parser().parse_args()

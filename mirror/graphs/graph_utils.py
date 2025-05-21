@@ -11,11 +11,11 @@ from ..util import disjoint_pairs
 
 def get_sources(D: nx.DiGraph):
     "All nodes in `D: nx.DiGraph` with indegree of 0."
-    return [i for i in D.nodes if D.in_degree(i) == 0 if i != -1]
+    return [i for i in D.nodes if D.in_degree(i) == 0 and i != -1]
 
 def get_sinks(D: nx.DiGraph):
     "All nodes in `D: nx.DiGraph` with outdegree of 0."
-    return [i for i in D.nodes if D.out_degree(i) == 1 if i != -1]
+    return [i for i in D.nodes if D.out_degree(i) == 1 and i != -1]
 
 def get_nontrivial_sinks_and_sources(D: nx.DiGraph):
     """All sinks that are not sources, and all sources that are not sinks. In other words: sinks and sources that are not singleton components."""

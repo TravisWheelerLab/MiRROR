@@ -68,6 +68,8 @@ class FragmentPairGraph(DAG):
     ):
         index_key = fragment_itx.index_key
         pair_graph = DiGraph()
+        for i, _ in enumerate(fragment_itx._alignments):
+            pair_graph.add_node(i)
         for node_a1 in component:
             for node_b in fragment_itx[node_a1]:
                 # unpack the first edge
@@ -294,7 +296,7 @@ class FragmentChain:
     
     def second_aligned_weights(self):
         return list(filter(lambda x: x is not None, self._right_weight_sequence))
-    
+
     def __repr__(self):
         return f"""FragmentChain
 first edges\t{self.first_edges()}

@@ -1,6 +1,8 @@
 from ..util import residue_lookup
 from ..graphs.graph_utils import nx, SingularPath, DualPath, GraphPair, unzip_dual_path, path_to_edges
 from ..graphs.spectrum_graphs import GAP_KEY
+from ..graphs.align_types import AlignedPath
+from ..graphs.fragment_types import FragmentChain
 
 #=============================================================================#
 
@@ -47,6 +49,39 @@ class Affix:
 )"""
 
 #=============================================================================#
+
+def create_affix_from_fragment_chain(
+    fragment_chain: FragmentChain,
+) -> Affix:
+    edges1 = fragment_chain.first_edges()
+    sequence1 = [edges1[0][0]] + [edge[1] for edge in edges1] 
+    edges2 = fragment_chain.second_edges()
+    sequence2 = [edges2[0][0]] + [edge[1] for edge in edges2]
+    dual_path = list(zip(sequence1, sequence2))
+    weights1 = fragment_chain.first_weights()
+    translation1 = list(map(residue_lookup, weights1))
+    weights2 = fragment_chain.second_weights()
+    translation2 = list(map(residue_lookup, weights2))
+    called_sequence = _call_sequence_from_translations(translation1, translation2)
+    return Affix(
+        dual_path = dual_path, 
+        translations = (translation1, translation2),
+        called_sequence = called_sequence)
+
+def create_affix_from_aligned_path(
+    aligned_path: AlignedPath,
+) -> Affix:
+    fragment1, fragment2 = aligned_path.fragments()
+    dual_path = list(zip(fragment1, fragment2))
+    weights1 = aligned_path.first_weights()
+    translation1 = list(map(residue_lookup, weights1))
+    weights2 = aligned_path.second_weights()
+    translation2 = list(map(residue_lookup, weights2))
+    called_sequence = _call_sequence_from_translations(translation1, translation2)
+    return Affix(
+        dual_path = dual_path, 
+        translations = (translation1, translation2),
+        called_sequence = called_sequence)
 
 def create_affix(
     dual_path: DualPath,
