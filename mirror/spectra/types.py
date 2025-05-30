@@ -64,8 +64,8 @@ class PeakList:
         n = len(mz)
         assert len(intensity) == n
         self._n = n
-        self._mz = mz
-        self._intensity = intensity
+        self.mz = mz
+        self.intensity = intensity
 
     @classmethod
     def from_mzlib(cls, 
@@ -98,11 +98,11 @@ class PeakList:
         return self._n
     
     def __getitem__(self, i: int):
-        return self._mz[i]
+        return self.mz[i]
     
     def get_intensity(self, i: int):
         """Return the intensity of the `i`th peak."""
-        return self._intensity[i]
+        return self.intensity[i]
 
 class AnnotatedPeakList(PeakList):
     """A PeakList with additional data associated to peaks.
@@ -112,22 +112,24 @@ class AnnotatedPeakList(PeakList):
     def __init__(self,
         mz: np.ndarray, 
         intensity: np.ndarray,
-        charge: np.ndarray,
+        charge: list,
+        losses: list,
         metadata: dict,
     ):
         n = len(mz)
         assert len(intensity) == len(charge) == n
-        self._charge = charge
-        self._metadata = metadata
+        self.charge = charge
+        self.losses = losses
+        self.metadata = metadata
         super(AnnotatedPeakList, self).__init__(mz, intensity)
     
     def get_charge(self, i: int):
         """Return the charge state of the `i`th peak."""
-        return self._charge[i]
+        return self.charge[i]
     
     def get_metadata(self, i: int, key: str):
         """Return the metadata for `key` of the `i`th peak."""
-        return self._metadata[key][i]
+        return self.metadata[key][i]
 
 class BenchmarkPeakList(AnnotatedPeakList):
     """An annotated peak list in the format of the 9-species benchmark.
@@ -139,11 +141,11 @@ class BenchmarkPeakList(AnnotatedPeakList):
         *args,
         **kwargs,
     ):
-        self._peptide = peptide
+        self.peptide = peptide
         super(BenchmarkPeakList, self).__init__(*args, **kwargs)
     
     def get_peptide(self):
-        return self._peptide
+        return self.peptide
 
     @classmethod
     def from_mzlib(cls, 
@@ -171,7 +173,7 @@ class BenchmarkPeakList(AnnotatedPeakList):
                         annotation.mass_error, 
                         annotation.series, 
                         annotation.position, 
-                        annotation.neutral_losses)
+                        [annotation.neutral_losses])
                 else:
                     return (
                         None,
@@ -179,7 +181,6 @@ class BenchmarkPeakList(AnnotatedPeakList):
                         None,
                         None,
                         None)
-
             charge, mass_error, series, position, losses = zip(*map(
                 lambda x: parse_annotation(x[0]),
                 annotations))
@@ -189,11 +190,11 @@ class BenchmarkPeakList(AnnotatedPeakList):
                 mz = mz, 
                 intensity = intensity,
                 charge = charge,
+                losses = losses,
                 metadata = {
                     "mass_error": mass_error,
                     "series": series,
-                    "position": position,
-                    "losses": losses})
+                    "position": position})
         
     @classmethod
     def from_mgf(cls, 
@@ -208,13 +209,16 @@ class BenchmarkPeakList(AnnotatedPeakList):
         seq = spectrum['params']['seq']
         # peak data
         mz = spectrum['m/z array']
+        n = len(mz)
         intensity = spectrum['intensity array']
         # peak annotations
-        charge = spectrum['charge array']
+        charge = [[c] for c in spectrum['charge array']]
+        losses = [[[None]] for _ in range(n)]
         # done
         return cls(
             peptide = seq,
             mz = mz, 
             intensity = intensity,
             charge = charge,
+            losses = losses,
             metadata = {})
