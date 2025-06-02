@@ -36,8 +36,7 @@ def annotate_peaks(
     consistency = [False for _ in range(n)]
     for i in range(n):
         for data in (charges[i], losses[i]):
-            if len(set(data)) < len(data):
-                consistency[i] = True
+            consistency[i] = len(set(data)) < len(data)
     # done
     return AnnotatedPeakList(
         mz = peaks.mz,

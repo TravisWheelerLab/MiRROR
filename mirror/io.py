@@ -2,12 +2,8 @@ from pyteomics import mgf
 import mzspeclib as mzlib
 from mzspeclib.validate import ValidationWarning as mzlib_ValidationWarning
 import warnings
-def _silence_mzlib_warnings():
-    from mzspeclib.validate import ValidationWarning as mzlib_ValidationWarning
-    import warnings
-    warnings.filterwarnings(action="ignore", category = mzlib_ValidationWarning)
+warnings.filterwarnings(action="ignore", category = mzlib_ValidationWarning)
 
-_silence_mzlib_warnings()
 
 def read_mzlib(path_to_mzlib: str) -> mzlib.SpectrumLibrary:
     """From a path string, load the mzlib file as an mzspeclib.SpectrumLibrary."""

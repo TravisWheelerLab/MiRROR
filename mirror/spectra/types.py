@@ -10,14 +10,9 @@ from ..io import mgf, read_mgf, mzlib, read_mzlib
 
 @dataclass
 class SpectrumParams:
-    # spectrum preparation 
-    a: float
-    b: float
+    # spectrum preparation
     # peak detection
-    x: float
-    y: float
     # peak annotation
-    z: float
     # spectrum alignment
     score_model: str
     score_threshold: float
@@ -123,6 +118,10 @@ class AnnotatedPeakList(PeakList):
         self.metadata = metadata
         super(AnnotatedPeakList, self).__init__(mz, intensity)
     
+    def __repr__(self):
+        metadata_repr = '\n'.join(f"- {key}: {list(val)}" for key, val in self.metadata.items())
+        return f"AnnotatedPeakList:\nmz: {self.mz}\nintensity: {self.intensity}\ncharge: {self.charge}\nlosses: {self.losses}\nmetadata:\n{metadata_repr}"
+
     def get_charge(self, i: int):
         """Return the charge state of the `i`th peak."""
         return self.charge[i]
@@ -169,10 +168,10 @@ class BenchmarkPeakList(AnnotatedPeakList):
             def parse_annotation(annotation):
                 if type(annotation) == PeptideFragmentIonAnnotation:
                     return (
-                        annotation.charge, 
-                        annotation.mass_error, 
-                        annotation.series, 
-                        annotation.position, 
+                        [annotation.charge], 
+                        [annotation.mass_error], 
+                        [annotation.series], 
+                        [annotation.position], 
                         [annotation.neutral_losses])
                 else:
                     return (
@@ -184,18 +183,19 @@ class BenchmarkPeakList(AnnotatedPeakList):
             charge, mass_error, series, position, losses = zip(*map(
                 lambda x: parse_annotation(x[0]),
                 annotations))
+            print(losses)
             # done
             return cls(
                 peptide = seq,
-                mz = mz, 
-                intensity = intensity,
-                charge = charge,
-                losses = losses,
+                mz = list(mz), 
+                intensity = list(intensity),
+                charge = list(charge),
+                losses = [None if L is None else [[loss.name for loss in l] for l in L] for L in losses],
                 metadata = {
-                    "mass_error": mass_error,
-                    "series": series,
-                    "position": position})
-        
+                    "mass_error": [None if E is None else [e.mass_error for e in E] for E in mass_error],
+                    "series": list(series),
+                    "position": list(position)})
+
     @classmethod
     def from_mgf(cls, 
         dataset: mgf.IndexedMGF, 

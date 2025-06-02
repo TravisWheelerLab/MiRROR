@@ -11,14 +11,14 @@ import unittest
 class TestSpectra(unittest.TestCase):
 
     @staticmethod
-    def read_test_mzlib():
+    def read_test_9species_mzlib():
         return read_mzlib("data/spectra/Apis-mellifera.mzlib.txt")
     
     @staticmethod
-    def read_test_mgf():
+    def read_test_9species_mgf():
         return read_mgf("data/spectra/Apis-mellifera.mgf")
     
-    def _test_BenchmarkPeakList(self, name: str, dataset_constructor, benchmark_constructor, sampling_interval: int = 100):
+    def _test_BenchmarkPeakList_9species(self, name: str, dataset_constructor, benchmark_constructor, sampling_interval: int = 100):
         print(f"{name} start\n-reading spectra")
         time_start = time()
         dataset = dataset_constructor()
@@ -30,18 +30,24 @@ class TestSpectra(unittest.TestCase):
         elapsed = time() - time_start
         print(f"{name} done\n-elapsed: {elapsed}")
     
-    def test_BenchmarkPeakList(self):
-        self._test_BenchmarkPeakList(
+    def test_BenchmarkPeakList_9species(self):
+        self._test_BenchmarkPeakList_9species(
             name = "mgf",
-            dataset_constructor = self.read_test_mgf,
+            dataset_constructor = self.read_test_9species_mgf,
             benchmark_constructor = BenchmarkPeakList.from_mgf,
             sampling_interval = 24)
 
-        self._test_BenchmarkPeakList(
+        self._test_BenchmarkPeakList_9species(
             name = "mzlib",
-            dataset_constructor = self.read_test_mzlib,
+            dataset_constructor = self.read_test_9species_mzlib,
             benchmark_constructor = BenchmarkPeakList.from_mzlib,
             sampling_interval = 50)
+    
+    def test_BenchmarkPeakList_annotation(self):
+        benchmark_peak_list = BenchmarkPeakList.from_mzlib(
+            dataset = self.read_test_9species_mzlib(),
+            i = 0)
+        print(benchmark_peak_list)
 
     def test_annotate_peaks(self):
         peaks = PeakList(
@@ -84,4 +90,4 @@ class TestSpectra(unittest.TestCase):
         self.assertEqual(
             annotated_peaks.metadata['consistency'],
             [False, True, True, True, False])
-        print(f"AnnotatedPeakList:\n{annotated_peaks.mz}\n{annotated_peaks.intensity}\n{annotated_peaks.charge}\n{annotated_peaks.losses}\n{annotated_peaks.metadata['consistency']}")
+        print(annotated_peaks)
