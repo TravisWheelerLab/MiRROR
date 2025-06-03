@@ -111,26 +111,23 @@ class MassTransformationSpace:
     def get_residue_mass(self, i: int):
         return self.residue_masses[i]
     
-    def get_loss_mass(self, key: str, i: int):
-        if i == 0:
+    def get_loss_mass(self, key: str, loss_id: int):
+        i = loss_id - 1
+        if i == -1:
             return 0.
+        elif i in self.residue_losses[key]: 
+            return self.loss_masses[i]
         else:
-            return self.loss_masses[i - 1]
-        #if i in self.residue_losses[key]:
-        #else:
-        #    return np.inf
+            return np.inf
     
-    def get_modification_mass(self, key: str, i: int):
-        if i == 0:
+    def get_modification_mass(self, key: str, mod_id: int):
+        i = mod_id - 1
+        if i == -1:
             return 0.
+        elif i in self.residue_modifications[key]: 
+            return self.modification_masses[i]
         else:
-            return self.modification_masses[i - 1]
-        #if i in self.residue_modifications[key]:
-        #else:
-        #    return np.inf
-
-    #self.min = min(self.params.residue_masses) - max(0, max(self.params.loss_masses)) + min(0, min(self.params.loss_masses)) + min(0, min(self.params.modification_masses))
-    #self.max = max(self.params.residue_masses) - min(0, min(self.params.loss_masses)) + max(0, max(self.params.loss_masses)) + max(0, max(self.params.modification_masses))
+            return np.inf
 
 @dataclass
 class AbstractMassTransformationSolver(ABC):

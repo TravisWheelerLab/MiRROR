@@ -191,7 +191,6 @@ class BenchmarkPeakList(AnnotatedPeakList):
             charge, mass_error, series, position, losses = zip(*map(
                 lambda x: parse_annotation(x[0]),
                 annotations))
-            print(losses)
             # done
             return cls(
                 peptide = seq,
