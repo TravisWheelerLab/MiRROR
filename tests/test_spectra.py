@@ -54,38 +54,11 @@ class TestSpectra(unittest.TestCase):
             mz = [0,2,5,7,10],
             intensity = [1,1,1,1,1])
         transformations = [
-            MassTransformation(
-                residue = 0,
-                modification = 0,
-                inner_index = (0, 1),
-                peaks = (0, 1),
-                losses = (0, 0),
-                charges = (0, 0),
-            ),
-            MassTransformation(
-                residue = 0,
-                modification = 0,
-                inner_index = (1, 2),
-                peaks = (1, 2),
-                losses = (0, 0),
-                charges = (0, 0),
-            ),
-            MassTransformation(
-                residue = 0,
-                modification = 0,
-                inner_index = (2, 3),
-                peaks = (2, 3),
-                losses = (0, 0),
-                charges = (0, 0),
-            ),
-            MassTransformation(
-                residue = 0,
-                modification = 0,
-                inner_index = (3, 4),
-                peaks = (3, 4),
-                losses = (0, 0),
-                charges = (0, 0),
-            )]
+            MassTransformation.dummy(index_pair = (0,1)),
+            MassTransformation.dummy(index_pair = (1,2)),
+            MassTransformation.dummy(index_pair = (2,3)),
+            MassTransformation.dummy(index_pair = (3,4)),
+        ]
         annotated_peaks = annotate_peaks(peaks, transformations)
         self.assertEqual(
             annotated_peaks.metadata['consistency'],
