@@ -26,7 +26,7 @@ def annotate_peaks(
     losses = [list() for _ in range(n)]
     for mt in transformations:
         l, r = mt.peaks
-        l_charge, r_charge = mt.charges
+        l_charge, r_charge = mt.charge_states
         l_loss, r_loss = mt.losses
         charges[l].append(l_charge)
         losses[l].append(l_loss)

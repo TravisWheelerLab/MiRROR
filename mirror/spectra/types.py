@@ -95,6 +95,9 @@ class PeakList:
     def __getitem__(self, i: int):
         return self.mz[i]
     
+    def __iter__(self):
+        return self.mz.__iter__()
+    
     def get_intensity(self, i: int):
         """Return the intensity of the `i`th peak."""
         return self.intensity[i]
@@ -142,6 +145,11 @@ class BenchmarkPeakList(AnnotatedPeakList):
     ):
         self.peptide = peptide
         super(BenchmarkPeakList, self).__init__(*args, **kwargs)
+    
+    def __repr__(self):
+        annotation_repr = super(BenchmarkPeakList, self).__repr__()
+        peptide_repr = f"peptide: {self.peptide}"
+        return '\n'.join([annotation_repr, peptide_repr])
     
     def get_peptide(self):
         return self.peptide
