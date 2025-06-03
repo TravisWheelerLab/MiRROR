@@ -87,6 +87,8 @@ def solve_peak_list(
                     left_loss_mass = transformation_space.get_loss_mass(key, left_loss_idx)
                     right_loss_mass = transformation_space.get_loss_mass(key, right_loss_idx)
                     modification_mass = transformation_space.get_modification_mass(key, modification_idx)
+                    if np.inf in (left_loss_mass, right_loss_mass, modification_mass):
+                        continue
                     ## calculate the difference between observation and explanation
                     ## each subtraction introduces numeric instability; do as few as possible.
                     left_inverse_transformed_peak = left_peak + left_loss_mass

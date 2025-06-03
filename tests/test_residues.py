@@ -59,7 +59,7 @@ class TestResidues(unittest.TestCase):
             time_elapsed = time() - time_start
             peptide_lengths.append(len(bpl.peptide))
             solution_times.append(time_elapsed)
-            print(f"spectrum[{i}]\n- peptide: {bpl.get_peptide()}\n- time: {time_elapsed}")
+            #print(f"spectrum[{i}]\n- peptide: {bpl.get_peptide()}\n- time: {time_elapsed}")
         avg_time = sum(solution_times) / num_samples
         avg_len = sum(peptide_lengths) / num_samples
         print(f"average time: {avg_time}\naverage peptide length: {avg_len}")
