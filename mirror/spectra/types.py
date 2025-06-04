@@ -1,3 +1,4 @@
+from typing import Any, Iterable
 from dataclasses import dataclass
 import warnings
 
@@ -89,23 +90,23 @@ class PeakList:
             mz = mz, 
             intensity = intensity)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._n
     
-    def __getitem__(self, i: int):
+    def __getitem__(self, i: int) -> float:
         return self.mz[i]
     
-    def __iter__(self):
+    def __iter__(self) -> Iterable:
         return self.mz.__iter__()
     
-    def get_intensity(self, i: int):
+    def get_intensity(self, i: int) -> float:
         """Return the intensity of the `i`th peak."""
         return self.intensity[i]
 
 class AnnotatedPeakList(PeakList):
     """A PeakList with additional data associated to peaks.
     Each annotation describes charge state, losses, and post-translation modification.
-    Each peak may have multiple annotations. Peaks with multiple matched associations."""
+    Each peak may have multiple annotations."""
 
     def __init__(self,
         mz: np.ndarray, 
@@ -125,13 +126,47 @@ class AnnotatedPeakList(PeakList):
         metadata_repr = '\n'.join(f"- {key}: {list(val)}" for key, val in self.metadata.items())
         return f"AnnotatedPeakList:\nmz: {self.mz}\nintensity: {self.intensity}\ncharge: {self.charge}\nlosses: {self.losses}\nmetadata:\n{metadata_repr}"
 
-    def get_charge(self, i: int):
-        """Return the charge state of the `i`th peak."""
+    def get_charge(self, i: int) -> int:
+        """The charge state of the `i`th peak."""
         return self.charge[i]
     
-    def get_metadata(self, i: int, key: str):
+    def get_losses(self, i: int) -> int:
+        """The loss(es) of the `i`th peak."""
+        return self.losses[i]
+
+    def get_metadata_keys(self):
+        return self.metadata.keys()
+            
+    def get_metadata(self, i: int, key: str) -> Any:
         """Return the metadata for `key` of the `i`th peak."""
         return self.metadata[key][i]
+    
+    def compare_peak_annotations(self, other, i: int, keys):
+        # collate self
+        s_charges = self.get_charge(i)
+        s_losses = self.get_losses(i)
+        s_meta = [self.get_metadata(i, k) for k in keys]
+        s_data = set(zip([s_charges, s_loses, *s_meta]))
+        # collate other
+        o_charges = other.get_charge(i)
+        o_losses = other.get_losses(i)
+        o_meta = [other.get_metadata(i, k) for k in keys]
+        o_data = set(zip([o_charges, o_losses, *o_meta]))
+        # compare
+        matches = s_data.intersection(o_data)
+        misses = s_data.symmetric_difference(o_data)
+        return matches, misses
+
+    def compare(self, other):
+        if len(self) != len(other):
+            raise ValueError("Unequal number of peaks; cannot directly compare annotations for distinct peak lists.")
+        if self.mz != other.mz:
+            raise ValueError("Mismatched m/z values; cannot directly compare annotations for distinct peak lists.")
+        common_keys = set(self.get_metadata_keys()).intersection(other.get_metadata_keys())
+        matches, misses = zip(*map(
+            lambda i: self.compare_peak_annotations(self, other, i, common_keys), 
+            range(len(self))))
+        return matches, misses
 
 class BenchmarkPeakList(AnnotatedPeakList):
     """An annotated peak list in the format of the 9-species benchmark.

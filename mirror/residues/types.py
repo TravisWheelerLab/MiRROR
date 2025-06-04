@@ -6,89 +6,19 @@ from bisect import bisect_left, bisect_right
 import numpy as np
 
 @dataclass
-class MassTransformation:
-    """A collection of parameters describing the loss, charge, and modification
-    states of a pair of peaks whose difference corresponds to a transformation
-    of a residue mass. Other than the residue index, values of 0 imply the null
-    state, e.g., charge +1, no neutral losses, or no modification."""
-    # index within the charge-augmented peak list
-    inner_index: tuple[int, int]
-    # index into the original peak list
-    peaks: tuple[int, int]
-    peaks_mass: tuple[float, float]
-    # residue mass without transformation
-    residue: int
-    residue_mass: float
-    # post-translational modification
-    modification: int
-    modification_mass: float
-    # neutral losses
-    losses: tuple[int, int]
-    losses_mass: tuple[float, float]
-    # charge states
-    charge_states: tuple[int, int]
-    # difference between the transformed left peak and the observed right peak
-    mass_error: float
-
-    @classmethod
-    def dummy(cls, index_pair: tuple[int, int]):
-        return cls(
-            inner_index = index_pair,
-            peaks = index_pair,
-            peaks_mass = (0., 0.),
-            residue = 0,
-            residue_mass = 0.,
-            modification = 0,
-            modification_mass = 0.,
-            losses = (0, 0),
-            losses_mass = (0., 0.),
-            charge_states = (1, 1),
-            mass_error = 0.)
-    
-    @classmethod
-    def without_index(cls,
-        query_mass: float,
-        residue: int,
-        residue_mass: float,
-        modification: int,
-        modification_mass: float,
-        losses: tuple[int, int],
-        losses_mass: tuple[float, float],
-        charge_states: tuple[int, int],
-        mass_error: float,
-    ):
-        return cls(
-            inner_index = (-1, 0),
-            peaks = (-1, 0),
-            peaks_mass = (0., query_mass),
-            residue = residue,
-            residue_mass = residue_mass,
-            modification = modification,
-            modification_mass = modification_mass,
-            losses = losses,
-            losses_mass = losses_mass,
-            charge_states = charge_states,
-            mass_error = mass_error)
-
-@dataclass
 class MassTransformationSpace:
     """A model of every potential transformation under a given parametization.
     Transformations are represented as shifts, so the space is a glorified list of floats."""
     residue_symbols: list[str]
     residue_masses: list[float]
+    loss_symbols: list[str]
     loss_masses: list[float]
     residue_losses: dict[str, list[int]]
+    modification_symbols: list[str]
     modification_masses: list[float]
     residue_modifications: dict[str, list[int]]
 
-    def get_extremal_delta(self):
-        max_mass = max(self.residue_masses)
-        min_loss = min(self.loss_masses)
-        max_loss = max(self.loss_masses)
-        max_modification = max(self.modification_masses)
-        return max_mass + max_loss + max_modification - min_loss
-
-    def get_transformation_tensors(self):
+    def _construct_transformation_tensors(self):
         masses = np.array(self.residue_masses)
         losses = self.loss_masses
         modifications = self.modification_masses
@@ -105,27 +35,48 @@ class MassTransformationSpace:
         # compute the extremal delta
         return mass_tensor, left_loss_tensor, right_loss_tensor, modification_tensor
 
-    def get_key(self, i: int):
+    def __post_init__(self):
+        self.mass_tensor, self.left_loss_tensor, self.right_loss_tensor, self.modification_tensor = self._construct_transformation_tensors()
+
+    def get_extremal_delta(self):
+        max_mass = max(self.residue_masses)
+        min_loss = min(self.loss_masses)
+        max_loss = max(self.loss_masses)
+        max_modification = max(self.modification_masses)
+        return max_mass + max_loss + max_modification - min_loss
+    
+    def get_transformation_tensors(self):
+        return self.mass_tensor, self.left_loss_tensor, self.right_loss_tensor, self.modification_tensor
+
+    def get_residue_symbol(self, i: int):
         return self.residue_symbols[i]
+    
+    def get_loss_symbol(self, i: int):
+        if i == 0:
+            return ''
+        else:
+            return self.loss_symbols[i - 1]
+    
+    def get_modification_symbol(self, i: int):
+        if i == 0:
+            return ''
+        else:
+            return self.modification_symbols[i - 1]
 
     def get_residue_mass(self, i: int):
         return self.residue_masses[i]
     
-    def get_loss_mass(self, key: str, loss_id: int):
-        i = loss_id - 1
-        if i == -1:
-            return 0.
-        elif i in self.residue_losses[key]: 
-            return self.loss_masses[i]
+    def get_loss_mass(self, key: str, i: int):
+        loss_id = i - 1
+        if i == 0 or loss_id in self.residue_losses[key]:
+            return self.left_loss_tensor[0, i, 0, 0]
         else:
             return np.inf
     
-    def get_modification_mass(self, key: str, mod_id: int):
-        i = mod_id - 1
-        if i == -1:
-            return 0.
-        elif i in self.residue_modifications[key]: 
-            return self.modification_masses[i]
+    def get_modification_mass(self, key: str, i: int):
+        modification_id = i - 1
+        if i == 0 or modification_id in self.residue_losses[key]:
+            return self.modification_tensor[0, 0, 0, i]
         else:
             return np.inf
 
@@ -156,6 +107,103 @@ class AbstractMassTransformationSolver(ABC):
 
     def _filter_solution(self, optimizers: Iterable[tuple[int, int, int, int]]) -> Iterable[tuple[int, int, int, int]]:
         return filter(lambda x: ((x[1] == 0) or (x[1] != x[2])), optimizers)
+
+@dataclass
+class ResidueParams:
+    # search parameters
+    tolerance: float
+    comparative_tolerance: float
+    strategy: Type[AbstractMassTransformationSolver]
+    # transformation parameters
+    ## charge states
+    charge_symbols: list[str]
+    charge_states: list[int]
+    ## neutral losses
+    loss_symbols: list[str]
+    loss_masses: list[float]
+    ## modifications
+    modification_symbols: list[str]
+    modification_masses: list[float]
+    ## residues and residue -> loss,modification tables
+    residue_symbols: list[str]
+    residue_masses: list[float]
+    residue_losses: dict[str, list[int]]
+    residue_modifications: dict[str, list[int]]
+
+@dataclass
+class MassTransformation:
+    """A collection of parameters describing the loss, charge, and modification
+    states of a pair of peaks whose difference corresponds to a transformation
+    of a residue mass. Other than the residue index, values of 0 imply the null
+    state, e.g., charge +1, no neutral losses, or no modification."""
+    # index within the charge-augmented peak list
+    inner_index: tuple[int, int]
+    # index into the original peak list
+    peaks_index: tuple[int, int]
+    peaks_mass: tuple[float, float]
+    # residue mass without transformation
+    residue_index: int
+    residue_mass: float
+    residue_symbol: str
+    # post-translational modification
+    modification_index: int
+    modification_mass: float
+    modification_symbol: str
+    # neutral losses
+    losses_index: tuple[int, int]
+    losses_mass: tuple[float, float]
+    losses_symbol: str
+    # charge states
+    charges_index: tuple[int, int]
+    charges_symbol: str
+    # difference between the transformed left peak and the observed right peak
+    mass_error: float
+
+    @classmethod
+    def dummy(cls, index_pair: tuple[int, int]):
+        return cls(
+            inner_index = index_pair,
+            peaks_index = index_pair,
+            peaks_mass = (0.,0.,),
+            residue_index = -1,
+            residue_mass = 0.,
+            residue_symbol = '',
+            modification_index = 0,
+            modification_mass = 0.,
+            modification_symbol = '',
+            losses_index = (0, 0),
+            losses_mass = (0., 0.),
+            losses_symbol = ('', ''),
+            charges_index = (0, 0),
+            charges_symbol = ('', ''),
+            mass_error = 0.)
+    
+    @classmethod
+    def without_index(cls,
+        query_mass: float,
+        residue_index: int,
+        modification_index: int,
+        losses_index: tuple[int, int],
+        charges_index: tuple[int, int],
+        mass_error: float,
+        params: ResidueParams,
+    ):
+        return cls(
+            inner_index = (-1, 0),
+            peaks = (-1, 0),
+            peaks_mass = (0., query_mass),
+            residue_index = residue_index,
+            residue_mass = params.residue_masses[residue_index],
+            residue_symbol = params.residue_symbols[residue_index],
+            modification_index = modification_index,
+            modification_mass = modification_mass,
+            modification_symbol = params.modification_symbols[modification_index],
+            losses_index = losses_index,
+            losses_mass = (params.loss_masses[losses_index[0]], params.loss_masses[losses_index[1]]),
+            losses_symbol = (params.loss_symbols[losses_index[0]], params.loss_symbols[losses_index[1]]),
+            charges_index = charges_index,
+            charges_symbol = (params.charge_symbols[charges_index[0]], params.charge_symbols[charges_index[1]]),
+            mass_error = mass_error)
 
 class TensorMassTransformationSolver(AbstractMassTransformationSolver):
     def __post_init__(self):
@@ -244,25 +292,3 @@ class BisectMassTransformationSolver(AbstractMassTransformationSolver):
     
     def get_solutions(self) -> tuple[int, int, int, int]:
         return self._filter_solution(map(self._unravel, range(self._match_lo, self._match_hi + 1)))
-
-@dataclass
-class ResidueParams:
-    # search parameters
-    tolerance: float
-    comparative_tolerance: float
-    strategy: Type[AbstractMassTransformationSolver]
-    # transformation parameters
-    ## charge states
-    charge_symbols: list[str]
-    charge_states: list[int]
-    ## neutral losses
-    loss_symbols: list[str]
-    loss_masses: list[float]
-    ## modifications
-    modification_symbols: list[str]
-    modification_masses: list[float]
-    ## residues and residue -> loss,modification tables
-    residue_symbols: list[str]
-    residue_masses: list[float]
-    residue_losses: dict[str, list[int]]
-    residue_modifications: dict[str, list[int]]

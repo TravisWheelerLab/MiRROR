@@ -10,6 +10,19 @@ def default_param():
 
 DEFAULT_PARAM = default_param()
 
+def complex_param():
+    """Creates a pyopenms.Param() object with add_b_ions, add_y_ions, add_metadata,
+    add_all_precursor_charges, and add_losses set to true."""
+    param = oms.Param()
+    param.setValue("add_b_ions", "true")
+    param.setValue("add_y_ions", "true")
+    param.setValue("add_all_precursor_charges", "true")
+    param.setValue("add_losses", "true")
+    param.setValue("add_metainfo", "true")
+    return param
+
+COMPLEX_PARAM = complex_param()
+
 def generate_fragment_spectrum(seq: str, param: oms.Param):
     """From a string and a pyopenms.Param() object, uses a pyopenms.TheoreticalSpectrumGenerator
     object to create a simulated fragment spectrum as a pyopenms.MSSpectrum object."""
@@ -37,5 +50,8 @@ def list_intensity(spec: oms.MSSpectrum):
     return [peak.getIntensity() for peak in spec]
 
 def simulate_simple_peaks(peptide: str):
-    spectrum = generate_fragment_spectrum(peptide, DEFAULT_PARAM)
-    return list_mz(spectrum)
+    return list_mz(generate_fragment_spectrum(peptide, DEFAULT_PARAM))
+
+def simulate_complex_peaks(peptide: str):
+    return list_mz(generate_fragment_spectrum(peptide, COMPLEX_PARAM))
+    

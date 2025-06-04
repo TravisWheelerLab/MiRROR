@@ -1,10 +1,13 @@
 from time import time
 from tqdm import tqdm
 
-from mirror.residues.types import *
 from mirror.io import *
+from mirror.residues.types import *
+from mirror.residues.presets import *
+from mirror.residues.transformations import *
 from mirror.spectra.types import *
 from mirror.spectra.preprocessing import *
+from mirror.spectra.simulation import simulate_simple_peaks
 
 import unittest
 
@@ -64,3 +67,32 @@ class TestSpectra(unittest.TestCase):
             annotated_peaks.metadata['consistency'],
             [False, True, True, True, False])
         print(annotated_peaks)
+    
+    def _benchmark(self, path_to_dataset, num_samples, sample_stride = 1, sample_offset = 0, params = DEFAULT_RESIDUE_PARAMS):
+        print(f"reading dataset: {path_to_dataset}")
+        dataset = read_mzlib(path_to_dataset)
+        print(f"iterating {num_samples} samples from position {sample_offset} with stride {sample_stride}")
+        peptide_lengths = []
+        solution_times = []
+        annotation_times = []
+        for i in range(sample_offset, num_samples * sample_stride, sample_stride):
+            # construct the benchmark peak list
+            bpl = BenchmarkPeakList.from_mzlib(dataset, i)
+            peptide_lengths.append(len(bpl.peptide))
+            # solve the transformations
+            time_start = time()
+            solutions = list(solve_peak_list(bpl, params))
+            time_elapsed = time() - time_start
+            solution_times.append(time_elapsed)
+            # annotate the spectrum
+            time_start = time()
+            apl = annotate_peaks(bpl, solutions)
+            time_elapsed = time() - time_start
+            annotation_times.append(time_elapsed)
+            
+            input(f"bpl {bpl}\napl {apl}")
+        avg_len = sum(peptide_lengths) / num_samples
+        print(f"soln time: {sum(solution_times)}\nanno time: {sum(annotation_times)}\naverage peptide length: {avg_len}")
+    
+    def benchmark(self):
+        self._benchmark("data/spectra/Apis-mellifera.mzlib.txt", 10, 100, 5)

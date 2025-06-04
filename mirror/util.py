@@ -4,7 +4,7 @@ def merge_in_order(arrays: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, np
     merged_array = np.hstack(arrays)
     order = np.argsort(merged_array)
     indices = np.hstack([np.arange(len(arr)) for arr in arrays])
-    source = np.hstack([np.full_like(arrays[i], i) for i in range(len(arrays))])
+    source = np.hstack([np.full_like(arrays[i], i, dtype=int) for i in range(len(arrays))])
     return merged_array[order], indices[order], source[order]
     #N = [len(A) for A in arrays]
     #I = [0 for _ in arrays]

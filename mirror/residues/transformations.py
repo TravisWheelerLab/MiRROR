@@ -40,8 +40,10 @@ def solve_peak_list(
     transformation_space = MassTransformationSpace(
         residue_symbols = params.residue_symbols,
         residue_masses = params.residue_masses,
+        loss_symbols = params.loss_symbols,
         loss_masses = params.loss_masses,
         residue_losses = params.residue_losses,
+        modification_symbols = params.modification_symbols,
         modification_masses = params.modification_masses,
         residue_modifications = params.residue_modifications)
     # 2. construct charge-augmented list of m/z values
@@ -53,12 +55,11 @@ def solve_peak_list(
         transformation_space = transformation_space,
         mz = augmented_peaks,
         tolerance = tolerance)
-    #print(f"tolerance {tolerance}\nextremal delta {extremal_delta}\nsolver {transformation_solver}")
     for (i, left_peak) in enumerate(augmented_peaks[:-1]):
         # set up the left peak
         transformation_solver.set_left_peak(i)
         left_index = deindexer[i]
-        left_charge = charge_table[i]
+        left_charge_index = charge_table[i]
         slice_offset = i + 1
         for (local_j, right_peak) in enumerate(augmented_peaks[slice_offset:]):
             j = slice_offset + local_j
@@ -72,42 +73,49 @@ def solve_peak_list(
                 # set up the right peak
                 transformation_solver.set_right_peak(j)
                 right_index = deindexer[j]
-                right_charge = charge_table[j]
+                right_charge_index = charge_table[j]
                 # enumerate solutions
                 min_delta = np.inf
-                #print(f"peak[{i}]ₗ = {left_peak}\tpeak[{j}]ᵣ = {right_peak}\tΔ = {mass_query}")
                 for solution_parameters in transformation_solver.get_solutions():
                     # unwrap solution
                     residue_idx, left_loss_idx, right_loss_idx, modification_idx = solution_parameters
-                    #print(f"- candidate:\n\t{solution_parameters}")
                     # measure the error
                     ## retrieve components.
-                    key = transformation_space.get_key(residue_idx)
+                    residue_symbol = transformation_space.get_residue_symbol(residue_idx)
                     residue_mass = transformation_space.get_residue_mass(residue_idx)
-                    left_loss_mass = transformation_space.get_loss_mass(key, left_loss_idx)
-                    right_loss_mass = transformation_space.get_loss_mass(key, right_loss_idx)
-                    modification_mass = transformation_space.get_modification_mass(key, modification_idx)
+                    left_loss_mass = transformation_space.get_loss_mass(residue_symbol, left_loss_idx)
+                    right_loss_mass = transformation_space.get_loss_mass(residue_symbol, right_loss_idx)
+                    modification_mass = transformation_space.get_modification_mass(residue_symbol, modification_idx)
                     if np.inf in (left_loss_mass, right_loss_mass, modification_mass):
                         continue
+                    left_charge_symbol = params.charge_symbols[left_charge_index]
+                    left_loss_symbol = transformation_space.get_loss_symbol(left_loss_idx)
+                    right_charge_symbol = params.charge_symbols[right_charge_index]
+                    right_loss_symbol = transformation_space.get_loss_symbol(right_loss_idx)
+                    modification_symbol = transformation_space.get_modification_symbol(modification_idx)
                     ## calculate the difference between observation and explanation
-                    ## each subtraction introduces numeric instability; do as few as possible.
                     left_inverse_transformed_peak = left_peak + left_loss_mass
                     right_inverse_transformed_peak = right_peak + right_loss_mass + modification_mass
                     inverse_transformed_mass = right_inverse_transformed_peak - left_inverse_transformed_peak
-                    delta_mass = abs(inverse_transformed_mass - residue_mass)
+                    delta_mass = inverse_transformed_mass - residue_mass
                     # if a solution exists, encode it as a MassTransformation
-                    #print(f"\tres = {key}\tmass = {residue_mass}\tleft = {left_loss_mass}\tright = {right_loss_mass}\tmod = {modification_mass}\tΔ = {delta_mass}")
-                    if delta_mass <= tolerance:
+                    if abs(delta_mass) <= tolerance:
                         yield MassTransformation(
                             inner_index = (i, j),
-                            peaks = (left_index, right_index),
+                            peaks_index = (left_index, right_index),
                             peaks_mass = (left_peak, right_peak),
-                            residue = residue_idx,
+                            residue_index = residue_idx,
                             residue_mass = residue_mass,
-                            modification = modification_idx,
+                            residue_symbol = residue_symbol,
+                            modification_index = modification_idx,
                             modification_mass = modification_mass,
-                            losses = (left_loss_idx, right_loss_idx),
+                            modification_symbol = modification_symbol,
+                            losses_index = (left_loss_idx, right_loss_idx),
                             losses_mass = (left_loss_mass, right_loss_mass),
-                            charge_states = (left_charge, right_charge),
+                            losses_symbol = (left_loss_symbol, right_loss_symbol),
+                            charges_index = (left_charge_index, right_charge_index),
+                            charges_symbol = (left_charge_symbol, right_charge_symbol),
                             mass_error = delta_mass,
                         )
+                    #else:
+                    #    print(f"candidate: {(left_index, right_index)} {residue_idx} {left_loss_idx} {right_loss_idx} {modification_idx} {delta_mass} | query: {mass_query} = {right_peak} - {left_peak} | decomposition: {residue_mass}  {left_loss_mass} {right_loss_mass} {modification_mass} ~ {inverse_transformed_mass} = {right_inverse_transformed_peak} - {left_inverse_transformed_peak} = ({right_peak} + {right_loss_mass} + {modification_mass}) - ({left_peak} + {left_loss_mass})")
