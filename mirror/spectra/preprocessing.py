@@ -24,19 +24,20 @@ def annotate_peaks(
     # construct the annotations
     charges = [list() for _ in range(n)]
     losses = [list() for _ in range(n)]
+    outgoing_states = [set() for _ in range(n)]
+    incoming_states = [set() for _ in range(n)]
     for mt in transformations:
-        l, r = mt.peaks
-        l_charge, r_charge = mt.charge_states
-        l_loss, r_loss = mt.losses
-        charges[l].append(l_charge)
-        losses[l].append(l_loss)
-        charges[r].append(r_charge)
-        losses[r].append(r_loss)
+        left_idx, right_idx = mt.peaks_index
+        outgoing_states[left_idx].add(mt.left_state())
+        incoming_states[right_idx].add(mt.right_state())
+        charges[left_idx].append(mt.charges_symbol[0])
+        charges[right_idx].append(mt.charges_symbol[1])
+        losses[left_idx].append(mt.losses_symbol[0])
+        losses[right_idx].append(mt.losses_symbol[1])
     # determine peak-wise consistency
-    consistency = [False for _ in range(n)]
+    consistency = [0 for _ in range(n)]
     for i in range(n):
-        peak_states = list(zip(charges[i], losses[i]))
-        consistency[i] = len(set(peak_states)) < len(peak_states)
+        consistency[i] = len(incoming_states[i].intersection(outgoing_states[i]))
     # done
     return AnnotatedPeakList(
         mz = peaks.mz,

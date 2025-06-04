@@ -136,6 +136,7 @@ class MassTransformation:
     states of a pair of peaks whose difference corresponds to a transformation
     of a residue mass. Other than the residue index, values of 0 imply the null
     state, e.g., charge +1, no neutral losses, or no modification."""
+    ### TODO - only store indices, serve mass and symbol values as parametized by a ResidueParams object, e.g., MassTransformation.get_residue_mass: ResidueParam -> float := param.residue_masses[transformation.residue_index]
     # index within the charge-augmented peak list
     inner_index: tuple[int, int]
     # index into the original peak list
@@ -158,6 +159,12 @@ class MassTransformation:
     charges_symbol: str
     # difference between the transformed left peak and the observed right peak
     mass_error: float
+
+    def left_state(self):
+        return (self.charges_index[0], self.losses_index[0])
+
+    def right_state(self):
+        return (self.charges_index[1], self.losses_index[1])
 
     @classmethod
     def dummy(cls, index_pair: tuple[int, int]):
