@@ -1,13 +1,13 @@
 from typing import Iterator
 from .minimal_nodes import propagate
 from .minimal_paths import backtrace
-from .align_types import AlignedPath, CostModel
-from .fragment_types import FragmentIntersectionGraph, FragmentPairGraph, FragmentChain
+from .align_types import AbstractAlignment, LocalAlignment, AbstractCostModel, LocalCostModel
+from .ensemble_types import FragmentIntersectionGraph, FragmentPairGraph, EnsembleAlignment
 from networkx import is_bipartite, connected_components
 
 def chain_fragment_pairs(
     fragment_intersection_graph: FragmentIntersectionGraph,
-    cost_model: CostModel,
+    cost_model: AbstractCostModel,
     threshold: float,
 ):
     fragment_pair_chains = []
@@ -39,11 +39,11 @@ def chain_fragment_pairs(
                 fragment_pair_chains.extend(minimal_paths)
     return fragment_pair_chains
 
-def collate_fragments(
-    alignments: Iterator[AlignedPath],
-    cost_model: CostModel,
+def assemble_fragments(
+    alignments: Iterator[LocalAlignment],
+    cost_model: LocalCostModel,
     threshold: float,
-) -> list[FragmentChain]:
+) -> list[EnsembleAlignment]:
     # construct the fragment intersection
     frag_itx = FragmentIntersectionGraph(
         alignments = alignments,
@@ -58,10 +58,10 @@ def collate_fragments(
         cost_model = cost_model,
         threshold = threshold,
     )
-    # construct the FragmentChain objects, associating each fragment pair chain
-    # to a single alignment-like structure.
+    # construct the EnsembleAlignments, associating each fragment pair chain
+    # to a single alignment object.
     return list(map(
-        lambda x: FragmentChain(
+        lambda x: EnsembleAlignment(
             score = x[0],
             alignment_chain = [alignments[i] for i in x[1]]),
         fragment_pair_chains))

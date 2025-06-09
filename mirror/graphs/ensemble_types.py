@@ -1,14 +1,14 @@
 from typing import Callable, Iterator, Any
 from itertools import chain, pairwise
 from .graph_types import DiGraph, DAG, StrongProductDAG
-from .align_types import AlignedPath, CostModel
+from .align_types import AbstractAlignment, LocalAlignment, AlignedPath, AbstractCostModel, LocalCostModel
 from networkx import Graph, is_bipartite, connected_components
 
 class FragmentIntersectionGraph(Graph):
     """A bipartite graph over aligned fragments."""
 
     def __init__(self,
-        alignments: Iterator[tuple[float, list[tuple[int, int]]]],
+        alignments: Iterator[LocalAlignment],
         index_key = "index"
     ):
         n = 0
@@ -63,7 +63,7 @@ class FragmentPairGraph(DAG):
     def __init__(self,
         fragment_itx: FragmentIntersectionGraph,
         component: set[int],
-        cost_model: CostModel,
+        cost_model: LocalCostModel,
         cost_key = "cost",
     ):
         index_key = fragment_itx.index_key
@@ -76,12 +76,14 @@ class FragmentPairGraph(DAG):
                 pair1 = (node_a1, node_b)
                 alignment_index1, first_index1, second_index1 = fragment_itx[node_a1][node_b][index_key]
                 alignment1 = fragment_itx.get_alignment(alignment_index1)
+                alignment1_score = alignment1.score()
                 for node_a2 in fragment_itx[node_b]:
                     if node_a2 != node_a1:
                         # unpack the second edge
                         pair2 = (node_a2, node_b)
                         alignment_index2, first_index2, second_index2 = fragment_itx[node_a2][node_b][index_key]
                         alignment2 = fragment_itx.get_alignment(alignment_index2)
+                        alignment2_score = alignment2.score()
                         # retrieve fragment and interval data
                         fragment_b = None
                         fragment_a1 = None
@@ -107,21 +109,21 @@ class FragmentPairGraph(DAG):
                         # determine edge direction
                         if interval_a1 < interval_a2:
                             gap_len = max(0, interval_a2[0] - interval_a1[1] - 1)
-                            cost = alignment2.score + (cost_model.gap * gap_len)
+                            cost = alignment2_score + (cost_model.gap * gap_len)
                             pair_graph.add_edge(alignment_index1, alignment_index2)
                             pair_graph[alignment_index1][alignment_index2][cost_key] = cost
                         elif interval_a2 < interval_a1:
                             gap_len = max(0, interval_a1[0] - interval_a2[1] - 1)
-                            cost = alignment1.score + (cost_model.gap * gap_len)
+                            cost = alignment1_score + (cost_model.gap * gap_len)
                             pair_graph.add_edge(alignment_index2, alignment_index1)
                             pair_graph[alignment_index2][alignment_index1][cost_key] = cost
         super(FragmentPairGraph, self).__init__(pair_graph, cost_key)
 
-class FragmentChain:
+class EnsembleAlignment(AbstractAlignment):
 
     @classmethod
     def _sequence_fragments(cls,
-        alignment_chain: list[AlignedPath],
+        alignment_chain: list[LocalAlignment],
     ) -> tuple[list[int],list[int]]:
         left_fragment_sequence = []
         right_fragment_sequence = []
@@ -139,10 +141,10 @@ class FragmentChain:
     
     @classmethod
     def _parametize_concatenations(cls,
-        alignment_chain: list[AlignedPath],
+        alignment_chain: list[LocalAlignment],
         fragment_sequence: list[int],
-        get_interval: Callable[[AlignedPath], tuple[int, int]],
-        score_interval: Callable[[AlignedPath, tuple[int, int]], float],
+        get_interval: Callable[[LocalAlignment], tuple[int, int]],
+        score_interval: Callable[[LocalAlignment, tuple[int, int]], float],
     ) -> tuple[list[int], list[int]]:
         truncation_sequence = []
         padding_sequence = []
@@ -174,12 +176,12 @@ class FragmentChain:
     
     @classmethod
     def _decompose_pad_truncate(cls,
-        alignment_chain: list[AlignedPath],
+        alignment_chain: list[LocalAlignment],
         fragment_sequence: list[int],
         padding: list[int],
         truncations: list[int],
-        get_fragment: Callable[[AlignedPath], list[int]],
-        get_weights: Callable[[AlignedPath], list[Any]]
+        get_fragment: Callable[[LocalAlignment], list[int]],
+        get_weights: Callable[[LocalAlignment], list[Any]]
     ) -> tuple[list[list[int]], list[list[Any]]]:
         sequence_decomposition = [get_fragment(alignment_chain[fragment_sequence[0]])]
         weight_sequence = [get_weights(alignment_chain[fragment_sequence[0]])]
@@ -215,11 +217,10 @@ class FragmentChain:
 
     def __init__(self,
         score: float,
-        alignment_chain: list[AlignedPath],
+        alignment_chain: list[LocalAlignment],
     ):
-        # public fields
-        self.score = score
         self.alignment_chain = alignment_chain
+        self._score = score
         #print(f"alignment chain {self.alignment_chain}")
         
         # private fields
@@ -241,6 +242,7 @@ class FragmentChain:
             fragment_sequence = self._left_fragment_sequence,
             get_interval = lambda aligned_path: aligned_path.first_interval(),
             score_interval = lambda aligned_path, interval: aligned_path.subscore(left_sub_interval = interval))
+
         self._right_truncation_sequence, self._right_padding_sequence = self._parametize_concatenations(
             alignment_chain = self.alignment_chain,
             fragment_sequence = self._right_fragment_sequence,
@@ -257,6 +259,7 @@ class FragmentChain:
             truncations = self._left_truncation_sequence,
             get_fragment = lambda aligned_path: aligned_path.first_fragment(),
             get_weights = lambda aligned_path: aligned_path.first_aligned_weights())
+
         self._right_edge_decomposition, self._right_weight_decomposition = self._decompose_pad_truncate(
             alignment_chain = self.alignment_chain,
             fragment_sequence = self._right_fragment_sequence,
@@ -269,33 +272,67 @@ class FragmentChain:
         self._left_edge_sequence, self._left_weight_sequence = self._concatenate_decomposed_sequences(
             edge_decomposition = self._left_edge_decomposition,
             weight_decomposition = self._left_weight_decomposition)
+
         self._right_edge_sequence, self._right_weight_sequence = self._concatenate_decomposed_sequences(
             edge_decomposition = self._right_edge_decomposition,
             weight_decomposition = self._right_weight_decomposition)
+    
+    # edges
 
     def first_edges(self):
         return self._left_edge_sequence
 
-    def first_aligned_edges(self):
-        return list(filter(lambda x: x[0] != x[1], self._left_edge_sequence))
-
-    def first_weights(self):
-        return self._left_weight_sequence
-    
-    def first_aligned_weights(self):
-        return list(filter(lambda x: x is not None, self._left_weight_sequence))
-
     def second_edges(self):
         return self._right_edge_sequence
+
+    def edges(self):
+        return list(zip(self.first_edges(), self.second_edges()))
+
+    def first_aligned_edges(self):
+        return list(filter(lambda x: x[0] != x[1], self._left_edge_sequence))
     
     def second_aligned_edges(self):
         return list(filter(lambda x: x[0] != x[1], self._right_edge_sequence))
 
+    # source and sink
+    def first_source(self):
+        self.alignment_chain[self._left_fragment_sequence[0]].first_source()
+        
+    def second_source(self):
+        self.alignment_chain[self._right_fragment_sequence[0]].second_source()
+    
+    def source(self):
+        return (self.first_source(), self.second_source)
+
+    def first_target(self):
+        self.alignment_chain[self._left_fragment_sequence[-1]].first_target()
+        
+    def second_target(self):
+        self.alignment_chain[self._right_fragment_sequence[-1]].second_target()
+    
+    def target(self):
+        return (self.target(), self.target)
+
+    # weights
+
+    def first_weights(self):
+        return self._left_weight_sequence
+
     def second_weights(self):
         return self._right_weight_sequence
+
+    def weights(self):
+        return list(zip(self.first_weights(), self.second_weights()))
+    
+    def first_aligned_weights(self):
+        return list(filter(lambda x: x is not None, self._left_weight_sequence))
     
     def second_aligned_weights(self):
         return list(filter(lambda x: x is not None, self._right_weight_sequence))
+
+    # score
+    def score(self):
+        return self._score
 
     def __repr__(self):
         return f"""FragmentChain

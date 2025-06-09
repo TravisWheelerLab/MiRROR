@@ -3,8 +3,8 @@ from mirror.graphs.minimal_paths import *
 from mirror.graphs.graph_types import *
 from mirror.graphs.align_types import *
 from mirror.graphs.align import *
-from mirror.graphs.fragment_types import *
-from mirror.graphs.fragment import *
+from mirror.graphs.ensemble_types import *
+from mirror.graphs.ensemble import *
 
 import unittest
 from random import shuffle
@@ -314,8 +314,8 @@ class TestAlign(unittest.TestCase):
             threshold = 1.,
         )
         for aligned_path in aln_de:
-            score = aligned_path.score
-            path = aligned_path.alignment
+            score = aligned_path.score()
+            path = aligned_path.alignment_nodes
             sequence1 = list(map(
                 lambda x: '_' if x == None else x,
                 ((dag1.weight_out(path[i][0], path[i + 1][0])) for i in range(len(path) - 1))))
@@ -349,8 +349,8 @@ class TestAlign(unittest.TestCase):
             path_filter = only_a_filter)
         
         for aligned_path in filtered_aln:
-            score = aligned_path.score
-            path = aligned_path.alignment
+            score = aligned_path.score()
+            path = aligned_path.alignment_nodes
             sequence1 = list(map(
                 lambda x: '_' if x == None else x,
                 ((aaaa_graph.weight_out(path[i][0], path[i + 1][0])) for i in range(len(path) - 1))))
@@ -434,7 +434,7 @@ class TestFragment(unittest.TestCase):
             product_graph = StrongProductDAG(first, second),
             cost_model = LocalCostModel(),
             threshold = 0)
-        return [aligned_path for aligned_path in aln if (not self._all_skips(aligned_path.alignment))]
+        return [aligned_path for aligned_path in aln if (not self._all_skips(aligned_path.alignment_nodes))]
     
     def _test_fragment_itx(self, first_dag, second_dag, tag):
         # alignment
@@ -450,7 +450,7 @@ class TestFragment(unittest.TestCase):
             for alignment_idx in alignment_sequence:
                 print(frag_itx.get_alignment(alignment_idx))
             print('-'*20)
-        fragment_chains = collate_fragments(aln, LocalCostModel, 1000)
+        fragment_chains = assemble_fragments(aln, LocalCostModel, 1000)
         print(fragment_chains)
     
     def test_non_ladder(self):
