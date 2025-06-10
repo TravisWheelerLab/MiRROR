@@ -5,6 +5,7 @@ from math import floor, ceil
 from abc import ABC, abstractmethod
 
 from .graph_types import ProductDAG
+from ..util import print_alignment
 
 CostFunction = Callable[[tuple, tuple], float]
 
@@ -435,7 +436,7 @@ class LocalAlignment(AbstractAlignment):
     
     # edges
     def edges(self):
-        return pairwise(self._alignment_nodes)
+        return pairwise(self.alignment_nodes)
 
     def first_edges(self):
         return pairwise(self._first_nodes)
@@ -470,7 +471,7 @@ class LocalAlignment(AbstractAlignment):
     
     # weights
     def weights(self):
-        return self._alignment_weights
+        return self.alignment_weights
     
     def first_weights(self):
         return self._first_weights
@@ -543,3 +544,10 @@ class LocalAlignment(AbstractAlignment):
                     else:
                         right_subscore += cost_model.substitution
                 return right_subscore
+    
+    def __repr__(self):
+        return print_alignment(
+            score = self.score(),
+            alignment_edges = self.edges(),
+            alignment_weights = self.weights(),
+            name = "LocalAlignment")

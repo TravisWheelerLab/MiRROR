@@ -1,14 +1,7 @@
-from mirror.graphs.minimal_nodes import *
-from mirror.graphs.minimal_paths import *
-from mirror.graphs.graph_types import *
-from mirror.graphs.align_types import *
-from mirror.graphs.align import *
-from mirror.graphs.ensemble_types import *
-from mirror.graphs.ensemble import *
-
 import unittest
 from random import shuffle
 
+from mirror.graphs.graph_types import *
 class TestGraphTypes(unittest.TestCase):
     
     @classmethod
@@ -76,6 +69,8 @@ class TestGraphTypes(unittest.TestCase):
         expected_neighbors = list(chain(d_prod_neighbors, b_prod_neighbors))
         self.assertEqual(s_prod_neighbors, expected_neighbors)
 
+from mirror.graphs.minimal_nodes import *
+
 class TestMinimalNodes(unittest.TestCase):
     
     def test_minimal_nodes(self):
@@ -117,6 +112,8 @@ class TestMinimalNodes(unittest.TestCase):
         print("cost table")
         for (k, v) in node_cost_table.items():
             print(f"{v}\t{s_prod.unravel(k)}")
+
+from mirror.graphs.minimal_paths import *
 
 class TestMinimalPaths(unittest.TestCase):
     
@@ -293,6 +290,9 @@ class TestMinimalPaths(unittest.TestCase):
             self.assertEqual(score == len(path))
             self.assertEqual(score % 2, 0)
 
+from mirror.graphs.align_types import *
+from mirror.graphs.align import *
+
 class TestAlign(unittest.TestCase):
 
     def test_align(self):
@@ -360,7 +360,10 @@ class TestAlign(unittest.TestCase):
             dual = [w1 if w1 == w2 else f"{w1}/{w2}" for (w1, w2) in zip(sequence1, sequence2)] 
             print(f"{score}\t{path}\n\t{dual}\n")
 
-class TestFragment(unittest.TestCase):
+from mirror.graphs.ensemble_types import *
+from mirror.graphs.ensemble import *
+
+class TestEnsemble(unittest.TestCase):
 
     def _get_dag_1(self):
         g_edges = [(0, 2), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (5, 7)]
@@ -476,3 +479,54 @@ class TestFragment(unittest.TestCase):
         dag1 = self._get_dag_1()
         dag5 = self._get_dag_5()
         self._test_fragment_itx(dag1, dag5, "15")
+
+from mirror.graphs.concatenation_types import *
+from mirror.graphs.concatenation import *
+
+class TestConcatenation(unittest.TestCase):
+
+    def _test_concat(self, first_dag, first_node_weights, second_dag, second_node_weights, tag):
+        product_graph = StrongProductDAG(first_dag, second_dag)
+        local_cost_model = LocalCostModel()
+        # local alignments
+        local_aln = align(
+            product_graph = product_graph,
+            cost_model = local_cost_model,
+            threshold = 0.)
+        # assembled fragments
+        ensemble_aln = assemble_fragments(
+            alignments = local_aln,
+            cost_model = local_cost_model,
+            threshold = 1000.)
+        # concatenated ensembles
+        concat_aln = concatenate_ensembles(
+            alignments = ensemble_aln,
+            first_node_weights = first_node_weights,
+            second_node_weights = second_node_weights,
+            cost_model = local_cost_model,
+            threshold = 1000.)
+        print(f"test-concat[ {tag} ]\n- local alignments:\n{local_aln}\n- ensemble alignments:\n{ensemble_aln}\n- concatenation alignments:\n{concat_aln}")
+    
+    def test_occluded_edge(self):
+        dag1 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(3,4),(4,5)],
+            weights = ['a','b','d','e'])
+        node_weights1 = [1., 2., 3., 4., 5., 6.]
+        dag2 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(1,2),(3,4),(4,5)],
+            weights = ['a','b','d','e'])
+        node_weights2 = [-1., -2., -3., -4., -5., -6.]
+        tag = "Occluded Edge"
+        self._test_concat(dag1, node_weights1, dag2, node_weights2, tag)
+    
+    def test_occluded_node(self):
+        dag1 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(2,3)],
+            weights = ['a','d'])
+        node_weights1 = [1., 2., 4., 5.]
+        dag2 = TestGraphTypes._construct_dag(
+            edges = [(0,1),(2,3)],
+            weights = ['a','d'])
+        node_weights2 = [-1., -2., -4., -5.]
+        tag = "Occluded Node"
+        self._test_concat(dag1, node_weights1, dag2, node_weights2, tag)

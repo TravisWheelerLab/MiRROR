@@ -1,13 +1,13 @@
 from typing import Iterator
 from .minimal_nodes import propagate
 from .minimal_paths import backtrace
-from .align_types import AbstractAlignment, LocalAlignment, AbstractCostModel, LocalCostModel
+from .align_types import LocalAlignment, LocalCostModel
 from .ensemble_types import FragmentIntersectionGraph, FragmentPairGraph, EnsembleAlignment
 from networkx import is_bipartite, connected_components
 
-def chain_fragment_pairs(
+def solve_fragment_pair_chains(
     fragment_intersection_graph: FragmentIntersectionGraph,
-    cost_model: AbstractCostModel,
+    cost_model: LocalCostModel,
     threshold: float,
 ):
     fragment_pair_chains = []
@@ -15,10 +15,10 @@ def chain_fragment_pairs(
         frag_pair = FragmentPairGraph(
             fragment_itx = fragment_intersection_graph,
             component = component,
-            cost_model = cost_model,
-        )
+            cost_model = cost_model)
         sources = frag_pair.sources()
         sinks = frag_pair.sinks()
+        # the weights of frag_pair are their own cost
         identity_cost = lambda _, x: x
         for src in sources:
             nc = propagate(
@@ -40,24 +40,22 @@ def chain_fragment_pairs(
     return fragment_pair_chains
 
 def assemble_fragments(
-    alignments: Iterator[LocalAlignment],
+    alignments: list[LocalAlignment],
     cost_model: LocalCostModel,
     threshold: float,
 ) -> list[EnsembleAlignment]:
     # construct the fragment intersection
     frag_itx = FragmentIntersectionGraph(
-        alignments = alignments,
-    )
+        alignments = alignments)
     assert is_bipartite(frag_itx)
     # find sequences of fragment pairs that can be concatenated to
     # form longer alignments.
     # parametize with `threshold` to filter out low-quality chains.
     # use fragment pair chains to guide construction of new alignments
-    fragment_pair_chains = chain_fragment_pairs(
+    fragment_pair_chains = solve_fragment_pair_chains(
         fragment_intersection_graph = frag_itx,
         cost_model = cost_model,
-        threshold = threshold,
-    )
+        threshold = threshold)
     # construct the EnsembleAlignments, associating each fragment pair chain
     # to a single alignment object.
     return list(map(

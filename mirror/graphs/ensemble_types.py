@@ -1,7 +1,10 @@
 from typing import Callable, Iterator, Any
 from itertools import chain, pairwise
+
 from .graph_types import DiGraph, DAG, StrongProductDAG
 from .align_types import AbstractAlignment, LocalAlignment, AlignedPath, AbstractCostModel, LocalCostModel
+from ..util import print_alignment
+
 from networkx import Graph, is_bipartite, connected_components
 
 class FragmentIntersectionGraph(Graph):
@@ -276,6 +279,11 @@ class EnsembleAlignment(AbstractAlignment):
         self._right_edge_sequence, self._right_weight_sequence = self._concatenate_decomposed_sequences(
             edge_decomposition = self._right_edge_decomposition,
             weight_decomposition = self._right_weight_decomposition)
+        
+        # initialize as a list
+        first_nodes = [x[0] for x in self._left_edge_sequence] + [self._left_edge_sequence[-1][1]]
+        second_nodes = [x[0] for x in self._right_edge_sequence] + [self._right_edge_sequence[-1][1]]
+        super(EnsembleAlignment, self).__init__(zip(first_nodes, second_nodes))
     
     # edges
 
@@ -289,26 +297,28 @@ class EnsembleAlignment(AbstractAlignment):
         return list(zip(self.first_edges(), self.second_edges()))
 
     def first_aligned_edges(self):
-        return list(filter(lambda x: x[0] != x[1], self._left_edge_sequence))
+        """First edges without stationary edges."""
+        return list(filter(lambda x: x[0] != x[1], self.first_edges()))
     
     def second_aligned_edges(self):
-        return list(filter(lambda x: x[0] != x[1], self._right_edge_sequence))
+        """Second edges without stationary edges."""
+        return list(filter(lambda x: x[0] != x[1], self.second_edges()))
 
     # source and sink
     def first_source(self):
-        self.alignment_chain[self._left_fragment_sequence[0]].first_source()
+        return self.alignment_chain[self._left_fragment_sequence[0]].first_source()
         
     def second_source(self):
-        self.alignment_chain[self._right_fragment_sequence[0]].second_source()
+        return self.alignment_chain[self._right_fragment_sequence[0]].second_source()
     
     def source(self):
         return (self.first_source(), self.second_source)
 
     def first_target(self):
-        self.alignment_chain[self._left_fragment_sequence[-1]].first_target()
+        return self.alignment_chain[self._left_fragment_sequence[-1]].first_target()
         
     def second_target(self):
-        self.alignment_chain[self._right_fragment_sequence[-1]].second_target()
+        return self.alignment_chain[self._right_fragment_sequence[-1]].second_target()
     
     def target(self):
         return (self.target(), self.target)
@@ -316,28 +326,32 @@ class EnsembleAlignment(AbstractAlignment):
     # weights
 
     def first_weights(self):
+        """Weight sequence in the first graph, including None weights."""
         return self._left_weight_sequence
 
     def second_weights(self):
+        """Weight sequence in the second graph, including None weights."""
         return self._right_weight_sequence
 
     def weights(self):
+        """Weight sequence in the product graph."""
         return list(zip(self.first_weights(), self.second_weights()))
     
     def first_aligned_weights(self):
-        return list(filter(lambda x: x is not None, self._left_weight_sequence))
+        """Second weights without None (≔ gap or skip) weights."""
+        return list(filter(lambda x: x is not None, self.first_weights()))
     
     def second_aligned_weights(self):
-        return list(filter(lambda x: x is not None, self._right_weight_sequence))
+        """Second weights without None (≔ gap or skip) weights."""
+        return list(filter(lambda x: x is not None, self.second_weights()))
 
     # score
     def score(self):
         return self._score
 
     def __repr__(self):
-        return f"""FragmentChain
-first edges\t{self.first_edges()}
-first weights\t{self.first_weights()}
-second edges\t{self.second_weights()}
-second weights\t{self.second_edges()}
-"""
+        return print_alignment(
+            score = self.score(),
+            alignment_edges = self.edges(),
+            alignment_weights = self.weights(),
+            name = "EnsembleAlignment")
