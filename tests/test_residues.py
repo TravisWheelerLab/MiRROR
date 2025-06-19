@@ -23,10 +23,11 @@ class TestResidues(unittest.TestCase):
         peaks = PeakList(mz, intensity)
         # run bisect strategy
         params = DEFAULT_RESIDUE_PARAMS
-        bisect_solutions = list(solve_peak_list(peaks, params))
+        bisect_solutions = sorted(list(solve_peak_list(peaks, params)), key = lambda x: x.mass_error)
         # run tensor strategy
         params.strategy = TensorMassTransformationSolver
-        tensor_solutions = list(solve_peak_list(peaks, params))
+        tensor_solutions = sorted(list(solve_peak_list(peaks, params)), key = lambda x: x.mass_error)
+        # run checks
         self.assertEqual(bisect_solutions, tensor_solutions)
         expected_residues = set(peptide[1:-1])
         observed_residues = set(map(lambda mt: mt.residue_symbol, bisect_solutions))
@@ -34,7 +35,7 @@ class TestResidues(unittest.TestCase):
         if verbose:
             print("Solutions:")
             for mt in bisect_solutions:
-                print(f"MassTransformation: res {mt.residue_symbol} charge {mt.charges_symbol} losses {mt.losses_symbol} modification {mt.modification_symbol}")
+                print(f"MassTransformation: res {mt.residue_symbol} charge {mt.charges_symbol} losses {mt.losses_symbol} modification {mt.modification_symbol} error {mt.mass_error}")
     
     def test_transformation_solver(self):
         samples = ["NREQSTK",

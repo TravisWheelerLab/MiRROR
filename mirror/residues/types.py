@@ -8,7 +8,7 @@ import numpy as np
 @dataclass
 class MassTransformationSpace:
     """A model of every potential transformation under a given parametization.
-    Transformations are represented as shifts, so the space is a glorified list of floats."""
+    Transformations are represented as shifts, so the space is a glorified array of floats."""
     residue_symbols: list[str]
     residue_masses: list[float]
     loss_symbols: list[str]
@@ -67,18 +67,20 @@ class MassTransformationSpace:
         return self.residue_masses[i]
     
     def get_loss_mass(self, key: str, i: int):
-        loss_id = i - 1
-        if i == 0 or loss_id in self.residue_losses[key]:
-            return self.left_loss_tensor[0, i, 0, 0]
-        else:
-            return np.inf
+        return self.left_loss_tensor[0, i, 0, 0]
+        #loss_id = i - 1
+        #if i == 0 or loss_id in self.residue_losses[key]:
+        #    return self.left_loss_tensor[0, i, 0, 0]
+        #else:
+        #    return np.inf
     
     def get_modification_mass(self, key: str, i: int):
-        modification_id = i - 1
-        if i == 0 or modification_id in self.residue_losses[key]:
-            return self.modification_tensor[0, 0, 0, i]
-        else:
-            return np.inf
+        return self.modification_tensor[0, 0, 0, i]
+        #modification_id = i - 1
+        #if i == 0 or modification_id in self.residue_losses[key]:
+        #    return self.modification_tensor[0, 0, 0, i]
+        #else:
+        #    return np.inf
 
 @dataclass
 class AbstractMassTransformationSolver(ABC):
@@ -91,11 +93,11 @@ class AbstractMassTransformationSolver(ABC):
         """Restructures the transformation space."""
 
     @abstractmethod
-    def set_left_peak(self, left_mz: float) -> None:
+    def set_left_peak(self, index: int) -> None:
         """Sets the left index for gap search, and performs any work needed for subsequent operations."""
     
     @abstractmethod
-    def set_right_peak(self, right_mz: float) -> None:
+    def set_right_peak(self, index: int) -> None:
         """Sets the right index for gap search, and performs any work needed to retrieve the optimal result for (left_mz, right_mz)."""
 
     @abstractmethod

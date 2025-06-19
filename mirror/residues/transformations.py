@@ -1,26 +1,11 @@
-from typing import Iterable
+from typing import Iterator
+import itertools as it
 
 from .types import ResidueParams, MassTransformation, MassTransformationSpace, AbstractMassTransformationSolver
-from ..spectra.types import PeakList
+from ..spectra.types import PeakList, BenchmarkPeakList, NineSpeciesBenchmarkPeakList
 from ..util import merge_in_order
 
 import numpy as np
-
-def _solve(
-    mass: float,
-) -> None:
-    pass
-
-def solve_single(
-    mz: float
-) -> MassTransformation:
-    """Determine the transformation responsible for a single residue mass."""
-
-def solve_pair(
-    left_mz: float,
-    right_mz: float
-) -> MassTransformation:
-    delta_mz = right_mz - left_mz
 
 def _augment_charge(
     peaks: PeakList,
@@ -31,10 +16,22 @@ def _augment_charge(
     merged_augmented_mz, deindexer, charge_table = merge_in_order(augmented_mz_arrays)
     return (merged_augmented_mz, deindexer, charge_table)
 
+def solve_singletons(
+    mz: Iterator[float],
+    params: ResidueParams,
+) -> list[Iterator[MassTransformation]]:
+    pass
+
+def solve_pairs(
+    pairs: Iterator[tuple[float, float]],
+    params: ResidueParams,
+) -> list[Iterator[MassTransformation]]:
+    pass
+
 def solve_peak_list(
     peaks: PeakList,
     params: ResidueParams,
-) -> Iterable[MassTransformation]:
+) -> Iterator[MassTransformation]:
     """Find all pairs of peaks related by a MassTransformation."""
     # 1. init search strategy (tensor or bisect)
     transformation_space = MassTransformationSpace(
@@ -97,9 +94,9 @@ def solve_peak_list(
                     left_inverse_transformed_peak = left_peak + left_loss_mass
                     right_inverse_transformed_peak = right_peak + right_loss_mass + modification_mass
                     inverse_transformed_mass = right_inverse_transformed_peak - left_inverse_transformed_peak
-                    delta_mass = inverse_transformed_mass - residue_mass
+                    delta_mass = abs(inverse_transformed_mass - residue_mass)
                     # if a solution exists, encode it as a MassTransformation
-                    if abs(delta_mass) <= tolerance:
+                    if delta_mass <= tolerance:
                         yield MassTransformation(
                             inner_index = (i, j),
                             peaks_index = (left_index, right_index),
@@ -119,3 +116,61 @@ def solve_peak_list(
                         )
                     #else:
                     #    print(f"candidate: {(left_index, right_index)} {residue_idx} {left_loss_idx} {right_loss_idx} {modification_idx} {delta_mass} | query: {mass_query} = {right_peak} - {left_peak} | decomposition: {residue_mass}  {left_loss_mass} {right_loss_mass} {modification_mass} ~ {inverse_transformed_mass} = {right_inverse_transformed_peak} - {left_inverse_transformed_peak} = ({right_peak} + {right_loss_mass} + {modification_mass}) - ({left_peak} + {left_loss_mass})")
+
+def _transformation_index_pairs_from_series_data(
+    series_idx: list[int],
+    series_pos: list[int],
+) -> Iterator[tuple[int, int]]:
+    for i, pos in zip(series_idx, series_pos):
+        for j, pos2 in zip(series_idx[i + 1:], series_pos[i + 1:]):
+            if pos2 == pos1 + 1:
+                yield (i, j)
+
+def _benchmark_transformations_from_index_pairs(
+    bpl: NineSpeciesBenchmarkPeakList,
+    pairs: Iterator[tuple[int, int]],
+    mass_transformation_space: MassTransformationSpace,
+) -> Iterator[MassTransformation]:
+    peptide = bpl.get_peptide()
+    for (i, j) in pairs:
+        left_mz = bpl[i]
+        right_mz = bpl[j]
+        left_charge, left_losses, left_series, left_position = bpl.get_state(i)
+        right_charge, right_losses, right_series, right_position = bpl.get_state(j)
+
+        residue_index = mass_transformation_space.get_residue_index(residue)
+        residue_mass = mass_transformation_space.get_residue_mass(residue_index)
+        yield MassTransformation(
+            inner_index=(i, j),
+            peaks_index=(i, j),
+            peaks_mass=(left_mz,right_mz),
+            residue_index=residue_index,
+            residue_mass=residue_mass,
+            residue_symbol=residue,
+            modification_index=modification_index,
+            modification_mass=modification,
+            modification_symbol=modification,
+            losses_index=(left_losses_index,right_losses_index),
+            losses_mass=(left_losses_mass,right_losses_mass),
+            losses_symbol=(left_losses_symbol,right_losses_symbol),
+            charges_index=(left_charge_index,right_charge_index),
+            charges_symbol=(left_charge_symbol,right_charge_symbol),
+            mass_error=abs(left_mass_error) + abs(right_mass_error))
+
+def benchmark_transformations(
+    bpl: NineSpeciesBenchmarkPeakList,
+    params: ResidueParams,
+) -> Iterator[MassTransformation]:
+    #
+    y_idx = bpl.get_y_series_peaks()
+    y_pos = [bpl.get_position[i] for i in y_idx]
+    y_index_pairs = _transformation_index_pairs_from_series_data(y_idx, y_pos)
+    y_transformations = _benchmark_transformations_from_index_pairs(bpl, y_index_pairs)
+    #
+    b_idx = bpl.get_b_series_peaks()
+    b_pos = [bpl.get_position[i] for i in b_idx]
+    b_index_pairs = _transformation_index_pairs_from_series_data(b_idx, b_pos)
+    b_transformations = _benchmark_transformations_from_index_pairs(bpl, b_index_pairs)
+    #
+    return it.chain(y_transformations, b_transformations)
+    
