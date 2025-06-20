@@ -11,6 +11,8 @@ from mirror.spectra.types import *
 from mirror.spectra.preprocessing import *
 from mirror.spectra.simulation import simulate_simple_peaks
 
+import numpy as np
+
 import unittest
 
 class TestSpectra(unittest.TestCase):
@@ -173,3 +175,58 @@ class TestSpectra(unittest.TestCase):
     
     def benchmark(self):
         self._benchmark("data/spectra/Apis-mellifera.mzlib.txt", 10)
+
+class TestMz(unittest.TestCase):
+
+    def test_charge_augmented_mz_from_singletons(self):
+        singletons = [0.5, 1.5, 2.5]
+        charges = 3
+        mz = ChargeAugmentedMz.from_singletons(singletons, charges)
+        self.assertEqual(
+            len(mz),
+            1 + (charges * len(singletons)))
+        self.assertEqual(
+            list(mz),
+            [0., 0.5, 1., 1.5, 1.5, 3., 4.5, 2.5, 5., 7.5])
+        self.assertEqual(
+            [mz.deindex(i) for i in range(len(mz))],
+            [-1, 0, 0, 0, 1, 1, 1, 2, 2, 2])
+        self.assertEqual(
+            [mz.charge(i) for i in range(len(mz))],
+            [-1, 0, 1, 2, 0, 1, 2, 0, 1, 2])
+    
+    def test_charge_augmented_mz_from_pairs(self):
+        pairs = [(0.5,1.5),(2.5,3.5)]
+        charges = 3
+        mz = ChargeAugmentedMz.from_pairs(pairs, charges)
+        self.assertEqual(
+            len(mz), 
+            charges * 2 * len(pairs))
+        self.assertEqual(
+            list(mz),
+            [0.5, 1.5, 1., 3., 1.5, 4.5, 2.5, 3.5, 5., 7., 7.5, 10.5])
+        self.assertEqual(
+            [mz.deindex(i) for i in range(len(mz))],
+            [0, 1, 0, 1, 0, 1, 2, 3, 2, 3, 2, 3])
+        self.assertEqual(
+            [mz.charge(i) for i in range(len(mz))],
+            [0, 0, 1, 1, 2, 2, 0, 0, 1, 1, 2, 2])
+
+    def test_charge_augmented_mz_from_peak_list(self):
+        peak_list = PeakList(
+            mz = np.array([0.5, 1.5, 2.5, 3.5]), 
+            intensity = np.ones(4))
+        charges = 3
+        mz = ChargeAugmentedMz.from_peak_list(peak_list, charges)
+        self.assertEqual(
+            len(mz), 
+            charges * len(peak_list))
+        self.assertEqual(
+            list(mz),
+            [0.5, 1.0, 1.5, 1.5, 2.5, 3.0, 3.5, 4.5, 5.0, 7.0, 7.5, 10.5])
+        self.assertEqual(
+            [mz.deindex(i) for i in range(len(mz))],
+            [0.0, 0.0, 1.0, 0.0, 2.0, 1.0, 3.0, 1.0, 2.0, 3.0, 2.0, 3.0])
+        self.assertEqual(
+            [mz.charge(i) for i in range(len(mz))],
+            [0.0, 1.0, 0.0, 2.0, 0.0, 1.0, 0.0, 2.0, 1.0, 1.0, 2.0, 2.0])

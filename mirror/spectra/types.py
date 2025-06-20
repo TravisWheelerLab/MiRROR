@@ -9,6 +9,7 @@ from mzpaf import PeptideFragmentIonAnnotation, Unannotated
 from mzspeclib.validate import ValidationWarning as mzlib_ValidationWarning
 
 from ..io import mgf, read_mgf, mzlib, read_mzlib
+from ..util import merge_in_order, interleave
 
 @dataclass
 class SpectrumParams:
@@ -26,12 +27,12 @@ class MzArray:
     Constructed via the prepare_spectrum function."""
 
     def __init__(self, 
-        spectrum_array: np.ndarray,
+        data: np.ndarray,
         resolution: float,
         min_mz: float,
         max_mz: float,
     ):
-        self.data = spectrum_array
+        self.data = data
         self.resolution = resolution
         self.min = min_mz
         self.max = max_mz
@@ -171,6 +172,70 @@ class AnnotatedPeakList(PeakList):
             range(len(self))))
         return matches, misses
 
+class ChargeAugmentedMz:
+    
+    def __init__(self,
+        mz: np.ndarray,
+        deindexer: np.ndarray,
+        charge_table: np.ndarray,
+    ):
+        self._n = len(mz)
+        self._mz = mz
+        self._deindexer = deindexer
+        self._charge_table = charge_table
+
+    def __len__(self) -> int:
+        return self._n
+    
+    def __getitem__(self, i: int) -> float:
+        return self._mz[i]
+    
+    def __iter__(self) -> Iterable:
+        return self._mz.__iter__()
+    
+    def deindex(self, i: int) -> int:
+        return self._deindexer[i]
+    
+    def charge(self, i: int) -> int:
+        return self._charge_table[i]
+    
+    @staticmethod
+    def augment_mz(mz: np.array, charges: int):
+        return [mz if (c == 1) else c * mz for c in range(1, charges + 1)]
+
+    @classmethod
+    def from_singletons(cls, mz_singletons: list[float], charges: int):
+        augmented_mz_arrays = cls.augment_mz(np.array(mz_singletons), charges)
+        n = len(mz_singletons)
+        charge_arr = np.array(range(charges))
+        return cls(
+            mz = np.hstack([[0.], interleave(augmented_mz_arrays)]), 
+            deindexer = np.hstack([-1] + [np.full(charges, i) for i in range(n)]), 
+            charge_table = np.hstack([-1] + [charge_arr for _ in range(n)]))
+
+    @classmethod
+    def from_pairs(cls, mz_pairs: list[tuple[float, float]], charges: int):
+        # idk what to tell you, this one got out of hand. it's necessary for benchmarking.
+        mz_left, mz_right = zip(*mz_pairs)
+        augmented_mz_left = cls.augment_mz(np.array(mz_left), charges)
+        augmented_mz_right = cls.augment_mz(np.array(mz_right), charges)
+        n = len(mz_left)
+        charge_arr = np.array(range(charges))
+        interleaved_charge_arr = interleave([charge_arr, charge_arr])
+        return cls(
+            mz = interleave([interleave(augmented_mz_left), interleave(augmented_mz_right)]), 
+            deindexer = np.hstack([interleave([np.full(charges, i), np.full(charges, i + 1)]) for i in range(0, 2 * n, 2)]),
+            charge_table = np.hstack([interleaved_charge_arr for _ in range(n)]))
+    
+    @classmethod
+    def from_peak_list(cls, peak_list: PeakList, charges: int):
+        augmented_mz_arrays = cls.augment_mz(peak_list.mz, charges)
+        merged_augmented_mz, deindexer, charge_table = merge_in_order(augmented_mz_arrays)
+        return cls(
+            mz = merged_augmented_mz, 
+            deindexer = deindexer, 
+            charge_table = charge_table)
+
 class BenchmarkPeakList(AnnotatedPeakList):
     """An annotated peak list with a target peptide.
     Constructed via from_mzlib, and from_mgf class methods 
@@ -191,6 +256,13 @@ class BenchmarkPeakList(AnnotatedPeakList):
     
     def get_peptide(self):
         return self.peptide
+
+    def get_state(self, i: int, metadata_keys = []) -> tuple:
+        """The annotation vector of the `i`th peak, including metadata if the `metadata_keys` kwarg is passed."""
+        charge = self.get_charge(i)[0]
+        losses = self.get_losses(i)[0]
+        metadata = [self.get_metadata(i, k) for k in metadata_keys]
+        return (charge, losses, series, position, *metadata)
 
     @classmethod
     def from_mzlib(cls, 
@@ -285,10 +357,11 @@ class NineSpeciesBenchmarkPeakList(BenchmarkPeakList):
         *args,
         **kwargs,
     ):
-        self.peptide = peptide
         self.series = series
         self.position = position
-        super(BenchmarkPeakList, self).__init__(mz, intensity, charge, losses, *args, **kwargs)
+        super(NineSpeciesBenchmarkPeakList, self).__init__(peptide, mz, intensity, charge, losses, *args, **kwargs)
+        self.y_idx = sorted(self._series_peak_indices('y'), key = lambda i: self.get_position(i)[0])
+        self.b_idx = sorted(self._series_peak_indices('b'), key = lambda i: self.get_position(i)[0])
     
     def get_series(self, i: int):
         return self.series[i]
@@ -296,25 +369,25 @@ class NineSpeciesBenchmarkPeakList(BenchmarkPeakList):
     def get_position(self, i: int):
         return self.position[i]
 
-    def get_states(self, i: int, metadata_keys = []) -> set:
+    def get_state(self, i: int, metadata_keys = []) -> tuple:
         """The set of annotation vector(s) for the `i`th peak, including metadata if the `metadata_keys` kwarg is passed."""
         charge = self.get_charge(i)[0]
         losses = self.get_losses(i)[0]
         series = self.get_series(i)[0]
         position = self.get_position(i)[0]
         metadata = [self.get_metadata(i, k) for k in metadata_keys]
-        return set([(charge, losses, series, position, *metadata)])
+        return (charge, losses, series, position, *metadata)
     
-    def get_series_peaks(self, series: str):
+    def _series_peak_indices(self, series: str):
         for i in range(len(self)):
             if self.get_series(i)[0] == series:
                 yield i
     
     def get_b_series_peaks(self):
-        return list(self.get_series_peaks('b'))
+        return self.b_idx
     
     def get_y_series_peaks(self):
-        return list(self.get_series_peaks('y'))
+        return self.y_idx
 
     @classmethod
     def from_mzlib(cls, 
@@ -363,3 +436,10 @@ class NineSpeciesBenchmarkPeakList(BenchmarkPeakList):
                 series = list(series),
                 position = list(position),
                 metadata = {"mass_error": mass_error})
+    
+    @classmethod
+    def from_mgf(cls, 
+        dataset: mgf.IndexedMGF, 
+        i: int,
+    ):
+        raise NotImplementedError("MGF datasets in the 9-species benchmark do not have series or position data, so they can't be used to construct this benchmark type.")

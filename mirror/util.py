@@ -3,6 +3,14 @@ from typing import Iterator, Any
 from itertools import chain
 from math import ceil
 
+def interleave(arrays: list[np.ndarray]) -> np.ndarray:
+    # https://stackoverflow.com/a/5347492
+    n = len(arrays)
+    c = np.empty(sum(a.size for a in arrays), dtype=arrays[0].dtype)
+    for i in range(n):
+        c[i::n] = arrays[i]
+    return c
+
 def merge_in_order(arrays: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     merged_array = np.hstack(arrays)
     order = np.argsort(merged_array)
