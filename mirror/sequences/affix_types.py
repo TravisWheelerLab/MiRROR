@@ -1,3 +1,5 @@
+from typing import Iterator
+
 from ..graphs.align_types import AbstractAlignment
 
 class Affix:
@@ -22,8 +24,8 @@ class Affix:
     @classmethod
     def from_alignment(cls, alignment: AbstractAlignment, placeholders: list[str]):
         return cls(
-            called_sequence = list(cls._call_affix_from_weight_sequence(alignment.weights(), placeholders)),
-            score = alignment.score)
+            called_sequence = list(cls._call_weight_sequence(alignment.weights(), placeholders)),
+            score = alignment.score())
 
     def __init__(self, called_sequence: list[str], score: float):
         self._called_sequence = called_sequence 
