@@ -32,12 +32,12 @@ def annotate_peaks(
         incoming_states[right_idx].add(mt.right_state())
         charges[left_idx].append(mt.charges_symbol[0])
         charges[right_idx].append(mt.charges_symbol[1])
-        losses[left_idx].append(mt.losses_symbol[0])
-        losses[right_idx].append(mt.losses_symbol[1])
+        losses[left_idx].append((mt.losses_symbol[0],))
+        losses[right_idx].append((mt.losses_symbol[1],))
     # determine peak-wise consistency
     consistency = [0 for _ in range(n)]
     for i in range(n):
-        consistency[i] = len(incoming_states[i].intersection(outgoing_states[i]))
+        consistency[i] = len(incoming_states[i].intersection(outgoing_states[i]))#list(filter(lambda x: x != (0, 0), incoming_states[i].intersection(outgoing_states[i]))))
     # done
     return AnnotatedPeakList(
         mz = peaks.mz,

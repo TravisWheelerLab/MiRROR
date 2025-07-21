@@ -215,7 +215,6 @@ class ChargeAugmentedMz:
 
     @classmethod
     def from_pairs(cls, mz_pairs: list[tuple[float, float]], charges: int):
-        # idk what to tell you, this one got out of hand. it's necessary for benchmarking.
         mz_left, mz_right = zip(*mz_pairs)
         augmented_mz_left = cls.augment_mz(np.array(mz_left), charges)
         augmented_mz_right = cls.augment_mz(np.array(mz_right), charges)
