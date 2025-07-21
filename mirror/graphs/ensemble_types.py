@@ -2,7 +2,7 @@ from typing import Callable, Iterator, Any
 from itertools import chain, pairwise
 
 from .graph_types import DiGraph, DAG, StrongProductDAG
-from .align_types import AbstractAlignment, LocalAlignment, AlignedPath, AbstractCostModel, LocalCostModel
+from .align_types import AbstractAlignment, LocalAlignment, AbstractCostModel, LocalCostModel
 from ..util import print_alignment
 
 from networkx import Graph, is_bipartite, connected_components

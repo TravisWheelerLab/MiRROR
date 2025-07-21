@@ -444,7 +444,7 @@ class TestEnsemble(unittest.TestCase):
         aln = self._align(first_dag, second_dag)
         # fragment consensus
         frag_itx = FragmentIntersectionGraph(aln)
-        fragment_consensii = chain_fragment_pairs(frag_itx, LocalCostModel(), 1000)
+        fragment_consensii = solve_fragment_pair_chains(frag_itx, LocalCostModel(), 1000)
         print(f"\nalignment {tag}:\n{aln}")
         print(f"fragment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._fragment_index}")
         print("fragment consensus:")
@@ -530,3 +530,50 @@ class TestConcatenation(unittest.TestCase):
         node_weights2 = [-1., -2., -4., -5.]
         tag = "Occluded Node"
         self._test_concat(dag1, node_weights1, dag2, node_weights2, tag)
+    
+    def test_complex(self):
+        pass
+
+import numpy as np
+#from .test_spectra import TestSpectra
+from mirror.spectra.types import NineSpeciesBenchmarkPeakList
+#from mirror.residues.transformations import transformations_from_series_data
+class TestSpectrumGraphs(unittest.TestCase):
+
+    def _test_benchmark_spectrum_graph(self):
+        dataset = TestSpectra.read_test_9species_mzlib()
+        for i in range(len(dataset)):
+            # read a NineSpeciesBenchmarkPeakList from the A. mellifera mzlib.
+            bpl = NineSpeciesBenchmarkPeakList(dataset, i)
+            # infer transformations, pivots, boundaries from the peak annotations.
+            transformations = benchmark_transformations(bpl)
+            pivot = benchmark_pivot(bpl, transformations)
+            boundaries = benchmark_boundaries(bpl, transformations, pivot)
+            # construct a spectrum graph pair over the transformations.
+            ascending_graph, descending_graph = spectrum_graph_from_transformations(
+                peak_list = bpl,
+                transformations = transformations,
+                pivot = pivot,
+                boundaries = boundaries)
+            # align spectrum graphs.
+            affixes = align_spectrum_graphs((ascending_graph, descending_graph))
+            # pair affixes.
+            affix_index_pairs = pair_affixes(affixes, ascending_graph, descending_graph)
+            # enumerate candidate sequences.
+            candidates = np.array(enumerate_candidates(affixes, affix_index_pairs, pivot, boundaries))
+            candidate_scores = np.array([x.score for x in candidates])
+            candidate_ranks = np.argsort(candidate_scores)
+            # align peptide to candidates.
+            target_peptide = bpl.get_peptide()
+            candidate_edit_distances = np.array(list(map(
+                lambda candidate_peptide: align_peptides(candidate_peptide, target_peptide).edit_distance,
+                candidates)))
+            optimal_edit_distance = min(candidate_edit_distances)
+            # iterate in order of ascending edit distance
+            candidate_distance_order = np.argsort(candidate_edit_distances)
+            candidate_edit_distances = candidate_edit_distances[candidate_distance_order]
+            candidate_ranks = candidate_ranks[candidate_distance_order]
+            candidate_scores = candidate_scores[candidate_distance_order]
+            candidates = candidates[candidate_distance_order]
+            for true_rank, (candidate, score_rank, score, edit_distance) in enumerate(zip(candidates, candidate_ranks, candidate_scores, candidate_edit_distances)):
+                input(f"({true_rank}): candidate[{score_rank}]\n - seq: {candidate.seq}\n - score: {score}\n - distance: {edit_distance}")
