@@ -3,6 +3,13 @@ from typing import Iterator, Any
 from itertools import chain
 from math import ceil
 
+def mask_ambiguous_residues(res: chr):
+    "Maps residues \'L\' and \'I\' to \"I/L\"."
+    if res == "L" or res == "I":
+        return "L"
+    else:
+        return res
+
 def interleave(arrays: list[np.ndarray]) -> np.ndarray:
     # https://stackoverflow.com/a/5347492
     n = len(arrays)
