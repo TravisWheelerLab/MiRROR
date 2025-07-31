@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 from multiprocessing import Pool
 import functools as ft
-import itertool as it
+#import itertool as it
+
+from .fragments import ResidueState, FragmentState, FragmentStateSpace
+from .pairs import PairedFragment
+from .pivots import PivotSearchParams, Pivot
+from .boundaries import LeftBoundaryFragment, RightBoundaryFragment
 
 @dataclass
 class AnnotationParams:
@@ -14,10 +19,11 @@ class AnnotationParams:
 
 class AnnotationResult:
     def __init__(self,
-        pairs: list[PairedPeak],
-        left_boundaries: list[LeftBoundaryPeak],
-        right_boundaries: list[list[RightBoundaryPeak]],
+        pairs: list[PairedFragment],
+        left_boundaries: list[LeftBoundaryFragment],
+        right_boundaries: list[list[RightBoundaryFragment]],
         pivots: list[Pivot],
+        pivot_index: list[int],
     ):
         self._n_pairs = len(pairs)
         self._pairs = pairs
@@ -27,10 +33,10 @@ class AnnotationResult:
 
         self._n_pivots = len(pivots)
         self._n_right_boundaries = len(right_boundaries)
+        assert self._n_pivots == len(pivot_index)
         assert self._n_pivots <= self._n_right_boundaries
-        self._pivots, self._pivot_order = zip(*sort(
-            zip(pivots, range(self._n_pivots)), 
-            key = lambda x: x[0].score))
+        self._pivots = pivots
+        self._pivot_index = pivot_index
         self._right_boundaries = right_boundaries
 
     def get_pairs(self):
@@ -42,8 +48,8 @@ class AnnotationResult:
     def get_pivots(self):
         return self._pivots
 
-    def get_right_boundaries(self, pivot_index: int):
-        return self._right_boundaries[self._pivot_order[pivot_index]]
+    def get_right_boundaries(self, pivot_id: int):
+        return self._right_boundaries[self._pivot_index[pivot_id]]
 
 def _annotate(
     peaks: PeakList,
@@ -74,7 +80,7 @@ def _annotate(
         match_threshold = params.match_threshold,
         residue_state_space = params.residue_state_space)
     # score and filter pivots according to their symmetry and right boundary quality.
-    pivots = rescore_pivots(
+    pivots, pivot_index = rescore_pivots(
         pivots = pivots,
         left_boundaries = left_boundaries,
         right_boundaries = right_boundaries,
@@ -85,7 +91,8 @@ def _annotate(
         pairs = peak_pairs,
         left_boundaries = left_boundaries,
         right_boundaries = right_boundaries,
-        pivots = pivots)
+        pivots = pivots,
+        pivot_index = pivot_index)
 
 def annotate(
     peak_lists: Iterator[PeakList],
@@ -93,5 +100,5 @@ def annotate(
 ) -> Iterator[AnnotationResult]:
     with Pool() as pool:
         return pool.map(
-            ft.partial(annotate, params = params),
+            ft.partial(_annotate, params = params),
             peak_lists)
