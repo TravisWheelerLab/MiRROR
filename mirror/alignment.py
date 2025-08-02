@@ -4,36 +4,51 @@ from multiprocessing import Pool
 import functools as ft
 import itertools as it
 
-from .pivots import Pivot
-from .graphs import construct_spectrum_graphs, align_spectrum_graphs, pair_alignments, LocalCostModel, AbstractAlignment
+from .pivots import AbstractPivot
+from .graphs import construct_spectrum_graphs, align_spectrum_graphs, pair_alignments, SpectrumGraph, LocalCostModel, AbstractAlignment
+from .sequences import SuffixArray, AffixPair
+
 from .annotation import AnnotationResult
 
 @dataclass
 class AlignmentParams:
     cost_threshold: float
     cost_model: LocalCostModel
+    suffix_array: SuffixArray
     aggregate_score_threshold: float
 
 class AlignmentResult:
-#    def __init__(self,
-#        pivots: list[Pivots],
-#        alignments: list[list[AbstractAlignment]],
-#        alignment_pairs: list[list[tuple[int, int, int]]]
-#    ):
-#        super(AlignmentResult, self).__init__(paired_alignments)
-#
-#    @classmethod
-#    def from_pivots(cls, pivots: list[Pivot]):
-#        return cls(
-#            pivots = pivots,
-#            alignments = it.repeat(None, len(pivots)),
-#            alignment_pairs = it.repeat(None, len(pivots)))
+    def __init__(self,
+        pivot: AbstractPivot,
+        alignments: list[AbstractAlignment],
+        affix_pairs: list[tuple[int, int]],
+    ):
+        self._pivot = pivot
+        self._alignments = alignments
+        self._affix_pairs = affix_pairs
+        self._n = len(affix_pairs)
 
-def _align(
+    def __len__(self) -> int:
+        return self._n
+
+    def __getitem__(self,
+        i: int,
+    ) -> AffixPair:
+        l, r = self._affix_pairs[i]
+        return AffixPair(
+            pivot = pivot,
+            prefix = self._alignments[l],
+            suffix = self._alignments[r])
+
+    def __iter__(self) -> Iterator[AffixPair]:
+        return map(
+            self.__getitem__,
+            range(len(self)))
+
+def compose(
     annotation: AnnotationResult,
     params: AlignmentParams,
-) -> AlignmentResult:
-    alignment_result = AlignmentResult.from_size(annotation.get_pivots())
+) -> Iterator[tuple[SpectrumGraph,SpectrumGraph]]:
     pairs = annotation.get_pairs()
     left_boundaries = annotation.get_left_boundaries()
     for (i, pivot) in enumerate(annotation.get_pivots()):
@@ -43,23 +58,22 @@ def _align(
             left_boundaries = left_boundaries,
             right_boundaries = right_boundaries,
             pivot = pivot)
-        alignments = list(align_spectrum_graphs(
-            graphs = spectrum_graph_pair,
-            cost_model = params.cost_model,
-            cost_threshold = params.cost_threshold))
-        alignment_pairs = pair_alignments(
-            pivot = pivot,
-            alignments = alignments,
-            score_threshold = params.aggregate_score_threshold)
-#        alignment_result[i] = (alignments, alignment_pairs)
-        # how is this data getting stored? we don't need to pass all of the alignment data to `filtration`, just
-    return alignment_result
+        yield pivot, spectrum_graph_pair
 
 def align(
-    annotations: Iterator[AnnotationResult],
+    pivot: AbstractPivot,
+    spectrum_graphs: tuple[SpectrumGraph,SpectrumGraph],
     params: AlignmentParams,
-) -> Iterator[AlignmentResult]:
-    with Pool() as pool:
-        return pool.map(
-            ft.partial(_align, params = params),
-            annotations)
+) -> AlignmentResult:
+    alignments = list(align_spectrum_graphs(
+        graphs = spectrum_graphs,
+        cost_model = params.cost_model,
+        cost_threshold = params.cost_threshold))
+    alignment_pairs = pair_alignments(
+        pivot = pivot,
+        alignments = alignments,
+        score_threshold = params.aggregate_score_threshold)
+    return AlignmentResult(
+        pivot = pivot,
+        alignments = alignments,
+        alignment_pairs = alignment_pair)

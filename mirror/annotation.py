@@ -1,17 +1,17 @@
 from dataclasses import dataclass
 from multiprocessing import Pool
 import functools as ft
-#import itertool as it
+import itertool as it
 
 from .fragments import ResidueState, FragmentState, FragmentStateSpace
 from .pairs import PairedFragment
-from .pivots import PivotSearchParams, Pivot
+from .pivots import PivotSearchParams, AbstractPivot
 from .boundaries import LeftBoundaryFragment, RightBoundaryFragment
 
 @dataclass
 class AnnotationParams:
     match_threshold: float
-    residue_state_space: ResidueStateSpace
+    fragment_state_space: FragmentStateSpace
     difference_threshold: float
     pivot_search_strategies: list[PivotSearchParams]
     pivot_symmetry_threshold: float
@@ -22,7 +22,7 @@ class AnnotationResult:
         pairs: list[PairedFragment],
         left_boundaries: list[LeftBoundaryFragment],
         right_boundaries: list[list[RightBoundaryFragment]],
-        pivots: list[Pivot],
+        pivots: list[AbstractPivot],
         pivot_index: list[int],
     ):
         self._n_pairs = len(pairs)
@@ -39,19 +39,19 @@ class AnnotationResult:
         self._pivot_index = pivot_index
         self._right_boundaries = right_boundaries
 
-    def get_pairs(self):
+    def get_pairs(self) -> list[PairedFragment]:
         return self._pairs
 
-    def get_left_boundaries(self):
+    def get_left_boundaries(self) -> list[LeftBoundaryFragment]:
         return self._left_boundaries
 
-    def get_pivots(self):
+    def get_pivots(self) -> list[AbstractPivot]:
         return self._pivots
 
-    def get_right_boundaries(self, pivot_id: int):
+    def get_right_boundaries(self, pivot_id: int) -> list[RightBoundaryFragment]:
         return self._right_boundaries[self._pivot_index[pivot_id]]
 
-def _annotate(
+def annotate(
     peaks: PeakList,
     params: AnnotationParams,
 ) -> AnnotationResult:
@@ -93,12 +93,3 @@ def _annotate(
         right_boundaries = right_boundaries,
         pivots = pivots,
         pivot_index = pivot_index)
-
-def annotate(
-    peak_lists: Iterator[PeakList],
-    params: AnnotationParams,
-) -> Iterator[AnnotationResult]:
-    with Pool() as pool:
-        return pool.map(
-            ft.partial(_annotate, params = params),
-            peak_lists)
