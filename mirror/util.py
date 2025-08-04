@@ -1,7 +1,42 @@
 import numpy as np
-from typing import Iterator, Any
+from typing import Iterable, Iterator, Any
 from itertools import chain
 from math import ceil
+
+def collapse_second_order_list(llist: list[list]):
+    """Associates a list of lists of elements to a flat list of elements.
+    
+        list(itertools.chain.from_iterable(llist))
+
+    :llist: a second-order iterable."""
+    return list(chain.from_iterable(llist))
+
+def _recursive_collapse(items, index, count):
+    # because strings are iterables, including characters, they will lead to infinite recursion if not treated separately.
+    if not(isinstance(items, str)) and isinstance(items, Iterable):
+        new_items = []
+        new_index = []
+        for x in items:
+            new_x, new_i, count = _recursive_collapse(x, index, count)
+            new_items.append(new_x)
+            new_index.append(new_i)
+        return collapse_second_order_list(new_items), new_index, count
+    else:
+        count += 1
+        return [items], count, count
+
+def recursive_collapse(items):
+    return _recursive_collapse(items, [], -1)[:2]
+
+def recursive_uncollapse(flat_items, index):
+    if isinstance(index, Iterable):
+        items = []
+        for subindex in index:
+            new_item = recursive_uncollapse(flat_items, subindex)
+            items.append(new_item)
+        return items
+    else:
+        return flat_items[index]
 
 def mask_ambiguous_residues(res: chr):
     "Maps residues \'L\' and \'I\' to \"I/L\"."
