@@ -1,15 +1,19 @@
-from typing import Self
+from typing import Self, Iterator
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from bisect import bisect_left, bisect_right
 import functools as ft
 import itertools as it
+from . import util
+
+import numpy as np
 
 @dataclass
 class FragmentStateSpace:
     loss_masses: list[float]
     loss_symbols: list[str]
 #    applicable_losses: list[list[int]] # amino_idx -> {loss_idx applicable to amino}.
-    max_num_losses: int                # restricts the number of losses that can be applied to a fragment.
+#    max_num_losses: int                # restricts the number of losses that can be applied to a fragment.
     charges: list[int]
 
     def n_losses(self) -> int:
@@ -23,6 +27,9 @@ class FragmentState:
     loss_mass: float
     loss_symbol: str
     charge: int
+
+    def __eq__(self, other: Self) -> bool:
+        return (self.peak_mz - other.peak_mz < 1e10) and (self.loss_id == other.loss_id) and (self.charge == other.charge)
 
     @classmethod
     def from_index(cls,
@@ -56,7 +63,7 @@ class ResidueStateSpace:
         return len(self.applicable_modifications[amino_id])
 
     def get_modifications(self, amino_id: int) -> list[float]:
-        return [self.modification_masses[i] for i in self.applicable_modofications[i]]
+        return [self.modification_masses[i] for i in self.applicable_modifications[amino_id]]
 
 @dataclass
 class ResidueState:
@@ -68,6 +75,9 @@ class ResidueState:
     modification_mass: float
     modification_symbol: str
 
+    def __eq__(self, other: Self) -> bool:
+        return (self.amino_id == other.amino_id) and (self.modification_id == other.modification_id)
+
     @classmethod
     def from_index(cls,
         residue_mass: float,
@@ -75,17 +85,20 @@ class ResidueState:
         modification_id: int,
         state_space: ResidueStateSpace,
     ) -> Self:
+        global_modification_id = state_space.applicable_modifications[amino_id][modification_id]
         return cls(
             residue_mass = residue_mass,
             amino_id = amino_id,
             amino_mass = state_space.amino_masses[amino_id],
             amino_symbol = state_space.amino_symbols[amino_id],
             modification_id = modification_id,
-            modification_mass = state_space.modification_masses[modification_id],
-            modification_symbols = state_space.modification_masses[modification_id])
+            modification_mass = state_space.modification_masses[global_modification_id],
+            modification_symbol = state_space.modification_symbols[global_modification_id])
 
-class AbstractFragmentSolver(ABC)
+class AbstractFragmentSolver(ABC):
+
     # abstract methods -- these must be implemented in child classes.
+
     @classmethod
     @abstractmethod
     def from_state_space(cls,
@@ -96,18 +109,27 @@ class AbstractFragmentSolver(ABC)
         """Construct a fragment solver object from an m/z array, a match threshold float value, and a state space triple (FragmentStateSpace,FragmentStateSpace,ResidueStateSpace). If the first m/z is not zero, a new list mz_new will be created such that mz_new[0] = 0 and otherwise mz_new[i + 1] = mz_old[i]."""
 
     @abstractmethod
-    def set_reference(self, idx: int) -> None:
-        """Set the reference m/z by index."""
+    def n_reference(self) -> int:
+        """Return the number of reference indices."""
 
     @abstractmethod
-    def set_query(self, idx: int) -> None:
-        """Set the query m/z by index."""
+    def n_query(self) -> int:
+        """Return the number of query indices."""
+
+    @abstractmethod
+    def set_reference(self, idx: int) -> tuple[int,int]:
+        """Set the reference m/z by index. Returns the unraveled (peak index, charge) pair."""
+
+    @abstractmethod
+    def set_query(self, idx: int) -> tuple[int,int]:
+        """Set the query m/z by index. Returns the unraveled (peak index, charge) pair."""
 
     @abstractmethod
     def get_solutions(self) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
         """Iterate residue and fragment states that solve the query - reference value within a margin of error. The solution triple (FragmentState,FragmentState,ResidueState) is drawn from the state space triple. The first fragment state is a member of the first fragment state space, the second of the second, and the residue state is a member of the residue state space. Any constraints placed on those spaces will restrict the corresponding output."""
 
     # utility methods -- these do not need to be overridden.
+
     @staticmethod
     def _augment_peaks(
         peaks: list[float],
@@ -118,8 +140,9 @@ class AbstractFragmentSolver(ABC)
             peaks = [0.] + peaks
         # construct and reorder the charge-augmented m/z
         mz_arr = np.array(peaks)
-        augmented_arrs = [mz if (c == 1) else c * mz for c in state_space.charges]
-        merged_mz_arr, deindexer, charge_table = util.merge_in_order(augmented_mz_arrays)
+        augmented_arrs = [mz_arr if (c == 1) else c * mz_arr for c in state_space.charges]
+        merged_mz_arr, deindexer, charge_table = util.merge_in_order(augmented_arrs)
+        charge_table = charge_table + 1
         # collect the deindexer,charge_table pairs as the index unraveler.
         return merged_mz_arr, list(zip(deindexer, charge_table))
 
@@ -147,7 +170,7 @@ class AbstractFragmentSolver(ABC)
             amino_aug_tensor = unc_aug_matrix + con_aug_vector
             amino_aug_masses = amino_aug_tensor.flatten()
             augmented_masses.extend(amino_aug_masses)
-            left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(range(len(amino_aug_masses), amino_aug_tensor.shape))
+            _, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(range(len(amino_aug_masses)), amino_aug_tensor.shape)
             amino_aug_indices = zip(it.repeat(amino_id), left_loss_ind, right_loss_ind, modification_ind)
             augmented_indices.extend(amino_aug_indices)
         # argsort by augmented mass and reorder the indices accordingly to construct the index unaveler.
@@ -165,11 +188,11 @@ class AbstractFragmentSolver(ABC)
             state_space: FragmentStateSpace,
     ) -> Iterator[FragmentState]:
         return map(
-            ft.partial(
-                FragmentState.from_index,
-                peak_idx = peak_idx,
-                peak_mz = peak_mz,
-                charge = charge
+            lambda loss_id: FragmentState.from_index(
+                peak_idx = int(peak_idx),
+                peak_mz = float(peak_mz),
+                loss_id = int(loss_id),
+                charge = int(charge),
                 state_space = state_space),
             loss_indices)
 
@@ -178,14 +201,15 @@ class AbstractFragmentSolver(ABC)
         amino_indices: Iterator[int],
         modification_indices: Iterator[int],
         residue_mass: float,
-        state_space: ResidueStateSpace:
+        state_space: ResidueStateSpace,
     ) -> Iterator[FragmentState]:
-        residue_state_factory = ft.partial(
-            ResidueState.from_index,
-            residue_mass = residue_mass,
-            state_space = state_space)
+            
         return map(
-            lambda x: residue_state_factory(*x),
+            lambda x: ResidueState.from_index(
+                residue_mass = float(residue_mass),
+                amino_id = int(x[0]),
+                modification_id = int(x[1]),
+                state_space = state_space),
             zip(amino_indices, modification_indices))
 
     @staticmethod
@@ -193,7 +217,7 @@ class AbstractFragmentSolver(ABC)
         solutions: Iterator[tuple[FragmentState,FragmentState,ResidueState]]
     ) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
         return filter(
-            lambda soln: soln[0].peak_idx != soln[1].peak_idx,
+            lambda soln: (soln[0].peak_idx != soln[1].peak_idx) and ((soln[0].loss_id != soln[1].loss_id) or (soln[0].loss_id == 0)),
             solutions)
 
 class BisectFragmentSolver(AbstractFragmentSolver):
@@ -201,9 +225,9 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         state_space: tuple[FragmentStateSpace,FragmentStateSpace,ResidueStateSpace],
         tolerance: float,
         left_mz: list[float],
-        left_mz_index_unraveler: list[tuple[int,int]] # -> (original mz idx, charge augment)
+        left_mz_index_unraveler: list[tuple[int,int]], # -> (original mz idx, charge augment)
         right_mz: list[float],
-        right_mz_index_unraveler: list[tuple[int,int]] # -> (original mz idx, charge augment)
+        right_mz_index_unraveler: list[tuple[int,int]], # -> (original mz idx, charge augment)
         target_masses: list[float],
         target_mass_index_unraveler: list[tuple[int, int, int, int]], # -> (left loss, right loss, amino, modification)
     ):
@@ -227,23 +251,29 @@ class BisectFragmentSolver(AbstractFragmentSolver):
     ) -> Self:
         """Construct a fragment solver object from an m/z array, a match threshold float value, and a state space triple (FragmentStateSpace,FragmentStateSpace,ResidueStateSpace)."""
         left_fragment_space, right_fragment_space, residue_space = state_space
-        left_mz, left_unraveler = augment_peaks(
+        left_mz, left_unraveler = cls._augment_peaks(
             peaks = mz,
             state_space = left_fragment_space)
-        right_mz, right_unraveler = augment_peaks(
+        right_mz, right_unraveler = cls._augment_peaks(
             peaks = mz,
             state_space = right_fragment_space)
-        target_masses, target_unraveler = augment_masses(
+        target_masses, target_unraveler = cls._augment_masses(
             state_space = state_space)
-        return self(
+        return cls(
             state_space = state_space,
             tolerance = tolerance,
             left_mz = left_mz,
-            left_mz_index_unravler = left_unraveler,
+            left_mz_index_unraveler = left_unraveler,
             right_mz = right_mz,
             right_mz_index_unraveler = right_unraveler,
             target_masses = target_masses,
-            target_mass_index_unraveler = target_unravler)
+            target_mass_index_unraveler = target_unraveler)
+
+    def n_reference(self) -> int:
+        return len(self._left_mz)
+
+    def n_query(self) -> int:
+        return len(self._right_mz)
 
     def _bound_bisection(self, i) -> int:
         return max(0, min(self._m - 1, i))
@@ -252,34 +282,39 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         return (self._bound_bisection(bisect_left(self._target_masses, query - self._tolerance)),
             self._bound_bisection(bisect_right(self._target_masses, query + self._tolerance)))
 
-    def set_reference(self, idx: int) -> None:
+    def set_reference(self, idx: int) -> tuple[int,int]:
         self._ref_mz = self._left_mz[idx]
         self._ref_peak_idx, self._ref_charge = self._left_mz_index_unraveler[idx]
+        return self._ref_peak_idx, self._ref_charge
 
-    def set_query(self, idx: int) -> None:
+    def set_query(self, idx: int) -> tuple[int,int]:
         self._query_mz = self._right_mz[idx] 
         self._query_peak_idx, self._query_charge = self._right_mz_index_unraveler[idx]
         self._match_lo, self._match_hi = self._bisect_range(self._query_mz - self._ref_mz)
+        return self._query_peak_idx, self._query_charge
 
     def get_solutions(self) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
-        left_loss_indices, right_loss_indices, amino_indices, modification_indices = zip(*map(
-            lambda i: self._target_mass_index_unraveler[i],
-            range(self._match_lo, self._match_hi + 1)))
-        left_fragment_states = self._generate_fragment_states(
-            loss_indices = left_loss_indices,
-            peak_idx = self._ref_peak_idx,
-            peak_mz = self._ref_mz,
-            charge = self._ref_charge,
-            state_space = self._left_fragment_space))
-        right_fragment_states = self._generate_fragment_states(
-            loss_indices = right_loss_indices,
-            peak_idx = self._query_peak_idx,
-            peak_mz = self._query_mz,
-            charge = self._query_charge,
-            state_space = self._right_fragment_space))
-        residue_states = self._generate_residue_states(
-            amino_indices = amino_indices,
-            modification_indices = modification_indices,
-            residue_mass = self._query_mz - self._ref_mz,
-            state_space = self._residue_space)
-        return self._filter_solutions(zip(left_fragment_states, right_fragment_states, residue_states))
+        if self._match_hi <= self._match_lo:
+            return []
+        else:
+            amino_indices, left_loss_indices, right_loss_indices, modification_indices = zip(*map(
+                lambda i: self._target_mass_index_unraveler[i],
+                range(self._match_lo, self._match_hi)))
+            left_fragment_states = self._generate_fragment_states(
+                loss_indices = left_loss_indices,
+                peak_idx = self._ref_peak_idx,
+                peak_mz = self._ref_mz,
+                charge = self._ref_charge,
+                state_space = self._left_fragment_space)
+            right_fragment_states = self._generate_fragment_states(
+                loss_indices = right_loss_indices,
+                peak_idx = self._query_peak_idx,
+                peak_mz = self._query_mz,
+                charge = self._query_charge,
+                state_space = self._right_fragment_space)
+            residue_states = self._generate_residue_states(
+                amino_indices = amino_indices,
+                modification_indices = modification_indices,
+                residue_mass = self._query_mz - self._ref_mz,
+                state_space = self._residue_space)
+            return self._filter_solutions(zip(left_fragment_states, right_fragment_states, residue_states))
