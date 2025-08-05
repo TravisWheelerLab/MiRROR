@@ -69,7 +69,7 @@ class TestFragments(unittest.TestCase):
             peak_mz = 10.,
             charge = 1,
             state_space = fragment_space))
-        print(fragment_states)
+#        print(fragment_states)
         # generate residue states
         residue_space = self._dummy_residue_space()
         # filter out degenrate solutions

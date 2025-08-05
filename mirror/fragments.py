@@ -93,7 +93,7 @@ class ResidueState:
             amino_symbol = state_space.amino_symbols[amino_id],
             modification_id = modification_id,
             modification_mass = state_space.modification_masses[global_modification_id],
-            modification_symbol = state_space.modification_symbols[global_modification_id])
+            modification_symbol = state_space.modification_masses[global_modification_id])
 
 class AbstractFragmentSolver(ABC):
 
@@ -105,6 +105,7 @@ class AbstractFragmentSolver(ABC):
         mz: list[float],
         tolerance: float,
         state_space: tuple[FragmentStateSpace,FragmentStateSpace,ResidueStateSpace],
+        target_mass_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
     ) -> Self:
         """Construct a fragment solver object from an m/z array, a match threshold float value, and a state space triple (FragmentStateSpace,FragmentStateSpace,ResidueStateSpace). If the first m/z is not zero, a new list mz_new will be created such that mz_new[0] = 0 and otherwise mz_new[i + 1] = mz_old[i]."""
 
@@ -147,7 +148,7 @@ class AbstractFragmentSolver(ABC):
         return merged_mz_arr, list(zip(deindexer, charge_table))
 
     @staticmethod
-    def _augment_masses(
+    def augment_masses(
         state_space: tuple[FragmentStateSpace,FragmentStateSpace,ResidueStateSpace],
     ) -> tuple[list[float],list[tuple[int,int,int,int]]]:
         left_fragment_space, right_fragment_space, residue_space = state_space
@@ -229,7 +230,7 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         right_mz: list[float],
         right_mz_index_unraveler: list[tuple[int,int]], # -> (original mz idx, charge augment)
         target_masses: list[float],
-        target_mass_index_unraveler: list[tuple[int, int, int, int]], # -> (left loss, right loss, amino, modification)
+        target_mass_index_unraveler: list[tuple[int,int,int,int]], # -> (left loss, right loss, amino, modification)
     ):
         self._left_fragment_space, self._right_fragment_space, self._residue_space = state_space
         self._tolerance = tolerance
@@ -248,6 +249,7 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         mz: list[float],
         tolerance: float,
         state_space: tuple[FragmentStateSpace,FragmentStateSpace,ResidueStateSpace],
+        target_mass_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
     ) -> Self:
         """Construct a fragment solver object from an m/z array, a match threshold float value, and a state space triple (FragmentStateSpace,FragmentStateSpace,ResidueStateSpace)."""
         left_fragment_space, right_fragment_space, residue_space = state_space
@@ -257,8 +259,7 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         right_mz, right_unraveler = cls._augment_peaks(
             peaks = mz,
             state_space = right_fragment_space)
-        target_masses, target_unraveler = cls._augment_masses(
-            state_space = state_space)
+        target_masses, target_unraveler = cls.augment_masses(state_space) if target_mass_data is None else target_mass_data
         return cls(
             state_space = state_space,
             tolerance = tolerance,
