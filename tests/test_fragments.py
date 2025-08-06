@@ -24,13 +24,13 @@ class TestFragments(unittest.TestCase):
         state_space = self._dummy_fragment_space()
         state = FragmentState.from_index(
             peak_idx = -1,
-            peak_mz = 5 - (22/7),
+            fragment_mass = 5 - (22/7),
             loss_id = 1,
             charge = 1,
             state_space = state_space)
         self.assertEqual(
-            state.peak_mz - state.loss_mass,
-            state.peak_mz - state_space.loss_masses[state.loss_id])
+            state.fragment_mass - state.loss_mass,
+            state.fragment_mass - state_space.loss_masses[state.loss_id])
 
     @staticmethod
     def _dummy_residue_space():
@@ -66,7 +66,7 @@ class TestFragments(unittest.TestCase):
         fragment_states = list(AbstractFragmentSolver._generate_fragment_states(
             loss_indices = [0,1,2],
             peak_idx = 0,
-            peak_mz = 10.,
+            fragment_mass = 10.,
             charge = 1,
             state_space = fragment_space))
 #        print(fragment_states)
@@ -105,13 +105,13 @@ class TestFragments(unittest.TestCase):
         for i in range(1, len(amino_ids)):
             left_fragment = FragmentState.from_index(
                 peak_idx = i,
-                peak_mz = fragment_masses[i - 1],
+                fragment_mass = fragment_masses[i - 1],
                 loss_id = loss_ids[i - 1],
                 charge = charges[i - 1],
                 state_space = fragment_space)
             right_fragment = FragmentState.from_index(
                 peak_idx = i + 1,
-                peak_mz = fragment_masses[i],
+                fragment_mass = fragment_masses[i],
                 loss_id = loss_ids[i],
                 charge = charges[i],
                 state_space = fragment_space)

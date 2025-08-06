@@ -7,7 +7,12 @@ from .solvers import ResidueState, ResidueStateSpace, FragmentState, FragmentSta
 def calculate_offset(
     soln: tuple[FragmentState,FragmentState,ResidueState],
 ) -> float:
-    pass
+    right_loss_mass = soln[1].loss_mass
+    amino_mass = soln[2].amino_mass
+    modification_mass = soln[2].modification_mass
+    predicted_residue_mass = amino_mass + modification_mass + left_loss_mass - right_loss_mass
+    observed_residue_mass = soln[2].residue_mass
+    return predited_residue_mass - observed_residue_mass
 
 @dataclass
 class PairedFragments:
@@ -19,6 +24,8 @@ class PairedFragments:
     def from_solution(cls,
         soln: tuple[FragmentState,FragmentState,ResidueState],
     ) -> Self:
+        if (soln[1].fragment_mass - soln[0].fragment_mass) != soln[2].residue_mass:
+            raise ValueError("Unable to form fragment pair; residue mass does not match the fragment mass delta.")
         return cls(
             *soln,
             offset = calculate_offset(soln))
