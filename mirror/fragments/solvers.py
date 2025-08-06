@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
 import functools as ft
 import itertools as it
-from . import util
+from .. import util
 
 import numpy as np
 
@@ -122,8 +122,8 @@ class AbstractFragmentSolver(ABC):
         """Set the reference m/z by index. Returns the unraveled (peak index, charge) pair."""
 
     @abstractmethod
-    def set_query(self, idx: int) -> tuple[int,int]:
-        """Set the query m/z by index. Returns the unraveled (peak index, charge) pair."""
+    def set_query(self, idx: int) -> tuple[int,int,float]:
+        """Set the query m/z by index. Returns the unraveled peak index and charge, as well as the mass delta from the reference m/z."""
 
     @abstractmethod
     def get_solutions(self) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
@@ -270,6 +270,11 @@ class BisectFragmentSolver(AbstractFragmentSolver):
             target_masses = target_masses,
             target_mass_index_unraveler = target_unraveler)
 
+    def get_extremal_masses(self) -> tuple[float,float]:
+        return (
+            self._target_masses[0] - self._tolerance,
+            self._target_masses[-1] + self._tolerance)
+
     def n_reference(self) -> int:
         return len(self._left_mz)
 
@@ -288,19 +293,20 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         self._ref_peak_idx, self._ref_charge = self._left_mz_index_unraveler[idx]
         return self._ref_peak_idx, self._ref_charge
 
-    def set_query(self, idx: int) -> tuple[int,int]:
+    def set_query(self, idx: int) -> tuple[int,int,float]:
         self._query_mz = self._right_mz[idx] 
         self._query_peak_idx, self._query_charge = self._right_mz_index_unraveler[idx]
-        self._match_lo, self._match_hi = self._bisect_range(self._query_mz - self._ref_mz)
-        return self._query_peak_idx, self._query_charge
+        self._query_mass_delta = self._query_mz - self._ref_mz
+        return self._query_peak_idx, self._query_charge, self._query_mass_delta
 
     def get_solutions(self) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
-        if self._match_hi <= self._match_lo:
+        match_lo, match_hi = self._bisect_range(self._query_mass_delta)
+        if match_hi <= match_lo:
             return []
         else:
             amino_indices, left_loss_indices, right_loss_indices, modification_indices = zip(*map(
                 lambda i: self._target_mass_index_unraveler[i],
-                range(self._match_lo, self._match_hi)))
+                range(match_lo, match_hi)))
             left_fragment_states = self._generate_fragment_states(
                 loss_indices = left_loss_indices,
                 peak_idx = self._ref_peak_idx,

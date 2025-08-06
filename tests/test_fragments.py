@@ -160,7 +160,7 @@ class TestFragments(unittest.TestCase):
         for i in range(solver.n_reference()):
             peak_i, charge_i = solver.set_reference(i)
             for j in range(i + 1, solver.n_query()):
-                peak_j, charge_j = solver.set_query(j)
+                peak_j, charge_j, _ = solver.set_query(j)
                 if (peak_i != 0) and (peak_j == peak_i + 1):
                     true_state = true_states[peak_i - 1]
                     true_left_fragment, true_right_fragment, true_residue = true_state
