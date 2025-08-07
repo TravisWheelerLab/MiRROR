@@ -3,17 +3,14 @@ from multiprocessing import Pool
 import functools as ft
 import itertool as it
 
-from .fragments import ResidueState, FragmentState, FragmentStateSpace
-from .pairs import PairedFragment
-from .pivots import PivotSearchParams, AbstractPivot
-from .boundaries import LeftBoundaryFragment, RightBoundaryFragment
+from .fragments import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, PairedFragment, PivotSearchParams, AbstractPivot, LeftBoundaryFragment, RightBoundaryFragment, find_pairs, find_pivots, find_left_boundaries, find_right_boundaries, rescore_pivots
 
 @dataclass
 class AnnotationParams:
     match_threshold: float
     fragment_state_space: FragmentStateSpace
-    difference_threshold: float
-    pivot_search_strategies: list[PivotSearchParams]
+    residue_state_space: ResidueStateSpace
+    pivot_search_strategies: set[PivotSearchParams]
     pivot_symmetry_threshold: float
     pivot_score_threshold: float
 
@@ -58,27 +55,29 @@ def annotate(
     # find pairs of peaks whose m/z difference has a ResidueState in the ResidueStateSpace.
     peak_pairs = find_pairs(
         peaks = peaks,
-        match_threshold = params.match_threshold,
-        residue_state_space = params.residue_state_space)
+        tolerance = params.pairs_delta_tolerance,
+        residue_state_space = params.residue_state_space,
+        fragment_state_space = params.fragment_state_space)
     # find pairs of pairs (or equivalent four-peak structures) that reflect about a common point of symmetry.
     pivots = find_pivots(
         pairs = peak_pairs,
-        peaks = peaks,
-        difference_threshold = params.difference_threshold,
-        search_strategies = params.pivot_search_strategies)
+        search_strategies = params.pivot_search_strategies,
+        residue_state_space = params.residue_state_space)
     # find boundary peaks. 
     ## LeftBoundaryPeaks have m/z that is within a shift transformation of a ResidueState.    
     left_boundaries = find_left_boundaries(
         peaks = peaks,
         match_threshold = params.match_threshold,
-        residue_state_space = params.residue_state_space)
+        residue_state_space = params.residue_state_space,
+        fragment_state_space = params.fragment_state_space)
     ## RightBoundaryPeaks have m/z that is within a reflection and shift of a ResidueState.
     ## the reflection is parametized by a pivot, so right_boundaries is a second-order collection.
     right_boundaries = find_right_boundaries(
         pivots = pivots,
         peaks = peaks,
         match_threshold = params.match_threshold,
-        residue_state_space = params.residue_state_space)
+        residue_state_space = params.residue_state_space,
+        fragment_state_space = params.fragment_state_space)
     # score and filter pivots according to their symmetry and right boundary quality.
     pivots, pivot_index = rescore_pivots(
         pivots = pivots,

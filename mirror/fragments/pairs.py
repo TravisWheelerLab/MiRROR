@@ -30,6 +30,11 @@ class PairedFragments:
             *soln,
             offset = calculate_offset(soln))
 
+    def fragment_masses(self) -> tuple[float,float]:
+        return (
+            self.left_fragment.fragment_mass,
+            self.right_fragment.fragment_mass)
+
 def find_pairs(
     peaks: PeakList,
     tolerance: float,

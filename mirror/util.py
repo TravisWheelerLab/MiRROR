@@ -1,7 +1,17 @@
 import numpy as np
-from typing import Iterable, Iterator, Any
+from typing import Iterable, Iterator, Any, Callable
 from itertools import chain
 from math import ceil
+
+def binsort(
+    arr: Iterable,
+    bins: int,
+    key: Callable = None,
+) -> list[list]:
+    B = [list() for _ in range(bins)]
+    for (i, k) in enumerate(map(key, arr)):
+        B[k].append(arr[i])
+    return B
 
 def collapse_second_order_list(llist: list[list]):
     """Associates a list of lists of elements to a flat list of elements.

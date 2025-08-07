@@ -174,7 +174,45 @@ class TestFragments(unittest.TestCase):
                         right_match = soln_right_fragment == true_right_fragment
                         residue_match = soln_residue == true_residue
 #                        print(f"---\nleft match {left_match} (\n\t\tleft occl? {left_occl}\n\t\tleft charge match? {left_charge_match})\nright match {right_match}\nresidue match {residue_match}")
-                        if (left_match or (left_occl and left_charge_match)) and right_match and residue_match:
-                            matches[peak_i - 1] = True
+                        matches[peak_i - 1] |= (left_match or (left_occl and left_charge_match)) and right_match and residue_match
         self.assertTrue(all(matches))
-                
+
+class TestPairs(unittest.TestCase):
+    pass
+
+from mirror.fragments.pivots import _find_overlap_pivots, _find_virtual_pivots
+import numpy as np
+class TestPivots(unittest.TestCase):
+
+    def test_overlap_pivots(self):
+        pairs = [
+            (1,2),
+            (2,3), 
+            (4,7), # 2
+            (6,8), # 3
+            (9,10)]
+        pivots = list(_find_overlap_pivots(pairs))
+        self.assertEqual(pivots, [(2,3)])
+
+    def test_virtual_pivots(self):
+        true_pivot = 0.3
+        tolerance = 0.0001
+        n_pairs = 10
+        for (tolerance,n_noise) in [(0.0001, 10), (0.0001, 100), (0.000001, 1000)]:
+            n_noise = 100
+            n_trials = 10
+            for _ in range(n_trials):
+                lower_pairs = np.random.uniform(size=(2,n_pairs)) * true_pivot
+                upper_pairs = 2 * true_pivot - lower_pairs
+                noise_pairs = np.random.uniform(size=(2,n_noise))
+                def arr_to_tups(arr):
+                    assert arr.shape[0] == 2 and len(arr.shape) == 2
+                    return list(zip(*arr))
+                all_pairs = list(map(sorted, sum(map(arr_to_tups, [lower_pairs, upper_pairs, noise_pairs]),start=[])))
+                all_pairs.sort()
+                pivots = list(_find_virtual_pivots(all_pairs, tolerance))
+                min_err = min(abs(p - true_pivot) for p in pivots)
+                self.assertLess(min_err, tolerance)
+
+class TestBoundaries(unittest.TestCase):
+    pass
