@@ -52,25 +52,25 @@ def annotate(
     peaks: PeakList,
     params: AnnotationParams,
 ) -> AnnotationResult:
-    # find pairs of peaks whose m/z difference has a ResidueState in the ResidueStateSpace.
+    # find pairs of peaks whose m/z difference is solvable as a (FragmentState,FragmentState,ResidueStateSpace) tuple.
     peak_pairs = find_pairs(
         peaks = peaks,
         tolerance = params.pairs_delta_tolerance,
         residue_state_space = params.residue_state_space,
         fragment_state_space = params.fragment_state_space)
-    # find pairs of pairs (or equivalent four-peak structures) that reflect about a common point of symmetry.
+    # find structures of pairs that reflect about a common point of symmetry.
     pivots = find_pivots(
         pairs = peak_pairs,
         search_strategies = params.pivot_search_strategies,
         residue_state_space = params.residue_state_space)
     # find boundary peaks. 
-    ## LeftBoundaryPeaks have m/z that is within a shift transformation of a ResidueState.    
+    ## LeftBoundaryPeaks have m/z that is within a shift transformation of a (FragmentState,ResidueState) solution.
     left_boundaries = find_left_boundaries(
         peaks = peaks,
         match_threshold = params.match_threshold,
         residue_state_space = params.residue_state_space,
         fragment_state_space = params.fragment_state_space)
-    ## RightBoundaryPeaks have m/z that is within a reflection and shift of a ResidueState.
+    ## RightBoundaryPeaks have m/z that is within a reflection and shift of a (FragmentState,ResidueState) solution.
     ## the reflection is parametized by a pivot, so right_boundaries is a second-order collection.
     right_boundaries = find_right_boundaries(
         pivots = pivots,

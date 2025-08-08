@@ -16,6 +16,13 @@ class FragmentStateSpace:
 #    max_num_losses: int                # restricts the number of losses that can be applied to a fragment.
     charges: list[int]
 
+    @classmethod
+    def trivial(cls) -> Self:
+        return cls(
+            loss_masses = [0.],
+            loss_symbols = [''],
+            charges = [1])
+
     def n_losses(self) -> int:
         return len(self.loss_masses)
 

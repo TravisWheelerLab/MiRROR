@@ -214,5 +214,26 @@ class TestPivots(unittest.TestCase):
                 min_err = min(abs(p - true_pivot) for p in pivots)
                 self.assertLess(min_err, tolerance)
 
+from mirror.util import measure_mirror_symmetry
 class TestBoundaries(unittest.TestCase):
-    pass
+
+    def test_mirror_symmetry(self):
+        c = 0.3
+        n_signal = 10
+        n_noise = 1000
+        n_trials = 100
+        for tolerance in (1e-1,1e-5,1e-10):
+            for _ in range(n_trials):
+                left = np.random.uniform(size=n_signal) * c
+                right = 2 * c - left
+                noise = np.random.uniform(size=n_noise)
+                signal = np.array(sorted(left.tolist() + right.tolist()))
+                aggregate = np.array(sorted(noise.tolist() + signal.tolist()))
+                self.assertTrue(
+                    all(left - (2 * c - right) < tolerance))
+                self.assertEqual(
+                    measure_mirror_symmetry(signal, c, tolerance),
+                    2 * n_signal)
+                self.assertGreaterEqual(
+                    measure_mirror_symmetry(aggregate, c, tolerance),
+                    2 * n_signal)

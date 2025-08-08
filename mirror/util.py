@@ -2,6 +2,29 @@ import numpy as np
 from typing import Iterable, Iterator, Any, Callable
 from itertools import chain
 from math import ceil
+from bisect import bisect_left, bisect_right
+
+def measure_mirror_symmetry(
+    sorted_arr: np.ndarray,
+    pivot_point: float,
+    tolerance: float):
+    """Reflects sorted_arr about pivot_point to create the query set; uses bisect to find the minimum distance of each query to any point in the original sorted_arr; returns the sum these minimum distances."""
+    reflected_arr = 2 * pivot_point - sorted_arr
+    n = len(sorted_arr)
+    left_bound = sorted_arr[0]
+    right_bound = sorted_arr[-1]
+    symmetries = 0
+    for j,q in enumerate(reflected_arr):
+        I = range(
+            bisect_left(sorted_arr, q - tolerance),
+            bisect_right(sorted_arr, q + tolerance))
+        for i in I:
+            p = sorted_arr[i]
+            dif = abs(p - q)
+            if dif <= tolerance:
+                symmetries += 1
+                break
+    return symmetries
 
 def binsort(
     arr: Iterable,

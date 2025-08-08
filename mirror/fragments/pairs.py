@@ -58,6 +58,4 @@ def find_pairs(
             elif mass_delta > max_residue_mass:
                 break
             elif peak_j > peak_i:
-                yield from map(
-                    PairedFragments.from_solution,
-                    solver.get_solutions())
+                yield from [PairedFragments.from_solution(soln) for soln in solver.get_solutions()]
