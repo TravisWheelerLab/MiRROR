@@ -1,22 +1,25 @@
 from dataclasses import dataclass
 from multiprocessing import Pool
 import functools as ft
-import itertool as it
+import itertools as it
 
-from .fragments import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, PairedFragment, PivotSearchParams, AbstractPivot, LeftBoundaryFragment, RightBoundaryFragment, find_pairs, find_pivots, find_left_boundaries, find_right_boundaries, rescore_pivots
+from . import util
+
+from .spectra.types import PeakList, BenchmarkPeakList
+from .fragments import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, PairedFragments, PivotSearchParams, AbstractPivot, LeftBoundaryFragment, RightBoundaryFragment, find_pairs, find_pivots, find_left_boundaries, find_right_boundaries, rescore_pivots
 
 @dataclass
 class AnnotationParams:
-    match_threshold: float
+    fragment_search_tolerance: float
     fragment_state_space: FragmentStateSpace
     residue_state_space: ResidueStateSpace
     pivot_search_strategies: set[PivotSearchParams]
-    pivot_symmetry_threshold: float
-    pivot_score_threshold: float
+    pivot_symmetry_tolerance: float
+    pivot_score_threshold_factor: float
 
 class AnnotationResult:
     def __init__(self,
-        pairs: list[PairedFragment],
+        pairs: list[PairedFragments],
         left_boundaries: list[LeftBoundaryFragment],
         right_boundaries: list[list[RightBoundaryFragment]],
         pivots: list[AbstractPivot],
@@ -36,7 +39,7 @@ class AnnotationResult:
         self._pivot_index = pivot_index
         self._right_boundaries = right_boundaries
 
-    def get_pairs(self) -> list[PairedFragment]:
+    def get_pairs(self) -> list[PairedFragments]:
         return self._pairs
 
     def get_left_boundaries(self) -> list[LeftBoundaryFragment]:
@@ -55,19 +58,21 @@ def annotate(
     # find pairs of peaks whose m/z difference is solvable as a (FragmentState,FragmentState,ResidueStateSpace) tuple.
     peak_pairs = find_pairs(
         peaks = peaks,
-        tolerance = params.pairs_delta_tolerance,
+        tolerance = params.fragment_search_tolerance,
         residue_state_space = params.residue_state_space,
         fragment_state_space = params.fragment_state_space)
     # find structures of pairs that reflect about a common point of symmetry.
-    pivots = find_pivots(
-        pairs = peak_pairs,
-        search_strategies = params.pivot_search_strategies,
-        residue_state_space = params.residue_state_space)
+    pivots = list(it.chain.from_iterable([
+        find_pivots(
+            pairs = peak_pairs,
+            search_strategy = strategy,
+            residue_state_space = params.residue_state_space)
+        for strategy in params.pivot_search_strategies]))
     # find boundary peaks. 
     ## LeftBoundaryPeaks have m/z that is within a shift transformation of a (FragmentState,ResidueState) solution.
     left_boundaries = find_left_boundaries(
         peaks = peaks,
-        match_threshold = params.match_threshold,
+        tolerance = params.fragment_search_tolerance,
         residue_state_space = params.residue_state_space,
         fragment_state_space = params.fragment_state_space)
     ## RightBoundaryPeaks have m/z that is within a reflection and shift of a (FragmentState,ResidueState) solution.
@@ -75,16 +80,17 @@ def annotate(
     right_boundaries = find_right_boundaries(
         pivots = pivots,
         peaks = peaks,
-        match_threshold = params.match_threshold,
+        match_threshold = params.fragment_search_tolerance,
         residue_state_space = params.residue_state_space,
         fragment_state_space = params.fragment_state_space)
     # score and filter pivots according to their symmetry and right boundary quality.
+    expected_num_symmetries = 2 # need a better way to set this
     pivots, pivot_index = rescore_pivots(
         pivots = pivots,
         left_boundaries = left_boundaries,
         right_boundaries = right_boundaries,
-        symmetry_threshold = params.pivot_symmetry_threshold,
-        score_threshold = params.pivot_score_threshold)
+        symmetry_threshold = params.pivot_symmetry_tolerance,
+        score_threshold = expected_num_symmetries * params.pivot_score_threshold_factor)
     # wrap everything up as an AnnotationResult object
     return AnnotationResult(
         pairs = peak_pairs,

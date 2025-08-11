@@ -1,5 +1,5 @@
 from abc import ABC, abstractclassmethod
-from typing import Any, Iterable
+from typing import Any, Iterable, Self
 from dataclasses import dataclass
 import warnings
 
@@ -7,9 +7,12 @@ import numpy as np
 import pyopenms as oms
 from mzpaf import PeptideFragmentIonAnnotation, Unannotated
 from mzspeclib.validate import ValidationWarning as mzlib_ValidationWarning
+from pyopenms import MSSpectrum
 
 from ..io import mgf, read_mgf, mzlib, read_mzlib
 from ..util import merge_in_order, interleave
+
+from .simulation import generate_fragment_spectrum, DEFAULT_PARAM, COMPLEX_PARAM
 
 @dataclass
 class SpectrumParams:
@@ -172,98 +175,28 @@ class AnnotatedPeakList(PeakList):
             range(len(self))))
         return matches, misses
 
-class ChargeAugmentedMz:
-    
-    def __init__(self,
-        mz: np.ndarray,
-        deindexer: np.ndarray,
-        charge_table: np.ndarray,
-    ):
-        self._n = len(mz)
-        self._mz = mz
-        self._deindexer = deindexer
-        self._charge_table = charge_table
-
-    def __len__(self) -> int:
-        return self._n
-    
-    def __getitem__(self, i: int) -> float:
-        return self._mz[i]
-    
-    def __iter__(self) -> Iterable:
-        return self._mz.__iter__()
-    
-    def deindex(self, i: int) -> int:
-        return self._deindexer[i]
-    
-    def charge(self, i: int) -> int:
-        return self._charge_table[i]
-    
-    @staticmethod
-    def augment_mz(mz: np.array, charges: int):
-        return [mz if (c == 1) else c * mz for c in range(1, charges + 1)]
-
-    @classmethod
-    def from_singletons(cls, mz_singletons: list[float], charges: int):
-        augmented_mz_arrays = cls.augment_mz(np.array(mz_singletons), charges)
-        n = len(mz_singletons)
-        charge_arr = np.array(range(charges))
-        return cls(
-            mz = np.hstack([[0.], interleave(augmented_mz_arrays)]), 
-            deindexer = np.hstack([-1] + [np.full(charges, i) for i in range(n)]), 
-            charge_table = np.hstack([-1] + [charge_arr for _ in range(n)]))
-
-    @classmethod
-    def from_pairs(cls, mz_pairs: list[tuple[float, float]], charges: int):
-        mz_left, mz_right = zip(*mz_pairs)
-        augmented_mz_left = cls.augment_mz(np.array(mz_left), charges)
-        augmented_mz_right = cls.augment_mz(np.array(mz_right), charges)
-        n = len(mz_left)
-        charge_arr = np.array(range(charges))
-        interleaved_charge_arr = interleave([charge_arr, charge_arr])
-        return cls(
-            mz = interleave([interleave(augmented_mz_left), interleave(augmented_mz_right)]), 
-            deindexer = np.hstack([interleave([np.full(charges, i), np.full(charges, i + 1)]) for i in range(0, 2 * n, 2)]),
-            charge_table = np.hstack([interleaved_charge_arr for _ in range(n)]))
-    
-    @classmethod
-    def from_peak_list(cls, peak_list: PeakList, charges: int):
-        augmented_mz_arrays = cls.augment_mz(peak_list.mz, charges)
-        merged_augmented_mz, deindexer, charge_table = merge_in_order(augmented_mz_arrays)
-        return cls(
-            mz = merged_augmented_mz, 
-            deindexer = deindexer, 
-            charge_table = charge_table)
-
 class BenchmarkPeakList(AnnotatedPeakList):
     """An annotated peak list with a target peptide.
-    Constructed via from_mzlib, and from_mgf class methods 
-    or the simulate_peaks_from_peptide function of spectra.simulation."""
+    Implements constructors from_mzlib, from_mgf, from_9species, from_simulation."""
 
     def __init__(self,
         peptide: str,
+        mz: np.ndarray, 
+        intensity: np.ndarray,
+        charge: list,
+        losses: list,
+        series: list,
+        position: list,
         *args,
         **kwargs,
     ):
         self.peptide = peptide
-        super(BenchmarkPeakList, self).__init__(*args, **kwargs)
-    
-    def __repr__(self):
-        annotation_repr = super(BenchmarkPeakList, self).__repr__()
-        peptide_repr = f"peptide: {self.peptide}"
-        return '\n'.join([annotation_repr, peptide_repr])
-    
-    def get_peptide(self):
-        return self.peptide
-
-    def get_state(self, i: int, metadata_keys = []) -> tuple:
-        """The annotation vector of the `i`th peak, including metadata if the `metadata_keys` kwarg is passed."""
-        charge = self.get_charge(i)[0]
-        losses = self.get_losses(i)[0]
-        metadata = [self.get_metadata(i, k) for k in metadata_keys]
-        return (charge, losses, series, position, *metadata)
-
-    @classmethod
+        self.series = series
+        self.position = position
+        super(BenchmarkPeakList, self).__init__(mz, intensity, charge, losses, **kwargs)
+        self.y_idx = sorted(self._series_peak_indices('y'), key = lambda i: self.get_position(i)[0])
+        self.b_idx = sorted(self._series_peak_indices('b'), key = lambda i: self.get_position(i)[0])
+        
     def from_mzlib(cls, 
         dataset: mzlib.SpectrumLibrary,
         i: int,
@@ -339,57 +272,8 @@ class BenchmarkPeakList(AnnotatedPeakList):
             losses = losses,
             metadata = {})
 
-class NineSpeciesBenchmarkPeakList(BenchmarkPeakList):
-    """A benchmark peak list with peptide as well as 
-    series and position annotations on peaks. Can be 
-    constructed from the mzlib files of the nine-
-    -species benchmark."""
-
-    def __init__(self,
-        peptide: str,
-        mz: np.ndarray, 
-        intensity: np.ndarray,
-        charge: list,
-        losses: list,
-        series: list,
-        position: list,
-        *args,
-        **kwargs,
-    ):
-        self.series = series
-        self.position = position
-        super(NineSpeciesBenchmarkPeakList, self).__init__(peptide, mz, intensity, charge, losses, *args, **kwargs)
-        self.y_idx = sorted(self._series_peak_indices('y'), key = lambda i: self.get_position(i)[0])
-        self.b_idx = sorted(self._series_peak_indices('b'), key = lambda i: self.get_position(i)[0])
-    
-    def get_series(self, i: int):
-        return self.series[i]
-    
-    def get_position(self, i: int):
-        return self.position[i]
-
-    def get_state(self, i: int, metadata_keys = []) -> tuple:
-        """The set of annotation vector(s) for the `i`th peak, including metadata if the `metadata_keys` kwarg is passed."""
-        charge = self.get_charge(i)[0]
-        losses = self.get_losses(i)[0]
-        series = self.get_series(i)[0]
-        position = self.get_position(i)[0]
-        metadata = [self.get_metadata(i, k) for k in metadata_keys]
-        return (charge, losses, series, position, *metadata)
-    
-    def _series_peak_indices(self, series: str):
-        for i in range(len(self)):
-            if self.get_series(i)[0] == series:
-                yield i
-    
-    def get_b_series_peaks(self):
-        return self.b_idx
-    
-    def get_y_series_peaks(self):
-        return self.y_idx
-
     @classmethod
-    def from_mzlib(cls, 
+    def from_9species(cls, 
         dataset: mzlib.SpectrumLibrary,
         i: int,
     ):
@@ -435,10 +319,88 @@ class NineSpeciesBenchmarkPeakList(BenchmarkPeakList):
                 series = list(series),
                 position = list(position),
                 metadata = {"mass_error": mass_error})
-    
+
+    @staticmethod
+    def parse_oms_stringdata(data: bytes):
+        text = data.decode()
+        series = text[0]
+        loss_start = text.find('-')
+        charge_start = text.find('+')
+        if loss_start == -1:
+            loss = ''
+            pos_end = charge_start
+        else:
+            loss = text[loss_start + 1: charge_start]
+            pos_end = loss_start
+        charge = len(text) - charge_start
+        position = text[1:pos_end]
+        return charge, loss, series, position
+
     @classmethod
-    def from_mgf(cls, 
-        dataset: mgf.IndexedMGF, 
-        i: int,
-    ):
-        raise NotImplementedError("MGF datasets in the 9-species benchmark do not have series or position data, so they can't be used to construct this benchmark type.")
+    def from_oms_spectrum(cls,
+        peptide: str,
+        spectrum: MSSpectrum,
+    ) -> Self:
+        mz, intensity = spectrum.get_peaks()
+        charge, losses, series, position = zip(*[
+            cls.parse_oms_stringdata(bytestr) for bytestr in spectrum.getStringDataArrays()[0]])
+        return cls(
+            peptide = peptide,
+            mz = mz,
+            intensity = intensity,
+            charge = charge,
+            losses = losses,
+            series = series,
+            position = position,
+            metadata = {})
+
+    @classmethod
+    def from_simulation(cls,
+        peptide: str,
+        mode: str,
+        max_charge: int,
+    ) -> Self:
+        if mode == "simple":
+            return cls.from_oms_spectrum(
+                peptide = peptide,
+                spectrum = generate_fragment_spectrum(peptide, DEFAULT_PARAM, max_charge = max_charge))
+        elif mode == "complex":
+            return cls.from_oms_spectrum(
+                peptide = peptide,
+                spectrum = generate_fragment_spectrum(peptide, COMPLEX_PARAM, max_charge = max_charge))
+        else:
+            raise ValueError(f"unrecognized simulation mode: {mode}")
+        
+    def __repr__(self):
+        annotation_repr = super(BenchmarkPeakList, self).__repr__()
+        peptide_repr = f"peptide: {self.peptide}"
+        return '\n'.join([annotation_repr, peptide_repr])
+    
+    def get_peptide(self):
+        return self.peptide
+
+    def get_series(self, i: int):
+        return self.series[i]
+    
+    def get_position(self, i: int):
+        return self.position[i]
+
+    def get_state(self, i: int, metadata_keys = []) -> tuple:
+        """The set of annotation vector(s) for the `i`th peak, including metadata if the `metadata_keys` kwarg is passed."""
+        charge = self.get_charge(i)[0]
+        losses = self.get_losses(i)[0]
+        series = self.get_series(i)[0]
+        position = self.get_position(i)[0]
+        metadata = [self.get_metadata(i, k) for k in metadata_keys]
+        return (charge, losses, series, position, *metadata)
+    
+    def _series_peak_indices(self, series: str):
+        for i in range(len(self)):
+            if self.get_series(i)[0] == series:
+                yield i
+    
+    def get_b_series_peaks(self):
+        return self.b_idx
+    
+    def get_y_series_peaks(self):
+        return self.y_idx

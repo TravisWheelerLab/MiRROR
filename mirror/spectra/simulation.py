@@ -23,14 +23,14 @@ def complex_param():
 
 COMPLEX_PARAM = complex_param()
 
-def generate_fragment_spectrum(seq: str, param: oms.Param):
+def generate_fragment_spectrum(seq: str, param: oms.Param, min_charge = 1, max_charge = 1):
     """From a string and a pyopenms.Param() object, uses a pyopenms.TheoreticalSpectrumGenerator
     object to create a simulated fragment spectrum as a pyopenms.MSSpectrum object."""
     tsg = oms.TheoreticalSpectrumGenerator()
     spec = oms.MSSpectrum()
     peptide = oms.AASequence.fromString(seq)
     tsg.setParameters(param)
-    tsg.getSpectrum(spec, peptide, 1, 1)
+    tsg.getSpectrum(spec, peptide, min_charge, max_charge)
     return spec
 
 def list_mz(spec: oms.MSSpectrum):

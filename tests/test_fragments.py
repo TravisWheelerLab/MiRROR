@@ -1,15 +1,15 @@
-from time import time
+import unittest
 from math import sqrt
+from time import time
 from tqdm import tqdm
 
 from mirror.spectra.simulation import simulate_simple_peaks, simulate_complex_peaks
 from mirror.spectra.types import PeakList, BenchmarkPeakList
 from mirror.io import read_mzlib
 
+import numpy as np
+
 from mirror.fragments import FragmentStateSpace, FragmentState, ResidueStateSpace, ResidueState, AbstractFragmentSolver, BisectFragmentSolver
-
-import unittest
-
 class TestFragments(unittest.TestCase):
 
     @staticmethod
@@ -177,11 +177,16 @@ class TestFragments(unittest.TestCase):
                         matches[peak_i - 1] |= (left_match or (left_occl and left_charge_match)) and right_match and residue_match
         self.assertTrue(all(matches))
 
+from mirror.fragments.pairs import PairedFragments, find_pairs
 class TestPairs(unittest.TestCase):
-    pass
+
+    def test01_simple_simulation(self):
+        # a simple simulation that includes both ion series but no losses or charge states.
+
+    def test02_complex_simulation(self):
+        # a complex simulation with loss and charge states on both ion series.
 
 from mirror.fragments.pivots import _find_overlap_pivots, _find_virtual_pivots
-import numpy as np
 class TestPivots(unittest.TestCase):
 
     def test_overlap_pivots(self):
@@ -215,6 +220,7 @@ class TestPivots(unittest.TestCase):
                 self.assertLess(min_err, tolerance)
 
 from mirror.util import measure_mirror_symmetry
+from mirror.fragments.boundaries import LeftBoundaryFragment, RightBoundaryFragment, find_boundaries
 class TestBoundaries(unittest.TestCase):
 
     def test_mirror_symmetry(self):
@@ -237,3 +243,20 @@ class TestBoundaries(unittest.TestCase):
                 self.assertGreaterEqual(
                     measure_mirror_symmetry(aggregate, c, tolerance),
                     2 * n_signal)
+
+    def _simulate_boundaries(self, peptide: str, mode: str):
+        if mode == "simple":
+            return simulate_simple_peaks(peptide)
+        elif mode == "complex":
+            return simulate_complex_peaks(peptide)
+
+    def test_left_boundaries(self):
+        # check that left boundaries can be identified regardless of charge, loss, or modification
+        pass
+
+    def test_right_boundaries(self):
+        # check that right boundaries can be identified regardless of charge, loss, or modification
+        pass
+
+    def test_rescore_pivots(self):
+        # check that good pivots aren't being arbitrarily discarded
