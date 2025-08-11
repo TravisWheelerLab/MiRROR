@@ -1,11 +1,15 @@
 import unittest
+from typing import Iterator
 from math import sqrt
 from time import time
 from tqdm import tqdm
+import itertools as it
 
 from mirror.spectra.simulation import simulate_simple_peaks, simulate_complex_peaks
 from mirror.spectra.types import PeakList, BenchmarkPeakList
 from mirror.io import read_mzlib
+from mirror.presets import VALIDATION_PEPTIDES, MONO_ANNOTATION_PARAMS, AVG_ANNOTATION_PARAMS
+from mirror.annotation import AnnotationParams
 
 import numpy as np
 
@@ -177,14 +181,55 @@ class TestFragments(unittest.TestCase):
                         matches[peak_i - 1] |= (left_match or (left_occl and left_charge_match)) and right_match and residue_match
         self.assertTrue(all(matches))
 
+from tests.test_spectra import VALIDATION_SIMS
+
 from mirror.fragments.pairs import PairedFragments, find_pairs
 class TestPairs(unittest.TestCase):
 
-    def test01_simple_simulation(self):
-        # a simple simulation that includes both ion series but no losses or charge states.
+    @staticmethod
+    def _validate_pairs(
+        observed_pairs: list[PairedFragments],
+        bpl: BenchmarkPeakList,
+    ) -> bool:
+        observed_data = sorted([
+            (*sorted(p.peak_indices()), p.amino_symbol()) for p in observed_pairs if p.amino_symbol() in bpl.peptide])
+        # print("observed:\n", observed_data)
+        index_pairs = list(it.pairwise(range(1, len(bpl.peptide))))
+        true_data_sets = [list(bpl.get_pairs(l, r)) for (l, r) in index_pairs]
+        coverage = [0 for _ in index_pairs]
+        for (i, true_data) in enumerate(true_data_sets):
+            # print("true data ",i)
+            if len(true_data) == 0:
+                coverage[i] == 1
+            else:
+                for (left_peak_idx, right_peak_idx, amino_sym) in true_data:
+                    query = (*sorted([left_peak_idx, right_peak_idx]), amino_sym)
+                    if query in observed_data:
+                        coverage[i] += 1
+                        # print(f"\tquery {query} -> hit")
+                    # else:
+                        # print(f"\tquery {query} -> miss")
+        return all([x > 0 for x in coverage]), coverage
 
-    def test02_complex_simulation(self):
-        # a complex simulation with loss and charge states on both ion series.
+    def _test_sims(self,
+        sims: tuple[str,str,int,BenchmarkPeakList],
+        params: AnnotationParams,
+    ):
+        # check that fragment and residue states can be recovered across a variety of peptides and spectrum complexities.
+        for (peptide, mode, charges, sim_bpl) in VALIDATION_SIMS:
+            observed_pairs = list(find_pairs(
+                peaks = sim_bpl,
+                tolerance = params.fragment_search_tolerance,
+                residue_space = params.residue_state_space,
+                fragment_space = params.fragment_state_space))
+            validation, coverage = self._validate_pairs(observed_pairs, sim_bpl)
+            print(f"{peptide}, {mode}, {charges}, {coverage}")
+            self.assertTrue(validation)
+
+    def test_sims(self):
+        """Run the top-level pairs search function on a set of simulated spectra."""
+        self._test_sims(VALIDATION_SIMS, MONO_ANNOTATION_PARAMS)
+        # self._test_sims(VALIDATION_SIMS, AVG_ANNOTATION_PARAMS)
 
 from mirror.fragments.pivots import _find_overlap_pivots, _find_virtual_pivots
 class TestPivots(unittest.TestCase):
@@ -219,8 +264,12 @@ class TestPivots(unittest.TestCase):
                 min_err = min(abs(p - true_pivot) for p in pivots)
                 self.assertLess(min_err, tolerance)
 
+    def test_sims(self):
+        """Run the top-level pivot search function on a set of simulated spectra."""
+        pass
+
 from mirror.util import measure_mirror_symmetry
-from mirror.fragments.boundaries import LeftBoundaryFragment, RightBoundaryFragment, find_boundaries
+from mirror.fragments.boundaries import LeftBoundaryFragment, RightBoundaryFragment, find_left_boundaries, find_right_boundaries, rescore_pivots
 class TestBoundaries(unittest.TestCase):
 
     def test_mirror_symmetry(self):
@@ -244,19 +293,14 @@ class TestBoundaries(unittest.TestCase):
                     measure_mirror_symmetry(aggregate, c, tolerance),
                     2 * n_signal)
 
-    def _simulate_boundaries(self, peptide: str, mode: str):
-        if mode == "simple":
-            return simulate_simple_peaks(peptide)
-        elif mode == "complex":
-            return simulate_complex_peaks(peptide)
-
     def test_left_boundaries(self):
-        # check that left boundaries can be identified regardless of charge, loss, or modification
+        """Run the top-level left boundary search function on a set of simulated spectra."""
         pass
 
     def test_right_boundaries(self):
-        # check that right boundaries can be identified regardless of charge, loss, or modification
+        """Given ideal pivots and left boundaries, run the top-level right boundary search function on a set of simulated spectra."""
         pass
 
     def test_rescore_pivots(self):
-        # check that good pivots aren't being arbitrarily discarded
+        """Given ideal pivots and boundaries, run the rescoring / filtering function and verify that good pivots are not being discarded."""
+        pass

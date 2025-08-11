@@ -144,6 +144,7 @@ class AbstractFragmentSolver(ABC):
         state_space: FragmentStateSpace,
     ) -> tuple[list[float],list[tuple[int, int]]]:
         # if the peaks list does not include a dummy value 0. at index 0, create it.
+        peaks = peaks.mz
         if peaks[0] != 0.:
             peaks = [0.] + peaks
         # construct and reorder the charge-augmented m/z

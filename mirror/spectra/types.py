@@ -64,7 +64,7 @@ class PeakList:
     ):
         n = len(mz)
         assert len(intensity) == n
-        self._n = n
+        self.n = n
         self.mz = mz
         self.intensity = intensity
 
@@ -96,7 +96,7 @@ class PeakList:
             intensity = intensity)
 
     def __len__(self) -> int:
-        return self._n
+        return self.n
     
     def __getitem__(self, i: int) -> float:
         return self.mz[i]
@@ -191,12 +191,48 @@ class BenchmarkPeakList(AnnotatedPeakList):
         **kwargs,
     ):
         self.peptide = peptide
+        self.m = len(peptide)
         self.series = series
         self.position = position
         super(BenchmarkPeakList, self).__init__(mz, intensity, charge, losses, **kwargs)
         self.y_idx = sorted(self._series_peak_indices('y'), key = lambda i: self.get_position(i)[0])
         self.b_idx = sorted(self._series_peak_indices('b'), key = lambda i: self.get_position(i)[0])
-        
+        # bin peak indices by their peptide index as calculated from their series and position. peak b1 has peptide index 0, peak y1 has peptide index n, b2 has idx 1, y2 has index n - 1, etc. series data is retained via the inner dictionaries, because we don't want to pair across series even when they have the same index.
+        self.peak_idx_by_peptide_idx = [{'b':[],'y':[]} for _ in range(len(peptide) + 1)]
+        for i in range(len(self.mz)):
+            series = self.series[i]
+            position = int(self.position[i])
+            if series == 'b':
+                idx = position
+            elif series == 'y':
+                idx = self.m - position
+            # print(f"peak:{i} series:{series} pos:{position} idx:{idx}")
+            self.peak_idx_by_peptide_idx[idx][series].append(i)
+
+    def get_pairs(self,
+        l: int,
+        r: int,
+    ) -> Iterable[tuple[int, int, str]]:
+        """Given left and right peptide indices, return all (left peak index, right peak index, residue) data where residue is the character given by peptide[l:r] == peptide[l:l+1]. Does not (yet) support positions with a gap greater than one, i.e., r - l > 1 and `residue` is a kmer."""
+        if r != l + 1:
+            raise ValueError(f"indices {l}, {r} are not consecutive; this method does not yet support kmer queries.")
+        else:
+            l_peaks = self.peak_idx_by_peptide_idx[l]
+            r_peaks = self.peak_idx_by_peptide_idx[r]
+            l_b = l_peaks['b']
+            r_b = r_peaks['b']
+            l_y = l_peaks['y']
+            r_y = r_peaks['y']
+            residue = self.peptide[l:r]
+            for l_idx in l_b:
+                for r_idx in r_b:
+                    # dif = self.mz[r_idx] - self.mz[l_idx]
+                    yield (l_idx, r_idx, residue)#, dif)
+            for l_idx in l_y:
+                for r_idx in r_y:
+                    # dif = self.mz[l_idx] - self.mz[r_idx]
+                    yield (l_idx, r_idx, residue)#, dif)
+            
     def from_mzlib(cls, 
         dataset: mzlib.SpectrumLibrary,
         i: int,
