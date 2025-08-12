@@ -1,5 +1,5 @@
 import unittest
-from typing import Iterator
+from typing import Iterator, Any
 from math import sqrt
 from time import time
 from tqdm import tqdm
@@ -10,6 +10,7 @@ from mirror.spectra.types import PeakList, BenchmarkPeakList
 from mirror.io import read_mzlib
 from mirror.presets import VALIDATION_PEPTIDES, MONO_ANNOTATION_PARAMS, AVG_ANNOTATION_PARAMS
 from mirror.annotation import AnnotationParams
+import mirror.util as util
 
 import numpy as np
 
@@ -227,47 +228,43 @@ class TestPairs(unittest.TestCase):
             self.assertTrue(validation)
 
     def test_sims(self):
-        """Run the top-level pairs search function on a set of simulated spectra."""
+        """Run the find_pairs function on a set of simulated spectra."""
         self._test_sims(VALIDATION_SIMS, MONO_ANNOTATION_PARAMS)
         # self._test_sims(VALIDATION_SIMS, AVG_ANNOTATION_PARAMS)
 
-from mirror.fragments.pivots import _find_overlap_pivots, _find_virtual_pivots
+from mirror.fragments.pivots import AbstractPivot, find_overlap_pivots, find_virtual_pivots
+from mirror.annotation import reindex_by_fragment_masses
 class TestPivots(unittest.TestCase):
 
-    def test_overlap_pivots(self):
-        pairs = [
-            (1,2),
-            (2,3), 
-            (4,7), # 2
-            (6,8), # 3
-            (9,10)]
-        pivots = list(_find_overlap_pivots(pairs))
-        self.assertEqual(pivots, [(2,3)])
+    @staticmethod
+    def _project_pivots(pivots: Iterator[AbstractPivot]) -> list[tuple[float,Any]]:
+        return [(round(p.get_pivot_point(), 2), p.get_pivot_indices()) for p in pivots]
 
-    def test_virtual_pivots(self):
-        true_pivot = 0.3
-        tolerance = 0.0001
-        n_pairs = 10
-        for (tolerance,n_noise) in [(0.0001, 10), (0.0001, 100), (0.000001, 1000)]:
-            n_noise = 100
-            n_trials = 10
-            for _ in range(n_trials):
-                lower_pairs = np.random.uniform(size=(2,n_pairs)) * true_pivot
-                upper_pairs = 2 * true_pivot - lower_pairs
-                noise_pairs = np.random.uniform(size=(2,n_noise))
-                def arr_to_tups(arr):
-                    assert arr.shape[0] == 2 and len(arr.shape) == 2
-                    return list(zip(*arr))
-                all_pairs = list(map(sorted, sum(map(arr_to_tups, [lower_pairs, upper_pairs, noise_pairs]),start=[])))
-                all_pairs.sort()
-                pivots = list(_find_virtual_pivots(all_pairs, tolerance))
-                min_err = min(abs(p - true_pivot) for p in pivots)
-                self.assertLess(min_err, tolerance)
-
-    def test_sims(self):
-        """Run the top-level pivot search function on a set of simulated spectra."""
-        pass
-
+    def test_sims(self, params: AnnotationParams = MONO_ANNOTATION_PARAMS):
+        """Run the find_pivots function on a set of simulated spectra."""
+        for (peptide, mode, charges, sim_bpl) in VALIDATION_SIMS:
+            print(peptide, mode, charges)
+            print(sim_bpl.mz)
+            pairs = list(find_pairs(
+                peaks = sim_bpl,
+                tolerance = params.fragment_search_tolerance,
+                residue_space = params.residue_state_space,
+                fragment_space = params.fragment_state_space))
+            pairs, fragment_masses = reindex_by_fragment_masses(
+                pairs = pairs,
+                fragment_state_space = params.fragment_state_space)
+            observed_overlap_pivots, observed_overlap_structures = zip(*self._project_pivots(find_overlap_pivots(pairs)))
+            print("overlap", len(observed_overlap_pivots),len(set(observed_overlap_pivots)))
+            print(observed_overlap_pivots)
+            observed_virtual_pivots, _ = zip(*self._project_pivots(find_virtual_pivots(
+                pairs = pairs,
+                bin_width = params.fragment_search_tolerance)))
+            print("virtual", len(observed_virtual_pivots),len(set(observed_virtual_pivots)))
+            true_pivots, __ = zip(*sim_bpl.get_pivots())
+            print("groundtruth", len(true_pivots))
+            print(true_pivots)
+            input(f"hits: {len(set(observed_overlap_pivots + observed_virtual_pivots).intersection(true_pivots))}")
+            
 from mirror.util import measure_mirror_symmetry
 from mirror.fragments.boundaries import LeftBoundaryFragment, RightBoundaryFragment, find_left_boundaries, find_right_boundaries, rescore_pivots
 class TestBoundaries(unittest.TestCase):
@@ -294,13 +291,13 @@ class TestBoundaries(unittest.TestCase):
                     2 * n_signal)
 
     def test_left_boundaries(self):
-        """Run the top-level left boundary search function on a set of simulated spectra."""
+        """Run the find_left_boundaries function on simulated spectra."""
         pass
 
     def test_right_boundaries(self):
-        """Given ideal pivots and left boundaries, run the top-level right boundary search function on a set of simulated spectra."""
+        """Run the find_right_boundaries function on simulated spectra."""
         pass
 
     def test_rescore_pivots(self):
-        """Given ideal pivots and boundaries, run the rescoring / filtering function and verify that good pivots are not being discarded."""
+        """Run the rescoring / filtering function on simulated spectra; verify that good pivots are not being discarded."""
         pass

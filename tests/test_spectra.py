@@ -19,7 +19,7 @@ def simulate() -> Iterator[tuple[str,str,int,BenchmarkPeakList]]:
             sim_bpl = BenchmarkPeakList.from_simulation(peptide, mode, charges)
             yield (peptide, mode, charges, sim_bpl)
 
-VALIDATION_SIMS = simulate()
+VALIDATION_SIMS = list(simulate())
 
 class TestSpectra(unittest.TestCase):
 

@@ -1,5 +1,4 @@
-from .fragments import FragmentStateSpace, ResidueStateSpace, PivotSearchParams
-from .fragments.pivots import PivotSearchMode
+from .fragments import FragmentStateSpace, ResidueStateSpace
 from .annotation import AnnotationParams
 
 # this will be a plaintext configuration file.
@@ -243,16 +242,6 @@ AVG_RESIDUE_SPACE = ResidueStateSpace(
 
 FRAGMENT_SEARCH_TOLERANCE = 0.01
 
-PIVOT_SEARCH_TOLERANCE = 0.02
-
-OVERLAP_PIVOT_SEARCH = PivotSearchParams(
-    tolerance = PIVOT_SEARCH_TOLERANCE,
-    mode = PivotSearchMode.OVERLAP)
-
-VIRTUAL_PIVOT_SEARCH = PivotSearchParams(
-    tolerance = PIVOT_SEARCH_TOLERANCE,
-    mode = PivotSearchMode.VIRTUAL)
-
 PIVOT_SYMMETRY_TOLERANCE = 0.01
 PIVOT_SCORE_THRESHOLD_FACTOR = 1.
 
@@ -260,8 +249,6 @@ MONO_ANNOTATION_PARAMS = AnnotationParams(
     fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
     fragment_state_space = FRAGMENT_SPACE,
     residue_state_space = MONO_RESIDUE_SPACE,
-    pivot_search_strategies = [
-        OVERLAP_PIVOT_SEARCH, VIRTUAL_PIVOT_SEARCH],
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
     pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
 
@@ -269,8 +256,6 @@ AVG_ANNOTATION_PARAMS = AnnotationParams(
     fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
     fragment_state_space = FRAGMENT_SPACE,
     residue_state_space = AVG_RESIDUE_SPACE,
-    pivot_search_strategies = [
-        OVERLAP_PIVOT_SEARCH, VIRTUAL_PIVOT_SEARCH],
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
     pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
 

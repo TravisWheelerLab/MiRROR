@@ -1,4 +1,4 @@
-from typing import Self, Iterator, Callable
+from typing import Self, Iterator, Callable, Any, Iterable
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
@@ -8,8 +8,8 @@ import itertools as it
 
 import numpy as np
 
+from .. import util
 from ..spectra.types import PeakList
-from .solvers import ResidueStateSpace
 from .pairs import PairedFragments
 
 class AbstractPivot(ABC):
@@ -18,6 +18,10 @@ class AbstractPivot(ABC):
     @abstractmethod
     def get_pivot_point(self) -> float:
         """The center point of the pivot; an approximate point of mirror symmetry for peaks and fragment pairs."""
+
+    @abstractmethod
+    def get_pivot_indices(self) -> Any:
+        """Return either a sorted 4-tuple of integers, in the case of observed pivots, or None, in the case of virtual pivots."""
 
     @abstractmethod
     def get_score(self) -> float:
@@ -30,34 +34,36 @@ class AbstractPivot(ABC):
 @dataclass
 class OverlapPivot(AbstractPivot):
     """A pivot structure composed of two PairedFragments objects whose fragment mass intervals overlap."""
-    left_pair: PairedFragments
-    right_pair: PairedFragments
-    residue_mass_delta: float
+    indices: tuple[int,int,int,int]
+    left_pairs: list[PairedFragments]
+    right_pairs: list[PairedFragments]
     pivot_point: float
     score: float = 0
 
     @classmethod
     def from_pairs(cls,
-        index_pair: tuple[int,int],
-        paired_fragments: list[PairedFragments],
+        bin_idx_pair: tuple[int,int],
+        paired_fragments_bins: list[list[PairedFragments]],
     ) -> Self:
         """Construct a FragmentPivot object from two PairedFragments objects whose fragment mass intervals intersect."""
-        left_pair, right_pair = sorted(
-            (paired_fragments[index_pair[0]], paired_fragments[index_pair[1]]),
-            key = lambda pair: pair.left_fragment.fragment_mass)
-        ll, lr = left_pair.fragment_masses()
-        rl, rr = right_pair.fragment_masses()
-        if ll < rl < lr < rr:
+        left_bin_idx, right_bin_idx = bin_idx_pair
+        left_pairs = paired_fragments_bins[left_bin_idx]
+        left_idx_pair = left_pairs[0].peak_indices()
+        right_pairs = paired_fragments_bins[right_bin_idx]
+        right_idx_pair = right_pairs[0].peak_indices()
+        if (left_idx_pair[0] < right_idx_pair[0] < left_idx_pair[1] < right_idx_pair[1]):
             return cls(
-                left_pair = left_pair,
-                right_pair = right_pair,
-                residue_mass_delta = abs(pairs[0].residue.residue_mass - pairs[1].residue.residue_mass),
-                pivot_point = (ll + lr + rl + rr) / 4)
-        else:
-            raise ValueError(f"Fragment mass intervals [{ll}, {lr}], [{rl}, {rr}] do not intersect!")
+                indices = (left_idx_pair[0], right_idx_pair[0], left_idx_pair[1], right_idx_pair[1]),
+                left_pairs = left_pairs,
+                right_pairs = right_pairs,
+                pivot_point = (sum(left_pairs[0].fragment_masses()) + sum(right_pairs[0].fragment_masses())) / 4)
 
     def get_pivot_point(self) -> float:
         return self.pivot_point
+
+    def get_pivot_indices(self) -> tuple[int,int,int,int]:
+        """Return the indices of the left and right pairs comprising the pivot."""
+        return self.indices        
 
     def get_score(self) -> float:
         return self.score
@@ -76,6 +82,10 @@ class VirtualPivot(AbstractPivot):
     def get_pivot_point(self) -> float:
         return self.pivot_point
 
+    def get_pivot_indices(self) -> None:
+        """Virtual pivots do not have indices, so this method returns None."""
+        return None
+
     def get_score(self) -> float:
         return self.score
 
@@ -83,85 +93,81 @@ class VirtualPivot(AbstractPivot):
         self.score = score
         return self
 
-class PivotSearchMode(Enum):
-    OVERLAP = 1
-    VIRTUAL = 2
-
-@dataclass
-class PivotSearchParams:
-    tolerance: float
-    mode: PivotSearchMode
-
-def _find_overlap_pivots(
-    pairs: list[tuple[float,float]],
-) -> Iterator[tuple[int,int]]:
-    n = len(pairs)
-    for i in range(n):
-        i_left, i_right = pairs[i]
-        for j in range(i + 1, n):
-            j_left, j_right = pairs[j]
-            if j_left >= i_right:
-                break
-            else:
-                yield (i,j)
-
 def _find_virtual_pivots(
-    pairs: list[tuple[float,float]],
-    tolerance: float,
+    midpoints: Iterable[float],
+    bin_width: float,
 ) -> Iterator[tuple[float,float]]:
-    n = len(pairs)
-    # reduce pairs to their average fragment mass
-    midpoints = np.array(list(map(sum, pairs))) / 2.
-    # construct potential pivots from midpoint half-sums.
-    # for any given pair (x, y), their center h = (x + 2) / 2 is the point of mirror symmetry.
-    midpoint_pivots = (midpoints.reshape(n,1) + midpoints.reshape(1,n)).flatten() / 2.
     # restrict the potential pivots to the most frequent values
     # the point(s) that are most frequent are likely the ones that induce the greatest mirror symmetry.
+    num_bins = int((midpoints.max() - midpoints.min()) / bin_width)
+    if num_bins == 0:
+        return []
+    # print(num_bins)
     bin_counts, bin_edges = np.histogram(
-        midpoint_pivots,
-        bins = int((midpoints.max() - midpoints.min()) / tolerance))
+        midpoints,
+        bins = num_bins)
+    # print("bin edges", bin_edges)
     bin_values = (bin_edges[:-1] + bin_edges[1:]) / 2
+    # print("bin values", bin_values)
     frequencies = sorted(set(bin_counts))
     upper_quartile = int(len(frequencies) * 0.75)
     uq_mask = bin_counts > frequencies[upper_quartile]
     maximal_bin_values = bin_values[uq_mask]
     maximal_bin_counts = bin_counts[uq_mask]
     # return the bin values and the normalized bin counts
-    return zip(
-        maximal_bin_values,
-        maximal_bin_counts / sum(maximal_bin_counts))
+    return [VirtualPivot(pivot_point, frequency) for (pivot_point, frequency) in zip(maximal_bin_values, maximal_bin_counts / sum(maximal_bin_counts))]
 
-def _find_pivots(
+def _construct_midpoints(
     pairs: list[PairedFragments],
-    search_strategy: PivotSearchParams,
-) -> Iterator[AbstractPivot]:
-    tolerance = search_strategy.tolerance
-    pair_masses = [pair.fragment_masses() for pair in pairs]
-    if search_strategy.mode is PivotSearchMode.OVERLAP:
-        return map(
-            ft.partial(
-                OverlapPivot.from_pairs,
-                paired_fragments = pairs),
-            _find_overlap_pivots(pair_masses))
-    elif search_strategy.mode is PivotSearchMode.VIRTUAL:
-        return it.starmap(
-            VirtualPivot,
-            _find_disjoint_pivots(pair_masses, tolerance))
-    else:
-        raise ValueError(f"Search mode {search_strategy.mode} could not be recognized!")
+) -> Iterable[float]:
+    n = len(pairs)
+    pair_centers = np.array([sum(p.fragment_masses()) / 2 for p in pairs])
+    return (pair_centers.reshape(n,1) + pair_centers.reshape(1,n)).flatten() / 2.
 
-def find_pivots(
+def find_virtual_pivots(
     pairs: list[PairedFragments],
-    search_strategy: PivotSearchParams,
-    residue_state_space: ResidueStateSpace,
-) -> Iterator[AbstractPivot]:
+    bin_width: float,
+) -> Iterator[VirtualPivot]:
     # bin the pairs by their amino acid.
-    bins = util.binsort(
+    _, bins = util.binsort(
         pairs,
-        bins = len(residue_state_space.n_aminos()),
         key = lambda x: x.residue.amino_id)
-    # sort bins by fragment mass interval.
-    bins = [sorted(bin, key = lambda x: x.fragment_masses()) for bin in bins]
+    # within each bin, construct midpoints, and concatenate them into one list.
+    midpoints = np.concatenate([_construct_midpoints(pair_bin) for pair_bin in bins])
+    # find the most common midpoints and cast them as virtual pivots
+    return _find_virtual_pivots(midpoints, bin_width)
+
+def _find_overlap_pivots(
+    pairs: list[PairedFragments],
+) -> Iterator[OverlapPivot]:
+    # bin the pairs by their peak indices
+    pair_indices, bins = util.binsort(
+        pairs,
+        key = lambda x: str(x.peak_indices()))
+    # reorder bins by pair_indices
+    pair_ind_order = np.argsort(pair_indices)
+    pair_indices = pair_indices[pair_ind_order]
+    bins = [bins[i] for i in pair_ind_order]
+    # construct pivots
+    n = len(pair_indices)
+    for i in range(n):
+        left_i, right_i = bins[i][0].fragment_masses()
+        for j in range(i + 1, n):
+            left_j, right_j = bins[j][0].fragment_masses()
+            if left_j >= right_i:
+                break
+            elif (left_i < left_j < right_i < right_j):
+                yield OverlapPivot.from_pairs(
+                    (i,j),
+                    bins)
+
+def find_overlap_pivots(
+    pairs: list[PairedFragments],
+) -> Iterator[OverlapPivot]:
+    # bin the pairs by their amino acid.
+    _, bins = util.binsort(
+        pairs,
+        key = lambda x: x.residue.amino_id)
     # within each bin, search for pivots. chain results into one iterator
     return it.chain.from_iterable(
-        _find_pivots(pair_bin, search_strategy) for pair_bin in bins)
+        _find_overlap_pivots(pair_bin) for pair_bin in bins)

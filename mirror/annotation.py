@@ -1,19 +1,20 @@
+from typing import Iterable
 from dataclasses import dataclass
 from multiprocessing import Pool
 import functools as ft
 import itertools as it
 
-from . import util
+import numpy as np
 
+from . import util
 from .spectra.types import PeakList, BenchmarkPeakList
-from .fragments import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, PairedFragments, PivotSearchParams, AbstractPivot, LeftBoundaryFragment, RightBoundaryFragment, find_pairs, find_pivots, find_left_boundaries, find_right_boundaries, rescore_pivots
+from .fragments import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, PairedFragments, AbstractPivot, LeftBoundaryFragment, RightBoundaryFragment, find_pairs, find_overlap_pivots, find_virtual_pivots, find_left_boundaries, find_right_boundaries, rescore_pivots
 
 @dataclass
 class AnnotationParams:
     fragment_search_tolerance: float
     fragment_state_space: FragmentStateSpace
     residue_state_space: ResidueStateSpace
-    pivot_search_strategies: set[PivotSearchParams]
     pivot_symmetry_tolerance: float
     pivot_score_threshold_factor: float
 
@@ -51,23 +52,56 @@ class AnnotationResult:
     def get_right_boundaries(self, pivot_id: int) -> list[RightBoundaryFragment]:
         return self._right_boundaries[self._pivot_index[pivot_id]]
 
+# this function will eventually do more: the fragment states will be broken down into losses and charges, and used to create an AnnotatedSpectrum.
+# for now, it's just performing the utility required by pivots.
+def reindex_by_fragment_masses(
+    pairs: list[PairedFragments],
+    fragment_state_space: FragmentStateSpace,
+    precision: int = 4,
+) -> tuple[list[PairedFragments],Iterable[float]]:
+    # project to fragment masses
+    fragment_masses = list(it.chain.from_iterable(
+        np.round(p.fragment_masses(), precision) for p in pairs))
+    fragment_masses, reindexer = np.unique_inverse(fragment_masses)
+    # reindex the pairs
+    reindexed_pairs = [PairedFragments.from_solution((
+        FragmentState.from_index(
+            peak_idx = reindexer[2 * i],
+            fragment_mass = pair.left_fragment.fragment_mass,
+            loss_id = pair.left_fragment.loss_id,
+            charge = 1, # the peak idx now points to the decharged fragment mass in the new fragment_masses array
+            state_space = fragment_state_space),
+        FragmentState.from_index(
+            peak_idx = reindexer[(2 * i) + 1],
+            fragment_mass = pair.right_fragment.fragment_mass,
+            loss_id = pair.right_fragment.loss_id,
+            charge = 1, # the peak idx now points to the decharged fragment mass in the new fragment_masses array
+            state_space = fragment_state_space),
+        pair.residue)) for (i, pair) in enumerate(pairs)]
+    return (
+        reindexed_pairs,
+        fragment_masses)
+
 def annotate(
     peaks: PeakList,
     params: AnnotationParams,
 ) -> AnnotationResult:
     # find pairs of peaks whose m/z difference is solvable as a (FragmentState,FragmentState,ResidueStateSpace) tuple.
-    peak_pairs = find_pairs(
+    peak_pairs = list(find_pairs(
         peaks = peaks,
         tolerance = params.fragment_search_tolerance,
         residue_state_space = params.residue_state_space,
+        fragment_state_space = params.fragment_state_space))
+    # create fragment masses and reindexed pairs
+    fragment_pairs, fragment_masses = reindex_into_fragment_masses(
+        pairs = peak_pairs,
         fragment_state_space = params.fragment_state_space)
     # find structures of pairs that reflect about a common point of symmetry.
-    pivots = list(it.chain.from_iterable([
-        find_pivots(
-            pairs = peak_pairs,
-            search_strategy = strategy,
-            residue_state_space = params.residue_state_space)
-        for strategy in params.pivot_search_strategies]))
+    overlap_pivots = list(find_overlap_pivots(pairs = fragment_pairs))
+    virtual_pivots = list(find_virtual_pivots(
+        pairs = fragment_pairs,
+        bin_width = params.fragment_search_tolerance))
+    pivots = overlap_pivots + virtual_pivots
     # find boundary peaks. 
     ## LeftBoundaryPeaks have m/z that is within a shift transformation of a (FragmentState,ResidueState) solution.
     left_boundaries = find_left_boundaries(
@@ -76,7 +110,7 @@ def annotate(
         residue_state_space = params.residue_state_space,
         fragment_state_space = params.fragment_state_space)
     ## RightBoundaryPeaks have m/z that is within a reflection and shift of a (FragmentState,ResidueState) solution.
-    ## the reflection is parametized by a pivot, so right_boundaries is a second-order collection.
+    ## the reflection is parametized by a pivot, so right_boundaries is a nested list that shares its index with pivots.
     right_boundaries = find_right_boundaries(
         pivots = pivots,
         peaks = peaks,

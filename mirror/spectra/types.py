@@ -1,6 +1,8 @@
 from abc import ABC, abstractclassmethod
-from typing import Any, Iterable, Self
+from typing import Any, Iterator, Iterable, Self
 from dataclasses import dataclass
+import statistics as stat
+import itertools as it
 import warnings
 
 import numpy as np
@@ -101,7 +103,7 @@ class PeakList:
     def __getitem__(self, i: int) -> float:
         return self.mz[i]
     
-    def __iter__(self) -> Iterable:
+    def __iter__(self) -> Iterator:
         return self.mz.__iter__()
     
     def get_intensity(self, i: int) -> float:
@@ -196,7 +198,9 @@ class BenchmarkPeakList(AnnotatedPeakList):
         self.position = position
         super(BenchmarkPeakList, self).__init__(mz, intensity, charge, losses, **kwargs)
         self.y_idx = sorted(self._series_peak_indices('y'), key = lambda i: self.get_position(i)[0])
+        self.y_pos = [int(self.get_position(i)) for i in self.y_idx]
         self.b_idx = sorted(self._series_peak_indices('b'), key = lambda i: self.get_position(i)[0])
+        self.b_pos = [int(self.get_position(i)) for i in self.b_idx]
         # bin peak indices by their peptide index as calculated from their series and position. peak b1 has peptide index 0, peak y1 has peptide index n, b2 has idx 1, y2 has index n - 1, etc. series data is retained via the inner dictionaries, because we don't want to pair across series even when they have the same index.
         self.peak_idx_by_peptide_idx = [{'b':[],'y':[]} for _ in range(len(peptide) + 1)]
         for i in range(len(self.mz)):
@@ -212,7 +216,7 @@ class BenchmarkPeakList(AnnotatedPeakList):
     def get_pairs(self,
         l: int,
         r: int,
-    ) -> Iterable[tuple[int, int, str]]:
+    ) -> Iterator[tuple[int,int,str]]:
         """Given left and right peptide indices, return all (left peak index, right peak index, residue) data where residue is the character given by peptide[l:r] == peptide[l:l+1]. Does not (yet) support positions with a gap greater than one, i.e., r - l > 1 and `residue` is a kmer."""
         if r != l + 1:
             raise ValueError(f"indices {l}, {r} are not consecutive; this method does not yet support kmer queries.")
@@ -232,6 +236,72 @@ class BenchmarkPeakList(AnnotatedPeakList):
                 for r_idx in r_y:
                     # dif = self.mz[l_idx] - self.mz[r_idx]
                     yield (l_idx, r_idx, residue)#, dif)
+
+    def get_pivots(self) -> Iterator[tuple[float,Any]]:
+        """Identify overlap and virtual pivots in the spectrum. Virtual pivots are only returned if no overlap pivots can be found. Overlap pivots take the form (pivot point, (pair, pair)) while virtual pivots take the form (pivot point, None)."""
+        midpoints = []
+        # step 1 - look for overlap pivots
+        c = 0
+        for (l,r) in it.pairwise(range(self.m + 1)):
+            pairs = list(self.get_pairs(l,r))
+            for (i, (l1, r1, res)) in enumerate(pairs):
+                for (l2, r2, _) in pairs[i + 1:]: # all residues are the same in a call to get_pairs
+                    pivot_point = (self[l1] + self[l2] + self[r1] + self[r2]) / 4
+                    midpoints.append(pivot_point)
+                    if (l1 < l2 < r1 < r2) or (l2 < l1 < r2 < r1):
+                        c += 1
+                        yield (
+                            round(pivot_point, 2),
+                            ((l1,r1),(l2,r2)))
+        if c == 0:
+            # step 2 - when there are no overlap pivots, return the mode of virtual pivots.
+            midpoints = [round(x, 2) for x in midpoints]
+            yield (
+                stat.mode(midpoints),
+                None)
+
+    @staticmethod
+    def _get_extremal(arr: Iterator[int], weights: Iterable[int], extrema: int, reverse: bool = False) -> Iterator[int]:
+        enum_arr = list(enumerate(arr))
+        if reverse:
+            enum_arr = enum_arr[::-1]
+        for (i, val) in enum_arr:
+            if weights[i] == extrema:
+                yield val
+            else:
+                return
+
+    def get_prefix(self, peak_idx) -> str:
+        series = self.get_series(peak_idx)
+        position = int(self.get_position(peak_idx))
+        if series == 'b':
+            idx = position
+            return self.peptide[:idx]
+        elif series == 'y':
+            idx = self.m - position
+            return self.peptide[idx:]
+
+    def get_suffix(self, peak_idx) -> str:
+        series = self.get_series(peak_idx)
+        position = int(self.get_position(peak_idx))
+        if series == 'b':
+            idx = position
+            return self.peptide[idx:]
+        elif series == 'y':
+            idx = self.m - position
+            return self.peptide[:idx]
+
+    def get_left_boundaries(self) -> Iterator[tuple[int,str]]:
+        """Scan the low end of the spectrum for peaks whose annotated position is minimal w.r.t. its series; returns all the b ions whose position is less than or equal to any other b ion, and likewise all y ions whose position is less than or equal to any other y ion."""
+        return [(peak_idx, self.get_prefix(peak_idx)) for peak_idx in it.chain(
+            self._get_extremal(self.b_idx, self.b_pos, self.b_pos[0], reverse = False),
+            self._get_extremal(self.y_idx, self.y_pos, self.y_pos[0], reverse = False))]
+
+    def get_right_boundaries(self) -> Iterator[tuple[int,str]]:
+        """Scan the high end of the spectrum for peaks whose annotated position is maximal w.r.t. its series; returns all the b ions whose position is greater  than or equal to any other b ion, and likewise all y ions whose position is greater than or equal to any other y ion."""
+        return [(peak_idx, self.get_suffix(peak_idx)) for peak_idx in it.chain(
+            self._get_extremal(self.b_idx, self.b_pos, self.b_pos[-1], reverse = True),
+            self._get_extremal(self.y_idx, self.y_pos, self.y_pos[-1], reverse = True))]
             
     def from_mzlib(cls, 
         dataset: mzlib.SpectrumLibrary,
