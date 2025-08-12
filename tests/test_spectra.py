@@ -31,6 +31,17 @@ class TestSpectra(unittest.TestCase):
     def read_test_9species_mgf():
         return read_mgf("data/spectra/Apis-mellifera.mgf")
 
+    def test_PeakList_with_offset(self):
+        data = np.random.uniform(size=100)
+        peaks = PeakList(
+            mz = data,
+            intensity = np.ones_like(data))
+        offset = 22/7
+        new_data = data + offset
+        new_peaks = peaks.with_offset(offset)
+        self.assertTrue(all(data == peaks.mz))
+        self.assertTrue(all(new_data == new_peaks.mz))
+
     def test_benchmark_from_simulation(self):
         lookup_amino_mass = {symbol: mass for (symbol, mass) in zip(MONO_RESIDUE_SPACE.amino_symbols, MONO_RESIDUE_SPACE.amino_masses)}
         for peptide in VALIDATION_PEPTIDES:

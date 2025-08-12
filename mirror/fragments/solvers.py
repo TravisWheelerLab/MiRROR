@@ -1,4 +1,4 @@
-from typing import Self, Iterator
+from typing import Self, Iterator, Iterable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
@@ -116,6 +116,15 @@ class AbstractFragmentSolver(ABC):
     ) -> Self:
         """Construct a fragment solver object from an m/z array, a match threshold float value, and a state space triple (FragmentStateSpace,FragmentStateSpace,ResidueStateSpace). If target_mass_data is passed, that value will be used instead of constructing a new target mass list and deindexer from the state space."""
 
+    @classmethod
+    def from_half_space(cls,
+        mz: Iterable[float],
+        tolerance: float,
+        state_space: tuple[FragmentStateSpace,ResidueStateSpace],
+        target_mass_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
+    ) -> Self:
+        """Construct a fragment solver from a right fragment space and a residue space. The left mz and left state space are assumed to be trivial, meaning every reference fragment will be set to mz 0, charge 1, with no losses."""
+
     @abstractmethod
     def n_reference(self) -> int:
         """Return the number of reference indices."""
@@ -143,10 +152,6 @@ class AbstractFragmentSolver(ABC):
         peaks: list[float],
         state_space: FragmentStateSpace,
     ) -> tuple[list[float],list[tuple[int, int]]]:
-        # if the peaks list does not include a dummy value 0. at index 0, create it.
-        peaks = peaks.mz
-        if peaks[0] != 0.:
-            peaks = [0.] + peaks
         # construct and reorder the charge-augmented m/z
         mz_arr = np.array(peaks)
         decharged_arrs = [mz_arr if (c == 1) else c * mz_arr for c in state_space.charges]
@@ -212,7 +217,6 @@ class AbstractFragmentSolver(ABC):
         residue_mass: float,
         state_space: ResidueStateSpace,
     ) -> Iterator[FragmentState]:
-            
         return map(
             lambda x: ResidueState.from_index(
                 residue_mass = float(residue_mass),
@@ -225,9 +229,12 @@ class AbstractFragmentSolver(ABC):
     def _filter_solutions(
         solutions: Iterator[tuple[FragmentState,FragmentState,ResidueState]]
     ) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
-        return filter(
-            lambda soln: (soln[0].peak_idx != soln[1].peak_idx) and ((soln[0].loss_id != soln[1].loss_id) or (soln[0].loss_id == 0)),
-            solutions)
+        for soln in solutions:
+            if (soln[0].fragment_mass != soln[1].fragment_mass) and ((soln[0].loss_id != soln[1].loss_id) or (soln[0].loss_id == 0)):
+                yield soln
+        # return filter(
+        #     lambda soln: (soln[0].peak_idx != soln[1].peak_idx) and ((soln[0].loss_id != soln[1].loss_id) or (soln[0].loss_id == 0)),
+        #     solutions)
 
 class BisectFragmentSolver(AbstractFragmentSolver):
     def __init__(self,
@@ -254,7 +261,7 @@ class BisectFragmentSolver(AbstractFragmentSolver):
     
     @classmethod
     def from_state_space(cls,
-        mz: list[float],
+        mz: Iterable[float],
         tolerance: float,
         state_space: tuple[FragmentStateSpace,FragmentStateSpace,ResidueStateSpace],
         target_mass_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
@@ -263,6 +270,32 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         left_fragment_space, right_fragment_space, residue_space = state_space
         left_mass, left_unraveler = cls._decharge_peaks(
             peaks = mz,
+            state_space = left_fragment_space)
+        right_mass, right_unraveler = cls._decharge_peaks(
+            peaks = mz,
+            state_space = right_fragment_space)
+        target_masses, target_unraveler = cls.augment_masses(state_space) if target_mass_data is None else target_mass_data
+        return cls(
+            state_space = state_space,
+            tolerance = tolerance,
+            left_mass = left_mass,
+            left_mass_index_unraveler = left_unraveler,
+            right_mass = right_mass,
+            right_mass_index_unraveler = right_unraveler,
+            target_masses = target_masses,
+            target_mass_index_unraveler = target_unraveler)
+
+    @classmethod
+    def from_half_space(cls,
+        mz: Iterable[float],
+        tolerance: float,
+        state_space: tuple[FragmentStateSpace,ResidueStateSpace],
+        target_mass_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
+    ) -> Self:
+        state_space = (FragmentStateSpace.trivial(), *state_space)
+        left_fragment_space, right_fragment_space, residue_space = state_space
+        left_mass, left_unraveler = cls._decharge_peaks(
+            peaks = [0.],
             state_space = left_fragment_space)
         right_mass, right_unraveler = cls._decharge_peaks(
             peaks = mz,

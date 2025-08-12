@@ -4,8 +4,9 @@ from math import sqrt
 from time import time
 from tqdm import tqdm
 import itertools as it
+from bisect import bisect_left, bisect_right
 
-from mirror.spectra.simulation import simulate_simple_peaks, simulate_complex_peaks
+from mirror.spectra.simulation import simulate_simple_peaks, simulate_complex_peaks, simulate_pivot
 from mirror.spectra.types import PeakList, BenchmarkPeakList
 from mirror.io import read_mzlib
 from mirror.presets import VALIDATION_PEPTIDES, MONO_ANNOTATION_PARAMS, AVG_ANNOTATION_PARAMS
@@ -234,40 +235,93 @@ class TestPairs(unittest.TestCase):
 
 from mirror.fragments.pivots import AbstractPivot, find_overlap_pivots, find_virtual_pivots
 from mirror.annotation import reindex_by_fragment_masses
+from time import time
 class TestPivots(unittest.TestCase):
 
-    @staticmethod
-    def _project_pivots(pivots: Iterator[AbstractPivot]) -> list[tuple[float,Any]]:
-        return [(round(p.get_pivot_point(), 2), p.get_pivot_indices()) for p in pivots]
-
-    def test_sims(self, params: AnnotationParams = MONO_ANNOTATION_PARAMS):
+    def _test_sims(self, params: AnnotationParams = MONO_ANNOTATION_PARAMS, reindex: bool = False):
         """Run the find_pivots function on a set of simulated spectra."""
-        for (peptide, mode, charges, sim_bpl) in VALIDATION_SIMS:
-            print(peptide, mode, charges)
-            print(sim_bpl.mz)
+        pair_times = []
+        pivot_times = []
+        virtual_times = []
+        overlap_hits = 0
+        virtual_hits = 0
+        for (i, (peptide, mode, charges, sim_bpl)) in enumerate(VALIDATION_SIMS):
+            pair_time = time()
             pairs = list(find_pairs(
                 peaks = sim_bpl,
                 tolerance = params.fragment_search_tolerance,
                 residue_space = params.residue_state_space,
                 fragment_space = params.fragment_state_space))
-            pairs, fragment_masses = reindex_by_fragment_masses(
-                pairs = pairs,
-                fragment_state_space = params.fragment_state_space)
-            observed_overlap_pivots, observed_overlap_structures = zip(*self._project_pivots(find_overlap_pivots(pairs)))
-            print("overlap", len(observed_overlap_pivots),len(set(observed_overlap_pivots)))
-            print(observed_overlap_pivots)
-            observed_virtual_pivots, _ = zip(*self._project_pivots(find_virtual_pivots(
-                pairs = pairs,
-                bin_width = params.fragment_search_tolerance)))
-            print("virtual", len(observed_virtual_pivots),len(set(observed_virtual_pivots)))
-            true_pivots, __ = zip(*sim_bpl.get_pivots())
-            print("groundtruth", len(true_pivots))
-            print(true_pivots)
-            input(f"hits: {len(set(observed_overlap_pivots + observed_virtual_pivots).intersection(true_pivots))}")
+            pair_times.append(time() - pair_time)
+            
+            if reindex:
+                pairs, spectrum = reindex_by_fragment_masses(
+                    pairs = pairs,
+                    fragment_state_space = params.fragment_state_space)
+            else:
+                spectrum = sim_bpl.mz
+
+            pivot_time = time()
+            overlap_pivots = list(find_overlap_pivots(spectrum, pairs, params.fragment_search_tolerance * 2))
+            pivot_times.append(time() - pivot_time)
+            overlap_pivot_points = [p.get_pivot_point() for p in overlap_pivots]            
+            op = sorted(overlap_pivot_points)
+            true_pivot = simulate_pivot(sim_bpl.peptide)
+            tolerance = params.fragment_search_tolerance * 2
+            op_l = bisect_left(op, true_pivot - tolerance)
+            op_r = bisect_right(op, true_pivot + tolerance)
+            op_hit = op_l < op_r
+            overlap_hits += op_hit
+
+            virtual_time = time()
+            virtual_pivots = list(find_virtual_pivots(pairs, params.fragment_search_tolerance * 2))
+            virtual_times.append(time() - virtual_time)
+            virtual_pivot_points = [p.get_pivot_point() for p in virtual_pivots]
+            vt = sorted(virtual_pivot_points)
+            vt_l = bisect_left(vt, true_pivot - tolerance)
+            vt_r = bisect_right(vt, true_pivot + tolerance)
+            vt_hit = vt_l < vt_r
+            virtual_hits += vt_hit
+
+            self.assertTrue(op_hit or vt_hit)
+            print(f"{i}", flush=True, end=' ')
+        print(sum(pair_times), sum(pivot_times), sum(virtual_times), overlap_hits, virtual_hits)
+
+    def test_sims(self):
+        self._test_sims()
+
+    def test_sims_reindex(self):
+        self._test_sims(reindex=True)
             
 from mirror.util import measure_mirror_symmetry
 from mirror.fragments.boundaries import LeftBoundaryFragment, RightBoundaryFragment, find_left_boundaries, find_right_boundaries, rescore_pivots
 class TestBoundaries(unittest.TestCase):
+
+    def test_left_boundaries(self, params = MONO_ANNOTATION_PARAMS):
+        """Run the find_left_boundaries function on simulated spectra."""
+        print(params)
+        for (i, (peptide, mode, charges, sim_bpl)) in enumerate(VALIDATION_SIMS):
+            if charges > 1:
+                pass
+            left_boundaries = list(find_left_boundaries(
+                peaks = sim_bpl,
+                tolerance = 0.1,#params.fragment_search_tolerance,
+                residue_state_space = params.residue_state_space,
+                fragment_state_space = params.fragment_state_space))
+            print(i, peptide, mode, charges)
+            expected_boundaries = list(sim_bpl.get_left_boundaries())
+            observed_boundaries = [(lb.get_fragment().peak_idx, lb.get_residue().amino_symbol) for lb in left_boundaries]
+            for (idx,res) in expected_boundaries:
+                print(res, idx, round(sim_bpl[idx], 4), end='\t')
+                if (idx,res) in observed_boundaries:
+                    print('●')
+                else:
+                    print('◌')
+            input()
+
+    def test_right_boundaries(self):
+        """Run the find_right_boundaries function on simulated spectra."""
+        pass
 
     def test_mirror_symmetry(self):
         c = 0.3
@@ -289,14 +343,6 @@ class TestBoundaries(unittest.TestCase):
                 self.assertGreaterEqual(
                     measure_mirror_symmetry(aggregate, c, tolerance),
                     2 * n_signal)
-
-    def test_left_boundaries(self):
-        """Run the find_left_boundaries function on simulated spectra."""
-        pass
-
-    def test_right_boundaries(self):
-        """Run the find_right_boundaries function on simulated spectra."""
-        pass
 
     def test_rescore_pivots(self):
         """Run the rescoring / filtering function on simulated spectra; verify that good pivots are not being discarded."""

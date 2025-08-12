@@ -1,8 +1,10 @@
-import numpy as np
 from typing import Iterable, Iterator, Any, Callable
 from itertools import chain
 from math import ceil
 from bisect import bisect_left, bisect_right
+
+from numba import jit
+import numpy as np
 
 def measure_mirror_symmetry(
     sorted_arr: np.ndarray,
@@ -32,15 +34,9 @@ def binsort(
 ) -> tuple[Iterable,list[Iterable]]:
     unique_keys, deindexer = np.unique_inverse([key(x) for x in arr]) 
     bins = [list() for _ in range(len(unique_keys))]
-    # print(f"keys={unique_keys}, dxd={deindexer}, bins={bins}")
     for (i,x) in zip(deindexer,arr):
-        # print(i)
         bins[i].append(x)
     return unique_keys, bins
-    #B = [list() for _ in range(bins)]
-    #for (i, k) in enumerate(map(key, arr)):
-    #    B[k].append(arr[i])
-    #return B
 
 def collapse_second_order_list(llist: list[list]):
     """Associates a list of lists of elements to a flat list of elements.

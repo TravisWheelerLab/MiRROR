@@ -1,5 +1,5 @@
 from typing import Self, Iterator, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from abc import ABC, abstractmethod
 
 from ..spectra.types import PeakList
@@ -18,8 +18,8 @@ class AbstractBoundaryFragment(ABC):
         """Construct a boundary from its solution, as returned by a solver, and the series symbol."""
 
     @abstractmethod
-    def get_fragment_mass(self) -> float:
-        """The fragment mass associated to this boundary."""
+    def get_fragment(self) -> float:
+        """The fragment state associated to this boundary."""
 
     @abstractmethod
     def get_residue(self) -> ResidueState:
@@ -47,9 +47,9 @@ class LeftBoundaryFragment(AbstractBoundaryFragment):
             residue = soln[2],
             series = series)
 
-    def get_fragment_mass(self) -> float:
-        """The fragment mass associated to this boundary."""
-        return self.fragment.fragment_mass
+    def get_fragment(self) -> float:
+        """The fragment state associated to this boundary."""
+        return self.fragment
 
     def get_residue(self) -> ResidueState:
         """The residue state associated to this boundary."""
@@ -58,6 +58,10 @@ class LeftBoundaryFragment(AbstractBoundaryFragment):
     def get_series(self) -> str:
         """The symbol for the series whose offset was used to discover this boundary."""
         return self.series
+
+    def __repr__(self) -> str:
+        dict_repr = str(asdict(self))
+        return f"LeftBoundaryFragment{dict_repr}"
 
 class RightBoundaryFragment(AbstractBoundaryFragment):
     """A boundary fragment occurring on the high end of the spectrum. Typically corresponds to the last y-series ion, or a prefix of the y series. Implements the additional get_pivot_point method which returns the float value about which the fragment m/z of this boundary was reflected."""
@@ -79,9 +83,9 @@ class RightBoundaryFragment(AbstractBoundaryFragment):
             series = series,
             pivot_point = pivot_point)
 
-    def get_fragment_mass(self) -> float:
-        """The fragment mass associated to this boundary."""
-        return self.fragment.fragment_mass
+    def get_fragment(self) -> float:
+        """The fragment state associated to this boundary."""
+        return self.fragment
 
     def get_residue(self) -> ResidueState:
         """The residue state associated to this boundary."""
@@ -95,38 +99,31 @@ class RightBoundaryFragment(AbstractBoundaryFragment):
         return self.pivot_point
 
 SERIES_OFFSETS = [
-    ('b',-1),
-    ('y',-19),
+    ('b',-1.),
+    ('y',-19.),
 ]
 
-TRIVIAL_FRAGMENT_SPACE = FragmentStateSpace.trivial()
-
 def _find_boundaries(
-    prepared_peaks: Iterable[float],
-    series: str,
+    peaks: PeakList,    
     tolerance: float,
     residue_state_space: ResidueStateSpace,
     fragment_state_space: FragmentStateSpace,
     target_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
-) -> Iterator[AbstractBoundaryFragment]:
-    solver = BisectFragmentSolver.from_state_space(
+) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
+    solver = BisectFragmentSolver.from_half_space(
         mz = peaks,
         tolerance = tolerance,
-        state_space = (TRIVIAL_FRAGMENT_SPACE, fragment_space, residue_space),
+        state_space = (fragment_state_space, residue_state_space),
         target_mass_data = target_data)
     min_residue_mass, max_residue_mass = solver.get_extremal_masses()
     ref_peak, ref_charge = solver.set_reference(0)
     assert ref_peak == 0. and ref_charge == 1
-    for i in range(1, solver.n_query()):
+    for i in range(solver.n_query()):
         peak, charge, mass = solver.set_query(i)
-        if mass < min_residue_mass:
-            continue
-        elif mass > max_residue_mass:
+        if mass > max_residue_mass:
             break
-        else:
-            yield from map(
-                LeftBoundaryFragment.from_solution,
-                solver.get_solutions())
+        elif mass > min_residue_mass:
+            yield from solver.get_solutions()
 
 def find_left_boundaries(
     peaks: PeakList,
@@ -136,14 +133,15 @@ def find_left_boundaries(
     target_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
 ) -> Iterator[LeftBoundaryFragment]:
     for (series, offset) in SERIES_OFFSETS:
-        yield from _find_boundaries(
-            prepared_peaks = peaks.mz + offset,
-            series = series,
+        boundaries = _find_boundaries(
+            peaks = peaks.with_transformation(lambda x: x + offset),
             tolerance = tolerance,
             residue_state_space = residue_state_space,
             fragment_state_space = fragment_state_space,
             target_data = target_data)
+        yield from [LeftBoundaryFragment.from_solution(soln, series) for soln in boundaries]
 
+#TODO - fix
 def find_right_boundaries(
     pivots: list[AbstractPivot],
     peaks: PeakList,
@@ -155,15 +153,16 @@ def find_right_boundaries(
     n = len(pivots)
     results = [[] for _ in range(n)]
     for i in range(n):
-        reflected_peaks_arr = (2 * pivots[i].get_pivot_point()) - peaks_arr.mz
+        pivot_point = pivots[i].get_pivot_point()
+        reflector = 2 * pivot_point
         for (series, offset) in SERIES_OFFSET:
-            results[i].extend(_find_boundaries(
-                prepared_peaks = reflected_peaks_arr + offset,
-                series = series,
+            boundaries = _find_boundaries(
+                peaks = peaks.with_transformation(lambda x: reflector - x + offset),
                 tolerance = tolerance,
                 residue_state_space = residue_state_space,
                 fragment_state_space = fragment_state_space,
-                target_data = target_data))
+                target_data = target_data)
+            results[i].extend([RightBoundaryFragment])
     return results
 
 def rescore_pivots(

@@ -1,4 +1,21 @@
 import pyopenms as oms
+import numpy as np
+
+def y_series_param():
+    param = oms.Param()
+    param.setValue("add_b_ions", "false")
+    param.setValue("add_y_ions", "true")
+    return param
+
+Y_SERIES_PARAM = y_series_param()
+
+def b_series_param():
+    param = oms.Param()
+    param.setValue("add_y_ions", "false")
+    param.setValue("add_b_ions", "true")
+    return param
+
+B_SERIES_PARAM = b_series_param()
 
 def default_param():
     """Creates a pyopenms.Param() object with add_b_ions, add_y_ions, and add_metainfo set to true."""
@@ -54,4 +71,9 @@ def simulate_simple_peaks(peptide: str):
 
 def simulate_complex_peaks(peptide: str):
     return list_mz(generate_fragment_spectrum(peptide, COMPLEX_PARAM))
-    
+
+def simulate_pivot(peptide: str):
+    b = list_mz(generate_fragment_spectrum(peptide, B_SERIES_PARAM))
+    y = list_mz(generate_fragment_spectrum(peptide, Y_SERIES_PARAM))
+    true_pivot = [*b[0:2],*y[-3:-1]]
+    return np.mean(true_pivot)

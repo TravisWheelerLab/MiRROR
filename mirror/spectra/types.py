@@ -1,6 +1,7 @@
 from abc import ABC, abstractclassmethod
-from typing import Any, Iterator, Iterable, Self
+from typing import Any, Iterator, Iterable, Self, Callable
 from dataclasses import dataclass
+from copy import deepcopy
 import statistics as stat
 import itertools as it
 import warnings
@@ -96,6 +97,13 @@ class PeakList:
         return cls(
             mz = mz, 
             intensity = intensity)
+
+    def with_transformation(self,
+        func: Callable,
+    ) -> Self:
+        new_peaklist = deepcopy(self)
+        new_peaklist.mz = func(self.mz)
+        return new_peaklist
 
     def __len__(self) -> int:
         return self.n
@@ -239,6 +247,7 @@ class BenchmarkPeakList(AnnotatedPeakList):
 
     def get_pivots(self) -> Iterator[tuple[float,Any]]:
         """Identify overlap and virtual pivots in the spectrum. Virtual pivots are only returned if no overlap pivots can be found. Overlap pivots take the form (pivot point, (pair, pair)) while virtual pivots take the form (pivot point, None)."""
+
         midpoints = []
         # step 1 - look for overlap pivots
         c = 0

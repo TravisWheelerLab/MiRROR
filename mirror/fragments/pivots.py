@@ -7,6 +7,7 @@ import functools as ft
 import itertools as it
 
 import numpy as np
+from numba import jit
 
 from .. import util
 from ..spectra.types import PeakList
@@ -33,33 +34,40 @@ class AbstractPivot(ABC):
 
 @dataclass
 class OverlapPivot(AbstractPivot):
-    """A pivot structure composed of two PairedFragments objects whose fragment mass intervals overlap."""
+    """A pivot structure composed of two fragment mass intervals which overlap."""
     indices: tuple[int,int,int,int]
-    left_pairs: list[PairedFragments]
-    right_pairs: list[PairedFragments]
-    pivot_point: float
+    masses: tuple[float,float,float,float]
     score: float = 0
 
     @classmethod
-    def from_pairs(cls,
-        bin_idx_pair: tuple[int,int],
-        paired_fragments_bins: list[list[PairedFragments]],
+    def from_indices(cls,
+        indices: tuple[int,int,int,int],
+        fragment_masses: Iterable[float],
     ) -> Self:
-        """Construct a FragmentPivot object from two PairedFragments objects whose fragment mass intervals intersect."""
-        left_bin_idx, right_bin_idx = bin_idx_pair
-        left_pairs = paired_fragments_bins[left_bin_idx]
-        left_idx_pair = left_pairs[0].peak_indices()
-        right_pairs = paired_fragments_bins[right_bin_idx]
-        right_idx_pair = right_pairs[0].peak_indices()
-        if (left_idx_pair[0] < right_idx_pair[0] < left_idx_pair[1] < right_idx_pair[1]):
-            return cls(
-                indices = (left_idx_pair[0], right_idx_pair[0], left_idx_pair[1], right_idx_pair[1]),
-                left_pairs = left_pairs,
-                right_pairs = right_pairs,
-                pivot_point = (sum(left_pairs[0].fragment_masses()) + sum(right_pairs[0].fragment_masses())) / 4)
+        """Construct an OverlapPivot given its four indices and the fragment mass spectrum."""
+        if list(indices) == sorted(indices):
+            masses = tuple([fragment_masses[i] for i in indices])
+            if list(masses) == sorted(masses):
+                return OverlapPivot(
+                    indices = indices,
+                    masses = masses)
+        raise ValueError(f"pivot could not be formed on indices {indices}")
+        # left_bin_idx, right_bin_idx = bin_idx_pair
+        # left_pairs = paired_fragments_bins[left_bin_idx]
+        # left_idx_pair = left_pairs[0].peak_indices()
+        # right_pairs = paired_fragments_bins[right_bin_idx]
+        # right_idx_pair = right_pairs[0].peak_indices()
+        # if (left_idx_pair[0] < right_idx_pair[0] < left_idx_pair[1] < right_idx_pair[1]):
+        #     return cls(
+        #         indices = (left_idx_pair[0], right_idx_pair[0], left_idx_pair[1], right_idx_pair[1]),
+        #         left_pairs = left_pairs,
+        #         right_pairs = right_pairs,
+        #         pivot_point = (sum(left_pairs[0].fragment_masses()) + sum(right_pairs[0].fragment_masses())) / 4)
+        # else:
+        #     raise ValueError(f"not an overlap pivot: {left_idx_pair, right_idx_pair}")
 
     def get_pivot_point(self) -> float:
-        return self.pivot_point
+        return sum(self.masses) / 4
 
     def get_pivot_indices(self) -> tuple[int,int,int,int]:
         """Return the indices of the left and right pairs comprising the pivot."""
@@ -137,37 +145,29 @@ def find_virtual_pivots(
     # find the most common midpoints and cast them as virtual pivots
     return _find_virtual_pivots(midpoints, bin_width)
 
+@jit
 def _find_overlap_pivots(
-    pairs: list[PairedFragments],
-) -> Iterator[OverlapPivot]:
-    # bin the pairs by their peak indices
-    pair_indices, bins = util.binsort(
-        pairs,
-        key = lambda x: str(x.peak_indices()))
-    # reorder bins by pair_indices
-    pair_ind_order = np.argsort(pair_indices)
-    pair_indices = pair_indices[pair_ind_order]
-    bins = [bins[i] for i in pair_ind_order]
-    # construct pivots
-    n = len(pair_indices)
-    for i in range(n):
-        left_i, right_i = bins[i][0].fragment_masses()
-        for j in range(i + 1, n):
-            left_j, right_j = bins[j][0].fragment_masses()
-            if left_j >= right_i:
-                break
-            elif (left_i < left_j < right_i < right_j):
-                yield OverlapPivot.from_pairs(
-                    (i,j),
-                    bins)
-
+    spectrum: Iterable[float],
+    pairs: Iterable[tuple[int,int]],
+    tolerance: float,
+) -> Iterator[tuple[int,int]]:
+    n = len(spectrum)
+    for (i, i2) in pairs:
+        mass_i = spectrum[i2] - spectrum[i]
+        for j in range(i + 1, i2):
+            for j2 in range(i2 + 1, n):
+                mass_j = spectrum[j2] - spectrum[j]
+                dif = abs(mass_i - mass_j)
+                if dif < tolerance:
+                    yield (i,j,i2,j2)
+                elif mass_j > mass_i:
+                    break
+    
 def find_overlap_pivots(
+    spectrum: Iterable[float],
     pairs: list[PairedFragments],
+    tolerance: float,
 ) -> Iterator[OverlapPivot]:
-    # bin the pairs by their amino acid.
-    _, bins = util.binsort(
-        pairs,
-        key = lambda x: x.residue.amino_id)
-    # within each bin, search for pivots. chain results into one iterator
-    return it.chain.from_iterable(
-        _find_overlap_pivots(pair_bin) for pair_bin in bins)
+    pairs = np.unique([p.peak_indices() for p in pairs], axis = 0)
+    return [OverlapPivot.from_indices(ind, spectrum)
+        for ind in _find_overlap_pivots(spectrum, pairs, tolerance)]
