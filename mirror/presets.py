@@ -1,6 +1,8 @@
 from .fragments import FragmentStateSpace, ResidueStateSpace
 from .annotation import AnnotationParams
 
+import numpy as np
+
 # this will be a plaintext configuration file.
 
 SEP = ','
@@ -10,8 +12,10 @@ LOSS_H2O_MASS = 18.
 LOSS_NH3_MASS = 17.
 LOSS_CH2N2_MASS = 42.021798072
 LOSS_CH2NO_MASS = 44.013638687
+LOSS_Y_MASS = -19.
+LOSS_B_MASS = -1.
 
-LOSS_MASSES = [
+LOSS_MASSES = np.array([
     LOSS_NULL_MASS,
     LOSS_H2O_MASS,
     LOSS_NH3_MASS,
@@ -19,15 +23,21 @@ LOSS_MASSES = [
     LOSS_CH2NO_MASS,
     2. * LOSS_H2O_MASS,
     2. * LOSS_NH3_MASS,
-    LOSS_H2O_MASS + LOSS_NH3_MASS]
+    LOSS_H2O_MASS + LOSS_NH3_MASS])
+N_LOSSES = len(LOSS_MASSES)
+
+EXTREMAL_LOSS_MASSES = np.array([LOSS_Y_MASS, LOSS_B_MASS])
+N_EXTREMAL_LOSSES = len(EXTREMAL_LOSS_MASSES)
 
 LOSS_NULL_SYMBOL = ""
 LOSS_H2O_SYMBOL = "H2O"
 LOSS_NH3_SYMBOL = "NH3"
 LOSS_CH2N2_SYMBOL = "CH2N2"
 LOSS_CH2NO_SYMBOL = "CH2NO"
+LOSS_Y_SYMBOL = 'y'
+LOSS_B_SYMBOL = 'b'
 
-LOSS_SYMBOLS = [
+LOSS_SYMBOLS = np.array([
     LOSS_NULL_SYMBOL,
     LOSS_H2O_SYMBOL,
     LOSS_NH3_SYMBOL,
@@ -35,19 +45,28 @@ LOSS_SYMBOLS = [
     LOSS_CH2NO_SYMBOL,
     SEP.join(2 * [LOSS_H2O_SYMBOL]),
     SEP.join(2 * [LOSS_NH3_SYMBOL]),
-    SEP.join([LOSS_H2O_SYMBOL] + [LOSS_NH3_SYMBOL])]
+    SEP.join([LOSS_H2O_SYMBOL] + [LOSS_NH3_SYMBOL])])
+
+EXTREMAL_LOSS_SYMBOLS = np.array([LOSS_Y_SYMBOL, LOSS_B_SYMBOL])
 
 CHARGE_1 = 1
 CHARGE_2 = 2
 CHARGE_3 = 3
 
+CHARGES = [
+    CHARGE_1, 
+    CHARGE_2,
+    CHARGE_3]
+
 FRAGMENT_SPACE = FragmentStateSpace(
     loss_masses = LOSS_MASSES,
     loss_symbols = LOSS_SYMBOLS,
-    charges = [
-        CHARGE_1, 
-        CHARGE_2,
-        CHARGE_3,])
+    charges = CHARGES)
+
+EXTREMAL_FRAGMENT_SPACE = FragmentStateSpace(
+    loss_masses = (EXTREMAL_LOSS_MASSES.reshape(N_EXTREMAL_LOSSES, 1) + LOSS_MASSES.reshape(1, N_LOSSES)).flatten(),
+    loss_symbols = (EXTREMAL_LOSS_SYMBOLS.reshape(N_EXTREMAL_LOSSES, 1) + SEP + LOSS_SYMBOLS.reshape(1, N_LOSSES)).flatten(),
+    charges = CHARGES)
 
 AMINO_A_SYMBOL = 'A'
 AMINO_R_SYMBOL = 'R'
@@ -256,6 +275,13 @@ AVG_ANNOTATION_PARAMS = AnnotationParams(
     fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
     fragment_state_space = FRAGMENT_SPACE,
     residue_state_space = AVG_RESIDUE_SPACE,
+    pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
+    pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
+
+BOUNDARY_ANNOTATION_PARAMS = AnnotationParams(
+    fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
+    fragment_state_space = EXTREMAL_FRAGMENT_SPACE,
+    residue_state_space = MONO_RESIDUE_SPACE,
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
     pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
 

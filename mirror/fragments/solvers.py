@@ -1,4 +1,4 @@
-from typing import Self, Iterator, Iterable
+from typing import Self, Iterator, Iterable, Callable
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from bisect import bisect_left, bisect_right
@@ -121,6 +121,7 @@ class AbstractFragmentSolver(ABC):
         mz: Iterable[float],
         tolerance: float,
         state_space: tuple[FragmentStateSpace,ResidueStateSpace],
+        transformation: Callable = None,
         target_mass_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
     ) -> Self:
         """Construct a fragment solver from a right fragment space and a residue space. The left mz and left state space are assumed to be trivial, meaning every reference fragment will be set to mz 0, charge 1, with no losses."""
@@ -151,11 +152,12 @@ class AbstractFragmentSolver(ABC):
     def _decharge_peaks(
         peaks: list[float],
         state_space: FragmentStateSpace,
+        transformation: Callable = None,
     ) -> tuple[list[float],list[tuple[int, int]]]:
         # construct and reorder the charge-augmented m/z
         mz_arr = np.array(peaks)
-        decharged_arrs = [mz_arr if (c == 1) else c * mz_arr for c in state_space.charges]
-        merged_decharged_arr, deindexer, charge_table = util.merge_in_order(decharged_arrs)
+        decharged_arrs = [mz_arr if (c == 1) else (c * mz_arr) - (c - 1) for c in state_space.charges]
+        merged_decharged_arr, deindexer, charge_table = util.merge_in_order(decharged_arrs, transformation)
         charge_table = charge_table + 1
         # collect the deindexer,charge_table pairs as the index unraveler.
         return merged_decharged_arr, list(zip(deindexer, charge_table))
@@ -230,11 +232,11 @@ class AbstractFragmentSolver(ABC):
         solutions: Iterator[tuple[FragmentState,FragmentState,ResidueState]]
     ) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
         for soln in solutions:
-            if (soln[0].fragment_mass != soln[1].fragment_mass) and ((soln[0].loss_id != soln[1].loss_id) or (soln[0].loss_id == 0)):
+            not_loop = (soln[0].fragment_mass != soln[1].fragment_mass)
+            nontrivial_loss = (soln[0].loss_id != soln[1].loss_id)
+            trivial_left_loss = (soln[0].loss_id == 0)
+            if not_loop and (nontrivial_loss or trivial_left_loss):
                 yield soln
-        # return filter(
-        #     lambda soln: (soln[0].peak_idx != soln[1].peak_idx) and ((soln[0].loss_id != soln[1].loss_id) or (soln[0].loss_id == 0)),
-        #     solutions)
 
 class BisectFragmentSolver(AbstractFragmentSolver):
     def __init__(self,
@@ -290,6 +292,7 @@ class BisectFragmentSolver(AbstractFragmentSolver):
         mz: Iterable[float],
         tolerance: float,
         state_space: tuple[FragmentStateSpace,ResidueStateSpace],
+        transformation: Callable = None,
         target_mass_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
     ) -> Self:
         state_space = (FragmentStateSpace.trivial(), *state_space)
@@ -299,7 +302,8 @@ class BisectFragmentSolver(AbstractFragmentSolver):
             state_space = left_fragment_space)
         right_mass, right_unraveler = cls._decharge_peaks(
             peaks = mz,
-            state_space = right_fragment_space)
+            state_space = right_fragment_space,
+            transformation = transformation)
         target_masses, target_unraveler = cls.augment_masses(state_space) if target_mass_data is None else target_mass_data
         return cls(
             state_space = state_space,

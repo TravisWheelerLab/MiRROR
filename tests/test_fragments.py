@@ -9,7 +9,7 @@ from bisect import bisect_left, bisect_right
 from mirror.spectra.simulation import simulate_simple_peaks, simulate_complex_peaks, simulate_pivot
 from mirror.spectra.types import PeakList, BenchmarkPeakList
 from mirror.io import read_mzlib
-from mirror.presets import VALIDATION_PEPTIDES, MONO_ANNOTATION_PARAMS, AVG_ANNOTATION_PARAMS
+from mirror.presets import VALIDATION_PEPTIDES, MONO_ANNOTATION_PARAMS, AVG_ANNOTATION_PARAMS, BOUNDARY_ANNOTATION_PARAMS
 from mirror.annotation import AnnotationParams
 import mirror.util as util
 
@@ -294,15 +294,14 @@ class TestPivots(unittest.TestCase):
         self._test_sims(reindex=True)
             
 from mirror.util import measure_mirror_symmetry
+from mirror.fragments.pivots import VirtualPivot
 from mirror.fragments.boundaries import LeftBoundaryFragment, RightBoundaryFragment, find_left_boundaries, find_right_boundaries, rescore_pivots
 class TestBoundaries(unittest.TestCase):
 
-    def test_left_boundaries(self, params = MONO_ANNOTATION_PARAMS):
+    def test_left_boundaries(self, params = BOUNDARY_ANNOTATION_PARAMS):
         """Run the find_left_boundaries function on simulated spectra."""
         print(params)
         for (i, (peptide, mode, charges, sim_bpl)) in enumerate(VALIDATION_SIMS):
-            if charges > 1:
-                pass
             left_boundaries = list(find_left_boundaries(
                 peaks = sim_bpl,
                 tolerance = 0.1,#params.fragment_search_tolerance,
@@ -311,6 +310,7 @@ class TestBoundaries(unittest.TestCase):
             print(i, peptide, mode, charges)
             expected_boundaries = list(sim_bpl.get_left_boundaries())
             observed_boundaries = [(lb.get_fragment().peak_idx, lb.get_residue().amino_symbol) for lb in left_boundaries]
+            print("observed:",observed_boundaries)
             for (idx,res) in expected_boundaries:
                 print(res, idx, round(sim_bpl[idx], 4), end='\t')
                 if (idx,res) in observed_boundaries:
@@ -319,9 +319,30 @@ class TestBoundaries(unittest.TestCase):
                     print('◌')
             input()
 
-    def test_right_boundaries(self):
+    def test_right_boundaries(self, params = BOUNDARY_ANNOTATION_PARAMS):
         """Run the find_right_boundaries function on simulated spectra."""
-        pass
+        print(params)
+        for (i, (peptide, mode, charges, sim_bpl)) in enumerate(VALIDATION_SIMS):
+            sim_pivot = VirtualPivot(
+                pivot_point = simulate_pivot(peptide),
+                frequency = 1)
+            right_boundaries = find_right_boundaries(
+                pivots = [sim_pivot],
+                peaks = sim_bpl,
+                tolerance = 0.1,
+                residue_state_space = params.residue_state_space,
+                fragment_state_space = params.fragment_state_space)[0] # collapsing the list b/c there is only one pivot about which to create right boundaries.
+            print(i, peptide, mode, charges)
+            print(f"pivot = {sim_pivot.pivot_point}")
+            expected_boundaries = list(sim_bpl.get_right_boundaries())
+            observed_boundaries = [(rb.get_fragment().peak_idx, rb.get_residue().amino_symbol) for rb in right_boundaries]
+            for (idx,res) in expected_boundaries:
+                print(res, idx, round(sim_bpl[idx], 4), end='\t')
+                if (idx,res) in observed_boundaries:
+                    print('●')
+                else:
+                    print('◌')
+            input()
 
     def test_mirror_symmetry(self):
         c = 0.3
