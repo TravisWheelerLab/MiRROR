@@ -229,8 +229,8 @@ class LocalAlignment(AbstractAlignment):
         self._score = score
         # decomposed node sequence data
         self._first_nodes, self._second_nodes = zip(*alignment_nodes)
-        self._first_fragment = list(self._remove_stationary(self._first_nodes))
-        self._second_fragment = list(self._remove_stationary(self._second_nodes))
+        self._first_component = list(self._remove_stationary(self._first_nodes))
+        self._second_component = list(self._remove_stationary(self._second_nodes))
         # decomposed edge sequence data
         self._first_weights, self._second_weights = map(list, zip(*alignment_weights))
         self._first_aligned_weights = list(self._remove_none(self._first_weights))
@@ -241,16 +241,16 @@ class LocalAlignment(AbstractAlignment):
         super(LocalAlignment, self).__init__(alignment_nodes)
     
     # nodes and intervals
-    def first_fragment(self) -> list[Any]:
-        return self._first_fragment
+    def first_component(self) -> list[Any]:
+        return self._first_component
 
-    def second_fragment(self) -> list[Any]:
-        return self._second_fragment
+    def second_component(self) -> list[Any]:
+        return self._second_component
     
-    def fragments(self) -> tuple[list[Any], list[Any]]:
+    def components(self) -> tuple[list[Any], list[Any]]:
         return (
-            self.first_fragment(),
-            self.second_fragment())
+            self.first_component(),
+            self.second_component())
 
     def first_interval(self) -> tuple[int, int]:
         """Position of first and last non-None weight in the first weight sequence."""
@@ -271,26 +271,26 @@ class LocalAlignment(AbstractAlignment):
         return pairwise(self._second_nodes)
 
     def first_aligned_edges(self):
-        return pairwise(self._first_fragment)
+        return pairwise(self._first_component)
 
     def second_aligned_edges(self):
-        return pairwise(self._second_fragment)
+        return pairwise(self._second_component)
     
     # source and sink
     def first_source(self):
-        return self._first_fragment[0]
+        return self._first_component[0]
     
     def second_source(self):
-        return self._second_fragment[0]
+        return self._second_component[0]
     
     def source(self):
         return (self.first_source(), self.second_source())
 
     def first_target(self):
-        return self._first_fragment[-1]
+        return self._first_component[-1]
     
     def second_target(self):
-        return self._second_fragment[-1]
+        return self._second_component[-1]
     
     def target(self):
         return (self.first_target(), self.second_target())

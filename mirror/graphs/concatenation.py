@@ -10,7 +10,7 @@ from networkx import is_bipartite, connected_components
 # TODO: refactor with a shared interface
 # e.g.: solve_alignment_order iterates the components of an AlignmentOrderGraph as AlignmentDAG objects
 
-def construct_ensemble_intervals(
+def _construct_ensemble_intervals(
     alignments: list[EnsembleAlignment],
     first_node_weights: list[float],
     second_node_weights: list[float],
@@ -27,7 +27,7 @@ def construct_ensemble_intervals(
         second_intervals.append((second_node_weights[aln.second_target()], second_node_weights[aln.second_source()]))
     return (first_intervals, second_intervals)
 
-def solve_ensemble_concatenations(
+def _solve_ensemble_concatenations(
     ensemble_dag: DualIntervalDAG,
     cost_model: LocalCostModel,
     threshold: float,
@@ -64,12 +64,12 @@ def concatenate_ensembles(
     threshold: float,
 ):
     # construct the ensemble sequentiality
-    first_ensemble_intervals, second_ensemble_intervals = construct_ensemble_intervals(alignments, first_node_weights, second_node_weights)
+    first_ensemble_intervals, second_ensemble_intervals = _construct_ensemble_intervals(alignments, first_node_weights, second_node_weights)
     ensemble_dag = DualIntervalDAG(
         first_intervals = first_ensemble_intervals,
         second_intervals = second_ensemble_intervals)
     # find optimal sequences of ensembles
-    ensemble_concatenations = solve_ensemble_concatenations(
+    ensemble_concatenations = _solve_ensemble_concatenations(
         ensemble_dag = ensemble_dag,
         cost_model = cost_model,
         threshold = threshold)

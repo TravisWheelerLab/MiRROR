@@ -6,7 +6,7 @@ import itertools as it
 
 from .pivots import AbstractPivot
 from .graphs import construct_spectrum_graphs, align_spectrum_graphs, pair_alignments, SpectrumGraph, LocalCostModel, AbstractAlignment
-from .sequences import SuffixArray, AffixPair
+from .sequences import SuffixArray
 
 from .annotation import AnnotationResult
 

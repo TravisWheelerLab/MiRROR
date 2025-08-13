@@ -7,104 +7,104 @@ from ..util import print_alignment
 
 from networkx import Graph, is_bipartite, connected_components
 
-class FragmentIntersectionGraph(Graph):
-    """A bipartite graph over aligned fragments."""
+class AlignmentIntersectionGraph(Graph):
+    """A bipartite graph over aligned alignments."""
 
     def __init__(self,
         alignments: Iterator[LocalAlignment],
         index_key = "index"
     ):
         n = 0
-        fragment_index = dict()
-        first_fragments = dict()
-        second_fragments = dict()
-        fragment_pairs = list()
+        alignment_table = dict()
+        first_components = dict()
+        second_components = dict()
+        alignment_pairs = list()
         for alignment_index, aligned_path in enumerate(alignments):
-            fragment1, fragment2 = aligned_path.fragments()
-            # index the first fragment
-            key1 = (1, tuple(fragment1))
-            if key1 not in fragment_index:
-                fragment_index[key1] = n
-                first_fragments[n] = fragment1
+            alignment1, alignment2 = aligned_path.components()
+            # index the first alignment
+            key1 = (1, tuple(alignment1))
+            if key1 not in alignment_table:
+                alignment_table[key1] = n
+                first_components[n] = alignment1
                 n += 1
-            index1 = fragment_index[key1]
-            # index the second fragment
-            key2 = (2, tuple(fragment2))
-            if key2 not in fragment_index:
-                fragment_index[key2] = n
-                second_fragments[n] = fragment2
+            index1 = alignment_table[key1]
+            # index the second alignment
+            key2 = (2, tuple(alignment2))
+            if key2 not in alignment_table:
+                alignment_table[key2] = n
+                second_components[n] = alignment2
                 n += 1
-            index2 = fragment_index[key2]
-            # create a weighted edge between the fragment indices
-            fragment_pairs.append((index1, index2, {index_key : (alignment_index, index1, index2)}))
+            index2 = alignment_table[key2]
+            # create a weighted edge between the alignment indices
+            alignment_pairs.append((index1, index2, {index_key : (alignment_index, index1, index2)}))
         
         # private fields
         self._alignments = alignments
-        self._fragment_index = fragment_index
-        self._first_fragments = first_fragments
-        self._second_fragments = second_fragments
+        self._alignment_index = alignment_index
+        self._first_components = first_components
+        self._second_components = second_components
         
         # public fields
         self.index_key = index_key
         
-        super(FragmentIntersectionGraph, self).__init__(incoming_graph_data = fragment_pairs)
+        super(AlignmentIntersectionGraph, self).__init__(incoming_graph_data = alignment_pairs)
     
-    def get_first_fragment(self, i: int):
-        return self._first_fragments[i]
+    def get_first_component(self, i: int):
+        return self._first_components[i]
 
-    def get_second_fragment(self, i: int):
-        return self._second_fragments[i]
+    def get_second_component(self, i: int):
+        return self._second_components[i]
     
     def get_alignment(self, i: int):
         return self._alignments[i]
 
-class FragmentPairGraph(DAG):
-    """A directed acyclic graph formed over a component of a FragmentIntersectionGraph
+class AlignmentPairGraph(DAG):
+    """A directed acyclic graph formed over a component of an AlignmentIntersectionGraph
     by taking its edges as nodes, and its length-two paths as edges. Ordered according
     to the interval order of alignments."""
 
     def __init__(self,
-        fragment_itx: FragmentIntersectionGraph,
+        alignment_itx: AlignmentIntersectionGraph,
         component: set[int],
         cost_model: LocalCostModel,
         cost_key = "cost",
     ):
-        index_key = fragment_itx.index_key
+        index_key = alignment_itx.index_key
         pair_graph = DiGraph()
-        for i, _ in enumerate(fragment_itx._alignments):
+        for i, _ in enumerate(alignment_itx._alignments):
             pair_graph.add_node(i)
         for node_a1 in component:
-            for node_b in fragment_itx[node_a1]:
+            for node_b in alignment_itx[node_a1]:
                 # unpack the first edge
                 pair1 = (node_a1, node_b)
-                alignment_index1, first_index1, second_index1 = fragment_itx[node_a1][node_b][index_key]
-                alignment1 = fragment_itx.get_alignment(alignment_index1)
+                alignment_index1, first_index1, second_index1 = alignment_itx[node_a1][node_b][index_key]
+                alignment1 = alignment_itx.get_alignment(alignment_index1)
                 alignment1_score = alignment1.score()
-                for node_a2 in fragment_itx[node_b]:
+                for node_a2 in alignment_itx[node_b]:
                     if node_a2 != node_a1:
                         # unpack the second edge
                         pair2 = (node_a2, node_b)
-                        alignment_index2, first_index2, second_index2 = fragment_itx[node_a2][node_b][index_key]
-                        alignment2 = fragment_itx.get_alignment(alignment_index2)
+                        alignment_index2, first_index2, second_index2 = alignment_itx[node_a2][node_b][index_key]
+                        alignment2 = alignment_itx.get_alignment(alignment_index2)
                         alignment2_score = alignment2.score()
-                        # retrieve fragment and interval data
-                        fragment_b = None
-                        fragment_a1 = None
-                        fragment_a2 = None
+                        # retrieve alignment and interval data
+                        alignment_b = None
+                        alignment_a1 = None
+                        alignment_a2 = None
                         interval_a1 = None
                         interval_a2 = None
                         if node_b == second_index1 == second_index2:
                             assert node_a1 == first_index1 and node_a2 == first_index2
-                            fragment_b = fragment_itx.get_second_fragment(node_b)
-                            fragment_a1 = fragment_itx.get_first_fragment(node_a1)
-                            fragment_a2 = fragment_itx.get_first_fragment(node_a2)
+                            alignment_b = alignment_itx.get_second_component(node_b)
+                            alignment_a1 = alignment_itx.get_first_component(node_a1)
+                            alignment_a2 = alignment_itx.get_first_component(node_a2)
                             interval_a1 = alignment1.first_interval()
                             interval_a2 = alignment2.first_interval()
                         elif node_b == first_index1 == first_index2:
                             assert node_a1 == second_index1 and node_a2 == second_index2
-                            fragment_b = fragment_itx.get_first_fragment(node_b)
-                            fragment_a1 = fragment_itx.get_second_fragment(node_a1)
-                            fragment_a2 = fragment_itx.get_second_fragment(node_a2)
+                            alignment_b = alignment_itx.get_first_component(node_b)
+                            alignment_a1 = alignment_itx.get_second_component(node_a1)
+                            alignment_a2 = alignment_itx.get_second_component(node_a2)
                             interval_a1 = alignment1.second_interval()
                             interval_a2 = alignment2.second_interval()
                         else:
@@ -120,38 +120,38 @@ class FragmentPairGraph(DAG):
                             cost = alignment1_score + (cost_model.gap * gap_len)
                             pair_graph.add_edge(alignment_index2, alignment_index1)
                             pair_graph[alignment_index2][alignment_index1][cost_key] = cost
-        super(FragmentPairGraph, self).__init__(pair_graph, cost_key)
+        super(AlignmentPairGraph, self).__init__(pair_graph, cost_key)
 
 class EnsembleAlignment(AbstractAlignment):
 
     @classmethod
-    def _sequence_fragments(cls,
+    def _sequence_components(cls,
         alignment_chain: list[LocalAlignment],
     ) -> tuple[list[int],list[int]]:
-        left_fragment_sequence = []
-        right_fragment_sequence = []
+        left_alignment_sequence = []
+        right_alignment_sequence = []
         prev_left = None
         prev_right = None
         for (i, aln) in enumerate(alignment_chain):
-            curr_left, curr_right = aln.fragments()
+            curr_left, curr_right = aln.components()
             if curr_left != prev_left:
-                left_fragment_sequence.append(i)
+                left_alignment_sequence.append(i)
             if curr_right != prev_right:
-                right_fragment_sequence.append(i)
+                right_alignment_sequence.append(i)
             prev_left = curr_left
             prev_right = curr_right
-        return left_fragment_sequence, right_fragment_sequence
+        return left_alignment_sequence, right_alignment_sequence
     
     @classmethod
     def _parametize_concatenations(cls,
         alignment_chain: list[LocalAlignment],
-        fragment_sequence: list[int],
+        alignment_sequence: list[int],
         get_interval: Callable[[LocalAlignment], tuple[int, int]],
         score_interval: Callable[[LocalAlignment, tuple[int, int]], float],
     ) -> tuple[list[int], list[int]]:
         truncation_sequence = []
         padding_sequence = []
-        for (curr_i, next_i) in pairwise(fragment_sequence):
+        for (curr_i, next_i) in pairwise(alignment_sequence):
             curr_interval = get_interval(alignment_chain[curr_i])
             next_interval = get_interval(alignment_chain[next_i])
             ### parametize the truncation
@@ -164,11 +164,11 @@ class EnsembleAlignment(AbstractAlignment):
                 next_subscore = score_interval(alignment_chain[next_i], overlap_interval)
                 truncator = interval_gap + 1
                 if next_subscore > curr_subscore:
-                    # truncate curr_fragment
+                    # truncate curr_alignment
                     truncation_sequence.append(-truncator)
                     padding_sequence.append(0)
                 else:
-                    # truncate next_fragment - how can this be implemented?
+                    # truncate next_alignment - how can this be implemented?
                     truncation_sequence.append(truncator)
                     padding_sequence.append(0)
             else:
@@ -180,32 +180,32 @@ class EnsembleAlignment(AbstractAlignment):
     @classmethod
     def _decompose_pad_truncate(cls,
         alignment_chain: list[LocalAlignment],
-        fragment_sequence: list[int],
+        alignment_sequence: list[int],
         padding: list[int],
         truncations: list[int],
-        get_fragment: Callable[[LocalAlignment], list[int]],
+        get_alignment: Callable[[LocalAlignment], list[int]],
         get_weights: Callable[[LocalAlignment], list[Any]]
     ) -> tuple[list[list[int]], list[list[Any]]]:
-        sequence_decomposition = [get_fragment(alignment_chain[fragment_sequence[0]])]
-        weight_sequence = [get_weights(alignment_chain[fragment_sequence[0]])]
-        for prev_position, (truncator, padding, aln_idx) in enumerate(zip(truncations, padding, fragment_sequence[1:])):
-            fragment = get_fragment(alignment_chain[aln_idx])
+        sequence_decomposition = [get_alignment(alignment_chain[alignment_sequence[0]])]
+        weight_sequence = [get_weights(alignment_chain[alignment_sequence[0]])]
+        for prev_position, (truncator, padding, aln_idx) in enumerate(zip(truncations, padding, alignment_sequence[1:])):
+            alignment = get_alignment(alignment_chain[aln_idx])
             weights = get_weights(alignment_chain[aln_idx])
             if truncator > 0:
-                sequence_decomposition.append(fragment[truncator:])
+                sequence_decomposition.append(alignment[truncator:])
                 weight_sequence.append(weights[truncator:])
             else:
                 if truncator < 0:
-                    prev_fragment = sequence_decomposition[prev_position]
-                    sequence_decomposition[prev_position] = prev_fragment[:truncator]
+                    prev_alignment = sequence_decomposition[prev_position]
+                    sequence_decomposition[prev_position] = prev_alignment[:truncator]
                     prev_weight = weight_sequence[prev_position]
                     weight_sequence[prev_position] = prev_weight[:truncator]
                 elif padding > 0:
-                    prev_fragment = sequence_decomposition[prev_position]
-                    sequence_decomposition[prev_position] = prev_fragment + [prev_fragment[-1]] * padding
+                    prev_alignment = sequence_decomposition[prev_position]
+                    sequence_decomposition[prev_position] = prev_alignment + [prev_alignment[-1]] * padding
                     prev_weight = weight_sequence[prev_position]
                     weight_sequence[prev_position] = prev_weight + ['None'] * padding
-                sequence_decomposition.append(fragment)
+                sequence_decomposition.append(alignment)
                 weight_sequence.append(weights)
         return sequence_decomposition, weight_sequence
     
@@ -227,11 +227,11 @@ class EnsembleAlignment(AbstractAlignment):
         #print(f"alignment chain {self.alignment_chain}")
         
         # private fields
-        ## 1.   determine the correct fragment sequence
-        self._left_fragment_sequence, self._right_fragment_sequence = self._sequence_fragments(
+        ## 1.   determine the correct alignment sequence
+        self._left_alignment_sequence, self._right_alignment_sequence = self._sequence_components(
             alignment_chain = self.alignment_chain)
-        #print(f"left fragment sequence {self._left_fragment_sequence}")
-        #print(f"right fragment sequence {self._right_fragment_sequence}")
+        #print(f"left alignment sequence {self._left_alignment_sequence}")
+        #print(f"right alignment sequence {self._right_alignment_sequence}")
         
         ## 2.   parametize concatenations with a truncation value: 
         ##      an integer that is negative if the left term is truncated, 
@@ -242,13 +242,13 @@ class EnsembleAlignment(AbstractAlignment):
         ##      the padding value determines how many gap edges are inserted.
         self._left_truncation_sequence, self._left_padding_sequence = self._parametize_concatenations(
             alignment_chain = self.alignment_chain,
-            fragment_sequence = self._left_fragment_sequence,
+            alignment_sequence = self._left_alignment_sequence,
             get_interval = lambda aligned_path: aligned_path.first_interval(),
             score_interval = lambda aligned_path, interval: aligned_path.subscore(left_sub_interval = interval))
 
         self._right_truncation_sequence, self._right_padding_sequence = self._parametize_concatenations(
             alignment_chain = self.alignment_chain,
-            fragment_sequence = self._right_fragment_sequence,
+            alignment_sequence = self._right_alignment_sequence,
             get_interval = lambda aligned_path: aligned_path.second_interval(),
             score_interval = lambda aligned_path, interval: aligned_path.subscore(right_sub_interval = interval))
         #print(f"left trunc {self._left_truncation_sequence}\nleft pad {self._left_padding_sequence}")
@@ -257,18 +257,18 @@ class EnsembleAlignment(AbstractAlignment):
         ## 3.   construct the truncated decomposition.
         self._left_edge_decomposition, self._left_weight_decomposition = self._decompose_pad_truncate(
             alignment_chain = self.alignment_chain,
-            fragment_sequence = self._left_fragment_sequence,
+            alignment_sequence = self._left_alignment_sequence,
             padding = self._left_padding_sequence,
             truncations = self._left_truncation_sequence,
-            get_fragment = lambda aligned_path: aligned_path.first_fragment(),
+            get_alignment = lambda aligned_path: aligned_path.first_component(),
             get_weights = lambda aligned_path: aligned_path.first_aligned_weights())
 
         self._right_edge_decomposition, self._right_weight_decomposition = self._decompose_pad_truncate(
             alignment_chain = self.alignment_chain,
-            fragment_sequence = self._right_fragment_sequence,
+            alignment_sequence = self._right_alignment_sequence,
             padding = self._right_padding_sequence,
             truncations = self._right_truncation_sequence,
-            get_fragment = lambda aligned_path: aligned_path.second_fragment(),
+            get_alignment = lambda aligned_path: aligned_path.second_component(),
             get_weights = lambda aligned_path: aligned_path.second_aligned_weights())
 
         ## 4.   finally, construct the sequence.
@@ -306,19 +306,19 @@ class EnsembleAlignment(AbstractAlignment):
 
     # source and sink
     def first_source(self):
-        return self.alignment_chain[self._left_fragment_sequence[0]].first_source()
+        return self.alignment_chain[self._left_alignment_sequence[0]].first_source()
         
     def second_source(self):
-        return self.alignment_chain[self._right_fragment_sequence[0]].second_source()
+        return self.alignment_chain[self._right_alignment_sequence[0]].second_source()
     
     def source(self):
         return (self.first_source(), self.second_source)
 
     def first_target(self):
-        return self.alignment_chain[self._left_fragment_sequence[-1]].first_target()
+        return self.alignment_chain[self._left_alignment_sequence[-1]].first_target()
         
     def second_target(self):
-        return self.alignment_chain[self._right_fragment_sequence[-1]].second_target()
+        return self.alignment_chain[self._right_alignment_sequence[-1]].second_target()
     
     def target(self):
         return (self.target(), self.target)
