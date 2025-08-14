@@ -225,8 +225,6 @@ class TestMinimalPaths(unittest.TestCase):
 
         s_prod = StrongProductDAG(dag3, dag5)
 
-        # TODO: should be inexpensive to take (x, None) or (None, y) paths if one of the vertices is a source or sink.
-        # that is, cost functions need to support local alignment.
         cost_table = lambda u, v, x, y: 0. if (x == y) else (1. if ((x != None) and (y != None)) else 2.)
         cost = lambda edge, weight: cost_table(*edge, *weight)
 

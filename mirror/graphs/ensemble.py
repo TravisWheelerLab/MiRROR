@@ -5,7 +5,7 @@ from .align_types import LocalAlignment, LocalCostModel
 from .ensemble_types import AlignmentIntersectionGraph, AlignmentPairGraph, EnsembleAlignment
 from networkx import is_bipartite, connected_components
 
-def solve_alignment_pair_chains(
+def _solve_alignment_pair_chains(
     alignment_intersection_graph: AlignmentIntersectionGraph,
     cost_model: LocalCostModel,
     threshold: float,
@@ -52,7 +52,7 @@ def assemble_alignments(
     # form longer alignments.
     # parametize with `threshold` to filter out low-quality chains.
     # use alignment pair chains to guide construction of new alignments
-    alignment_pair_chains = solve_alignment_pair_chains(
+    alignment_pair_chains = _solve_alignment_pair_chains(
         alignment_intersection_graph = aln_itx,
         cost_model = cost_model,
         threshold = threshold)
