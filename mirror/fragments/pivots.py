@@ -7,7 +7,7 @@ import functools as ft
 import itertools as it
 
 import numpy as np
-from numba import jit
+import numba
 
 from .. import util
 from ..spectra.types import PeakList
@@ -52,19 +52,6 @@ class OverlapPivot(AbstractPivot):
                     indices = indices,
                     masses = masses)
         raise ValueError(f"pivot could not be formed on indices {indices}")
-        # left_bin_idx, right_bin_idx = bin_idx_pair
-        # left_pairs = paired_fragments_bins[left_bin_idx]
-        # left_idx_pair = left_pairs[0].peak_indices()
-        # right_pairs = paired_fragments_bins[right_bin_idx]
-        # right_idx_pair = right_pairs[0].peak_indices()
-        # if (left_idx_pair[0] < right_idx_pair[0] < left_idx_pair[1] < right_idx_pair[1]):
-        #     return cls(
-        #         indices = (left_idx_pair[0], right_idx_pair[0], left_idx_pair[1], right_idx_pair[1]),
-        #         left_pairs = left_pairs,
-        #         right_pairs = right_pairs,
-        #         pivot_point = (sum(left_pairs[0].fragment_masses()) + sum(right_pairs[0].fragment_masses())) / 4)
-        # else:
-        #     raise ValueError(f"not an overlap pivot: {left_idx_pair, right_idx_pair}")
 
     def get_pivot_point(self) -> float:
         return sum(self.masses) / 4
@@ -118,10 +105,9 @@ def _find_virtual_pivots(
     bin_values = (bin_edges[:-1] + bin_edges[1:]) / 2
     # print("bin values", bin_values)
     frequencies = sorted(set(bin_counts))
-    upper_quartile = int(len(frequencies) * 0.75)
-    uq_mask = bin_counts > frequencies[upper_quartile]
-    maximal_bin_values = bin_values[uq_mask]
-    maximal_bin_counts = bin_counts[uq_mask]
+    mask = bin_counts > frequencies[int(len(frequencies) * 0.75)]
+    maximal_bin_values = bin_values[mask]
+    maximal_bin_counts = bin_counts[mask]
     # return the bin values and the normalized bin counts
     return [VirtualPivot(pivot_point, frequency) for (pivot_point, frequency) in zip(maximal_bin_values, maximal_bin_counts / sum(maximal_bin_counts))]
 
@@ -129,8 +115,9 @@ def _construct_midpoints(
     pairs: list[PairedFragments],
 ) -> Iterable[float]:
     n = len(pairs)
-    pair_centers = np.array([sum(p.fragment_masses()) / 2 for p in pairs])
-    return (pair_centers.reshape(n,1) + pair_centers.reshape(1,n)).flatten() / 2.
+    centers = np.array([np.sum(p.fragment_masses()) / 2 for p in pairs])
+    midpoints = (centers.reshape(n, 1) + centers.reshape(1, n))[np.triu_indices(n)] / 2
+    return midpoints
 
 def find_virtual_pivots(
     pairs: list[PairedFragments],
@@ -145,7 +132,7 @@ def find_virtual_pivots(
     # find the most common midpoints and cast them as virtual pivots
     return _find_virtual_pivots(midpoints, bin_width)
 
-@jit
+@numba.jit
 def _find_overlap_pivots(
     spectrum: Iterable[float],
     pairs: Iterable[tuple[int,int]],

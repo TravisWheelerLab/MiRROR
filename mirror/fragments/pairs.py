@@ -26,11 +26,17 @@ class PairedFragments:
     def from_solution(cls,
         soln: tuple[FragmentState,FragmentState,ResidueState],
     ) -> Self:
-        if (soln[1].fragment_mass - soln[0].fragment_mass) != soln[2].residue_mass:
-            raise ValueError("Unable to form fragment pair; residue mass does not match the fragment mass delta.")
+        fragment_mass_delta = soln[1].fragment_mass - soln[0].fragment_mass
+        residue_mass = soln[2].residue_mass
+        if fragment_mass_delta != residue_mass:
+            raise ValueError(f"Unable to form fragment pair; residue mass does not match the fragment mass delta.\n{soln}")
         return cls(
             *soln,
             offset = calculate_offset(soln))
+
+    def cost(self) -> float:
+        """Return sum cost from left fragment, right fragment, and residue states."""
+        return self.left_fragment.cost() + self.right_fragment.cost() + self.residue.cost()
 
     def amino_symbol(self) -> str:
         return self.residue.amino_symbol

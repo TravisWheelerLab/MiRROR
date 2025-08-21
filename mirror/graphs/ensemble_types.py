@@ -312,7 +312,7 @@ class EnsembleAlignment(AbstractAlignment):
         return self.alignment_chain[self._right_alignment_sequence[0]].second_source()
     
     def source(self):
-        return (self.first_source(), self.second_source)
+        return (self.first_source(), self.second_source())
 
     def first_target(self):
         return self.alignment_chain[self._left_alignment_sequence[-1]].first_target()
@@ -321,7 +321,7 @@ class EnsembleAlignment(AbstractAlignment):
         return self.alignment_chain[self._right_alignment_sequence[-1]].second_target()
     
     def target(self):
-        return (self.target(), self.target)
+        return (self.first_target(), self.second_target())
 
     # weights
 

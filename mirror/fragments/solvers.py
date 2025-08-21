@@ -38,6 +38,10 @@ class FragmentState:
     def __eq__(self, other: Self) -> bool:
         return (self.fragment_mass - other.fragment_mass < 1e10) and (self.loss_id == other.loss_id) and (self.charge == other.charge)
 
+    def cost(self) -> int:
+        """Returns aggregate +1 if loss_id != 0, +1 if charge > 1, ranging from 0 to 2."""
+        return (self.loss_id != 0) + (self.charge > 1)
+
     @classmethod
     def from_index(cls,
         peak_idx: int,
@@ -75,6 +79,7 @@ class ResidueStateSpace:
 @dataclass
 class ResidueState:
     residue_mass: float
+    delta: float
     amino_id: int
     amino_mass: float
     amino_symbol: str
@@ -85,6 +90,10 @@ class ResidueState:
     def __eq__(self, other: Self) -> bool:
         return (self.amino_id == other.amino_id) and (self.modification_id == other.modification_id)
 
+    def cost(self) -> float:
+        """Returns mass delta, +1 if modification_id != 0."""
+        return (self.modification_id != 0) + self.delta
+
     @classmethod
     def from_index(cls,
         residue_mass: float,
@@ -93,13 +102,17 @@ class ResidueState:
         state_space: ResidueStateSpace,
     ) -> Self:
         global_modification_id = state_space.applicable_modifications[amino_id][modification_id]
+        amino_mass = state_space.amino_masses[amino_id]
+        modification_mass = state_space.modification_masses[global_modification_id]
+        predicted_mass = amino_mass + modification_mass
         return cls(
             residue_mass = residue_mass,
+            delta = predicted_mass - residue_mass,
             amino_id = amino_id,
-            amino_mass = state_space.amino_masses[amino_id],
+            amino_mass = amino_mass,
             amino_symbol = state_space.amino_symbols[amino_id],
             modification_id = modification_id,
-            modification_mass = state_space.modification_masses[global_modification_id],
+            modification_mass = modification_mass,
             modification_symbol = state_space.modification_masses[global_modification_id])
 
 class AbstractFragmentSolver(ABC):

@@ -7,19 +7,22 @@ import itertools as it
 import mirror.util as util
 from mirror.io import *
 from mirror.spectra.types import *
-from mirror.presets import VALIDATION_PEPTIDES, MONO_RESIDUE_SPACE
+from mirror.presets import VALIDATION_PEPTIDES, MONO_RESIDUE_SPACE, AMINO_SYMBOLS, AMINO_MONO_MASSES
 
 import numpy as np
 
 import unittest
 
-def simulate() -> Iterator[tuple[str,str,int,BenchmarkPeakList]]:
-    for peptide in VALIDATION_PEPTIDES:
-        for mode, charges in (("simple", 1), ("simple", 3), ("complex", 3)):
-            sim_bpl = BenchmarkPeakList.from_simulation(peptide, mode, charges)
-            yield (peptide, mode, charges, sim_bpl)
+def _simulate() -> list[tuple[str,str,int,BenchmarkPeakList]]:
+    return [(
+            peptide, 
+            mode, 
+            charges, 
+            BenchmarkPeakList.from_simulation(peptide, mode, charges)) 
+        for peptide in VALIDATION_PEPTIDES 
+        for (mode, charges) in (("simple", 1), ("simple", 3), ("complex", 3))]
 
-VALIDATION_SIMS = list(simulate())
+VALIDATION_SIMS = _simulate()
 
 class TestSpectra(unittest.TestCase):
 
@@ -30,17 +33,6 @@ class TestSpectra(unittest.TestCase):
     @staticmethod
     def read_test_9species_mgf():
         return read_mgf("data/spectra/Apis-mellifera.mgf")
-
-    def test_PeakList_with_offset(self):
-        data = np.random.uniform(size=100)
-        peaks = PeakList(
-            mz = data,
-            intensity = np.ones_like(data))
-        offset = 22/7
-        new_data = data + offset
-        new_peaks = peaks.with_offset(offset)
-        self.assertTrue(all(data == peaks.mz))
-        self.assertTrue(all(new_data == new_peaks.mz))
 
     def test_benchmark_from_simulation(self):
         lookup_amino_mass = {symbol: mass for (symbol, mass) in zip(MONO_RESIDUE_SPACE.amino_symbols, MONO_RESIDUE_SPACE.amino_masses)}
@@ -64,6 +56,7 @@ class TestSpectra(unittest.TestCase):
             # in the simplest case, verify that the pairwise annotation isn't doing anything insane.
                 
     def test_BenchmarkPeakList_pairs(self):
+        lookup_amino_mass = {amino_symbol: amino_mass for (amino_mass, amino_symbol) in zip(AMINO_MONO_MASSES, AMINO_SYMBOLS)}
         for (peptide, mode, charges, sim_bpl) in VALIDATION_SIMS:
             if mode == "simple" and charges == 1:
                 pair_indices = list(it.pairwise(range(len(peptide) + 1)))

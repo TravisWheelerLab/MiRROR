@@ -33,12 +33,12 @@ class AlignmentResult:
 
     def __getitem__(self,
         i: int,
-    ) -> AffixPair:
+    ) -> tuple[Affix,Affix]:
         l, r = self._affix_pairs[i]
-        return AffixPair(
-            pivot = pivot,
-            prefix = self._alignments[l],
-            suffix = self._alignments[r])
+        return (
+            self._alignments[l],
+            pivot,
+            self._alignments[r])
 
     def __iter__(self) -> Iterator[AffixPair]:
         return map(
@@ -65,10 +65,10 @@ def align(
     spectrum_graphs: tuple[SpectrumGraph,SpectrumGraph],
     params: AlignmentParams,
 ) -> AlignmentResult:
-    alignments = list(align_spectrum_graphs(
+    alignments = align_spectrum_graphs(
         graphs = spectrum_graphs,
         cost_model = params.cost_model,
-        cost_threshold = params.cost_threshold))
+        cost_threshold = params.cost_threshold)
     alignment_pairs = pair_alignments(
         pivot = pivot,
         alignments = alignments,

@@ -62,7 +62,7 @@ def concatenate_ensembles(
     second_node_weights: list[float],
     cost_model: LocalCostModel,
     threshold: float,
-):
+) -> list[ConcatenationAlignment]:
     # construct the ensemble sequentiality
     first_ensemble_intervals, second_ensemble_intervals = _construct_ensemble_intervals(alignments, first_node_weights, second_node_weights)
     ensemble_dag = DualIntervalDAG(
@@ -74,8 +74,8 @@ def concatenate_ensembles(
         cost_model = cost_model,
         threshold = threshold)
     # concatenate the ensemble sequences
-    return list(map(
-        lambda x: ConcatenationAlignment(
-            score = x[0],
-            ensemble_sequence = [alignments[i] for i in x[1]]),
-        ensemble_concatenations))
+    return [
+        ConcatenationAlignment(
+            score = score,
+            ensemble_sequence = [alignments[i] for i in ensemble_indices])
+        for (score, ensemble_indices) in ensemble_concatenations]

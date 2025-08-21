@@ -1,7 +1,9 @@
 import unittest
 from random import shuffle
+import itertools as it
 
 from mirror.graphs.graph_types import *
+
 class TestGraphTypes(unittest.TestCase):
     
     @classmethod
@@ -360,6 +362,7 @@ class TestAlign(unittest.TestCase):
 
 from mirror.graphs.ensemble_types import *
 from mirror.graphs.ensemble import *
+from mirror.graphs.ensemble import _solve_alignment_pair_chains
 
 class TestEnsemble(unittest.TestCase):
 
@@ -442,7 +445,7 @@ class TestEnsemble(unittest.TestCase):
         aln = self._align(first_dag, second_dag)
         # alignment consensus
         frag_itx = AlignmentIntersectionGraph(aln)
-        alignment_consensii = solve_alignment_pair_chains(frag_itx, LocalCostModel(), 1000)
+        alignment_consensii = _solve_alignment_pair_chains(frag_itx, LocalCostModel(), 1000)
         print(f"\nalignment {tag}:\n{aln}")
         print(f"alignment itx:\n{frag_itx}\n{frag_itx.edges(data = True)}\n{frag_itx._alignment_index}")
         print("alignment consensus:")
@@ -532,46 +535,62 @@ class TestConcatenation(unittest.TestCase):
     def test_complex(self):
         pass
 
-# import numpy as np
-# #from .test_spectra import TestSpectra
-# from mirror.spectra.types import NineSpeciesBenchmarkPeakList
-# #from mirror.residues.transformations import transformations_from_series_data
-# class TestSpectrumGraphs(unittest.TestCase):
+from mirror.graphs.spectrum_graphs import SpectrumGraph, construct_spectrum_graphs
+from mirror.fragments import FragmentState, ResidueState, PairedFragments, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment
 
-#     def _test_benchmark_spectrum_graph(self):
-#         dataset = TestSpectra.read_test_9species_mzlib()
-#         for i in range(len(dataset)):
-#             # read a NineSpeciesBenchmarkPeakList from the A. mellifera mzlib.
-#             bpl = NineSpeciesBenchmarkPeakList(dataset, i)
-#             # infer transformations, pivots, boundaries from the peak annotations.
-#             transformations = benchmark_transformations(bpl)
-#             pivot = benchmark_pivot(bpl, transformations)
-#             boundaries = benchmark_boundaries(bpl, transformations, pivot)
-#             # construct a spectrum graph pair over the transformations.
-#             ascending_graph, descending_graph = spectrum_graph_from_transformations(
-#                 peak_list = bpl,
-#                 transformations = transformations,
-#                 pivot = pivot,
-#                 boundaries = boundaries)
-#             # align spectrum graphs.
-#             affixes = align_spectrum_graphs((ascending_graph, descending_graph))
-#             # pair affixes.
-#             affix_index_pairs = pair_affixes(affixes, ascending_graph, descending_graph)
-#             # enumerate candidate sequences.
-#             candidates = np.array(enumerate_candidates(affixes, affix_index_pairs, pivot, boundaries))
-#             candidate_scores = np.array([x.score for x in candidates])
-#             candidate_ranks = np.argsort(candidate_scores)
-#             # align peptide to candidates.
-#             target_peptide = bpl.get_peptide()
-#             candidate_edit_distances = np.array(list(map(
-#                 lambda candidate_peptide: align_peptides(candidate_peptide, target_peptide).edit_distance,
-#                 candidates)))
-#             optimal_edit_distance = min(candidate_edit_distances)
-#             # iterate in order of ascending edit distance
-#             candidate_distance_order = np.argsort(candidate_edit_distances)
-#             candidate_edit_distances = candidate_edit_distances[candidate_distance_order]
-#             candidate_ranks = candidate_ranks[candidate_distance_order]
-#             candidate_scores = candidate_scores[candidate_distance_order]
-#             candidates = candidates[candidate_distance_order]
-#             for true_rank, (candidate, score_rank, score, edit_distance) in enumerate(zip(candidates, candidate_ranks, candidate_scores, candidate_edit_distances)):
-#                 input(f"({true_rank}): candidate[{score_rank}]\n - seq: {candidate.seq}\n - score: {score}\n - distance: {edit_distance}")
+class TestSpectrumGraphs(unittest.TestCase):
+
+    def _dummy_params(self):
+        """a palindromic single series example with a virtual pivot."""
+        fragments = [
+            FragmentState(0,1.,0,0.,'b',1),
+            FragmentState(1,2.,0,0.,'',1),
+            FragmentState(2,4.,0,0.,'',1),
+            FragmentState(3,5.,0,0.,'',1),
+            FragmentState(4,7.,0,0.,'',1),
+            FragmentState(5,8.,0,0.,'b',1)]
+        residues = [
+            ResidueState(1.,0.,0,1.,'a',0,0.,''),
+            ResidueState(1.,0.,0,1.,'a',0,0.,''),
+            ResidueState(2.,0.,0,2.,'b',0,0.,''),
+            ResidueState(1.,0.,0,1.,'a',0,0.,''),
+            ResidueState(2.,0.,0,2.,'b',0,0.,''),
+            ResidueState(1.,0.,0,1.,'a',0,0.,''),
+            ResidueState(1.,0.,0,1.,'a',0,0.,'')]
+        pivot_point = 4.5
+        # pairs
+        pairs = [PairedFragments.from_solution((lf,rf,r))
+            for ((lf,rf),r) in zip(pairwise(fragments),residues[1:-1])]
+        # virtual pivot
+        pivot = VirtualPivot(pivot_point,1.)
+        # left boundary
+        left_boundaries = [BoundaryFragment.from_solution((None,fragments[0],residues[0]))]
+        # right boundary
+        right_boundaries = [ReflectedBoundaryFragment.from_solution((None,fragments[-1],residues[-1]),pivot_point)]
+
+        return [(pairs,left_boundaries,right_boundaries,pivot)]
+
+    def _simple_params(self):
+        """test cases generated without loss or charge states from the VALIDATION_PEPTIDES set."""
+
+    def _complex_params(self):
+        """test cases generated with loss and charge states from the VALIDATION_PEPTIDES set."""
+
+    def _test_construct(self, pairs, left_boundaries, right_boundaries, pivot):
+        incr_graph, decr_graph, cut_pairs = construct_spectrum_graphs(pairs, left_boundaries, right_boundaries, pivot)
+        print("incr",incr_graph)
+        print("decr",decr_graph)
+        print("cut",cut_pairs)
+        
+    def test1_construct(self):
+        for params in self._dummy_params():
+            self._test_construct(*params)
+
+#    def _test_align(self, graphs, model, threshold):
+#        pfx_aln, sfx_aln = align_spectrum_graphs(graphs, model, threshold)
+#        print("prefix alignments", pfx_aln)
+#        print("suffix alignments", sfx_aln)
+#
+#    def test2_align(self):
+#        for params in self._dummy_params():
+#            self._test_align(*self._test_construct(*params))

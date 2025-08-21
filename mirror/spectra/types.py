@@ -72,10 +72,18 @@ class PeakList:
         self.intensity = intensity
 
     @classmethod
+    def from_mz(cls,
+        mz: np.ndarray,
+    ) -> Self:
+        return cls(
+            mz = mz,
+            intensity = np.ones_like(mz))
+
+    @classmethod
     def from_mzlib(cls, 
         dataset: mzlib.SpectrumLibrary,
         i: int,
-    ):
+    ) -> Self:
         """Given a spectrum library `dataset` and an index `i`,
         retrieve the `i`th spectrum and use it to construct a PeakList."""
         spectrum = dataset[i]
@@ -88,7 +96,7 @@ class PeakList:
     def from_mgf(cls, 
         dataset: mgf.IndexedMGF, 
         i: int,
-    ):
+    ) -> Self:
         """Given an MGF `dataset` and an index `i`,
         retrieve the `i`th spectrum and use it to construct a PeakList."""
         spectrum = dataset[i]
@@ -245,29 +253,29 @@ class BenchmarkPeakList(AnnotatedPeakList):
                     # dif = self.mz[l_idx] - self.mz[r_idx]
                     yield (l_idx, r_idx, residue)#, dif)
 
-    def get_pivots(self) -> Iterator[tuple[float,Any]]:
-        """Identify overlap and virtual pivots in the spectrum. Virtual pivots are only returned if no overlap pivots can be found. Overlap pivots take the form (pivot point, (pair, pair)) while virtual pivots take the form (pivot point, None)."""
+    # def get_pivots(self) -> Iterator[tuple[float,Any]]:
+    #     """Identify overlap and virtual pivots in the spectrum. Virtual pivots are only returned if no overlap pivots can be found. Overlap pivots take the form (pivot point, (pair, pair)) while virtual pivots take the form (pivot point, None)."""
 
-        midpoints = []
-        # step 1 - look for overlap pivots
-        c = 0
-        for (l,r) in it.pairwise(range(self.m + 1)):
-            pairs = list(self.get_pairs(l,r))
-            for (i, (l1, r1, res)) in enumerate(pairs):
-                for (l2, r2, _) in pairs[i + 1:]: # all residues are the same in a call to get_pairs
-                    pivot_point = (self[l1] + self[l2] + self[r1] + self[r2]) / 4
-                    midpoints.append(pivot_point)
-                    if (l1 < l2 < r1 < r2) or (l2 < l1 < r2 < r1):
-                        c += 1
-                        yield (
-                            round(pivot_point, 2),
-                            ((l1,r1),(l2,r2)))
-        if c == 0:
-            # step 2 - when there are no overlap pivots, return the mode of virtual pivots.
-            midpoints = [round(x, 2) for x in midpoints]
-            yield (
-                stat.mode(midpoints),
-                None)
+    #     midpoints = []
+    #     # step 1 - look for overlap pivots
+    #     c = 0
+    #     for (l,r) in it.pairwise(range(self.m + 1)):
+    #         pairs = list(self.get_pairs(l,r))
+    #         for (i, (l1, r1, res)) in enumerate(pairs):
+    #             for (l2, r2, _) in pairs[i + 1:]: # all residues are the same in a call to get_pairs
+    #                 pivot_point = (self[l1] + self[l2] + self[r1] + self[r2]) / 4
+    #                 midpoints.append(pivot_point)
+    #                 if (l1 < l2 < r1 < r2) or (l2 < l1 < r2 < r1):
+    #                     c += 1
+    #                     yield (
+    #                         round(pivot_point, 2),
+    #                         ((l1,r1),(l2,r2)))
+    #     if c == 0:
+    #         # step 2 - when there are no overlap pivots, return the mode of virtual pivots.
+    #         midpoints = [round(x, 2) for x in midpoints]
+    #         yield (
+    #             stat.mode(midpoints),
+    #             None)
 
     @staticmethod
     def _get_extremal(arr: Iterator[int], weights: Iterable[int], extrema: int, reverse: bool = False) -> Iterator[int]:

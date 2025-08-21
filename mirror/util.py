@@ -1,10 +1,61 @@
 from typing import Iterable, Iterator, Any, Callable
-from itertools import chain
+from itertools import chain, combinations
 from math import ceil
 from bisect import bisect_left, bisect_right
 
 from numba import jit
 import numpy as np
+
+# TODO: rewrite
+def disjoint_pairs(
+    X: list[set],
+    Y: list[set],
+) -> Iterator[tuple[int,int]]:
+    def _construct_membership_table(
+        X: list[set],
+    ):
+        """Creates a dictionary that associates each element in each set in X to the 
+        index of the sets in which it is contained."""
+        S = set(chain.from_iterable(X))
+        table = {
+            s: []
+            for s in S
+        }
+        n = len(X)
+        for i in range(n):
+            for elt in X[i]:
+                table[elt].append(i)
+        return table
+    
+    def _find_disjoint(
+        x: set,
+        n: int,
+        membership_table: dict,
+    ):
+        """Given a set x, the number of sets in the superset, and the membership table representing
+        the superset, list the indices of the sets in the superset that do not intersect x."""
+        disjoint = [True for _ in range(n)]
+        for elt in x:
+            for set_idx in membership_table[elt]:
+                disjoint[set_idx] = False
+        return [i for i in range(n) if disjoint[i]]
+        
+
+    Y_membership = _construct_membership_table(Y)
+    n = len(X)
+    for i in range(n):
+        yield from [
+            (i,j) for j in _find_disjoint(X[i], n, Y_membership) if j > i]
+
+if __name__ == "__main__":
+    def powerset(iterable):
+        "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+        s = list(iterable)
+        return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+    x = list(powerset([1,2,3]))[1:-1]
+    dx = [(x[i],x[j]) for (i,j) in disjoint_pairs(x, x)]
+    print(x)
+    print(dx)
 
 def measure_mirror_symmetry(
     sorted_arr: np.ndarray,

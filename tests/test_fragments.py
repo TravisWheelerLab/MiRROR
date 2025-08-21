@@ -16,7 +16,7 @@ import mirror.util as util
 import numpy as np
 
 from mirror.fragments import FragmentStateSpace, FragmentState, ResidueStateSpace, ResidueState, AbstractFragmentSolver, BisectFragmentSolver
-class TestFragments(unittest.TestCase):
+class TestSolvers(unittest.TestCase):
 
     @staticmethod
     def _dummy_fragment_space():
@@ -134,9 +134,10 @@ class TestFragments(unittest.TestCase):
         return '\n\n\t'.join(map(lambda x: '\n\t'.join(map(str, x)), states))
 
     def test04_bisect_solver(self):
-        """Verify that the BisectFragmentSolver can be constructed and used to resolve dummy queries."""
+        """Verify that the BisectFragmentSolver can be constructed and resolve queries on a dummy state space."""
         # construct the dummy fragments
         state_space = (self._dummy_fragment_space(), self._dummy_fragment_space(), self._dummy_residue_space())
+        print(state_space)
         #state_space[0].charges = [1]
         #state_space[1].charges = [1]
         amino_ids = [
@@ -155,6 +156,7 @@ class TestFragments(unittest.TestCase):
             loss_ids = loss_ids,
             charges = charges)
         true_states_str = self._repr_states(true_states)
+        print(true_states_str)
         # construct the solver
         solver = BisectFragmentSolver.from_state_space(
             mz = fragment_masses,
@@ -165,6 +167,8 @@ class TestFragments(unittest.TestCase):
         matches = [False for _ in true_states]
         for i in range(solver.n_reference()):
             peak_i, charge_i = solver.set_reference(i)
+            print(i, peak_i, charge_i)
+            print(matches[peak_i - 1])
             for j in range(i + 1, solver.n_query()):
                 peak_j, charge_j, _ = solver.set_query(j)
                 if (peak_i != 0) and (peak_j == peak_i + 1):
@@ -179,8 +183,10 @@ class TestFragments(unittest.TestCase):
                         left_charge_match = soln_left_fragment.charge == true_left_fragment.charge
                         right_match = soln_right_fragment == true_right_fragment
                         residue_match = soln_residue == true_residue
-#                        print(f"---\nleft match {left_match} (\n\t\tleft occl? {left_occl}\n\t\tleft charge match? {left_charge_match})\nright match {right_match}\nresidue match {residue_match}")
+                        print(f"---\nleft match {left_match} (\n\t\tleft occl? {left_occl}\n\t\tleft charge match? {left_charge_match})\nright match {right_match}\nresidue match {residue_match}")
+                        print(soln_residue,true_residue)
                         matches[peak_i - 1] |= (left_match or (left_occl and left_charge_match)) and right_match and residue_match
+            print(matches[peak_i - 1])
         self.assertTrue(all(matches))
 
 from tests.test_spectra import VALIDATION_SIMS
@@ -246,6 +252,8 @@ class TestPivots(unittest.TestCase):
         overlap_hits = 0
         virtual_hits = 0
         for (i, (peptide, mode, charges, sim_bpl)) in enumerate(VALIDATION_SIMS):
+            true_pivot = simulate_pivot(sim_bpl.peptide)
+
             pair_time = time()
             pairs = list(find_pairs(
                 peaks = sim_bpl,
@@ -266,7 +274,6 @@ class TestPivots(unittest.TestCase):
             pivot_times.append(time() - pivot_time)
             overlap_pivot_points = [p.get_pivot_point() for p in overlap_pivots]            
             op = sorted(overlap_pivot_points)
-            true_pivot = simulate_pivot(sim_bpl.peptide)
             tolerance = params.fragment_search_tolerance * 2
             op_l = bisect_left(op, true_pivot - tolerance)
             op_r = bisect_right(op, true_pivot + tolerance)
@@ -277,6 +284,7 @@ class TestPivots(unittest.TestCase):
             virtual_pivots = list(find_virtual_pivots(pairs, params.fragment_search_tolerance * 2))
             virtual_times.append(time() - virtual_time)
             virtual_pivot_points = [p.get_pivot_point() for p in virtual_pivots]
+
             vt = sorted(virtual_pivot_points)
             vt_l = bisect_left(vt, true_pivot - tolerance)
             vt_r = bisect_right(vt, true_pivot + tolerance)
@@ -295,7 +303,7 @@ class TestPivots(unittest.TestCase):
             
 from mirror.util import measure_mirror_symmetry
 from mirror.fragments.pivots import VirtualPivot
-from mirror.fragments.boundaries import LeftBoundaryFragment, RightBoundaryFragment, find_left_boundaries, find_right_boundaries, rescore_pivots
+from mirror.fragments.boundaries import BoundaryFragment, ReflectedBoundaryFragment, find_left_boundaries, find_right_boundaries, rescore_pivots
 class TestBoundaries(unittest.TestCase):
 
     def test_left_boundaries(self, params = BOUNDARY_ANNOTATION_PARAMS):
@@ -309,7 +317,7 @@ class TestBoundaries(unittest.TestCase):
                 fragment_state_space = params.fragment_state_space))
             print(i, peptide, mode, charges)
             expected_boundaries = list(sim_bpl.get_left_boundaries())
-            observed_boundaries = [(lb.get_fragment().peak_idx, lb.get_residue().amino_symbol) for lb in left_boundaries]
+            observed_boundaries = [(lb.fragment.peak_idx, lb.residue.amino_symbol) for lb in left_boundaries]
             print("observed:",observed_boundaries)
             for (idx,res) in expected_boundaries:
                 print(res, idx, round(sim_bpl[idx], 4), end='\t')
@@ -317,7 +325,7 @@ class TestBoundaries(unittest.TestCase):
                     print('●')
                 else:
                     print('◌')
-            input()
+            # input()
 
     def test_right_boundaries(self, params = BOUNDARY_ANNOTATION_PARAMS):
         """Run the find_right_boundaries function on simulated spectra."""
@@ -335,14 +343,14 @@ class TestBoundaries(unittest.TestCase):
             print(i, peptide, mode, charges)
             print(f"pivot = {sim_pivot.pivot_point}")
             expected_boundaries = list(sim_bpl.get_right_boundaries())
-            observed_boundaries = [(rb.get_fragment().peak_idx, rb.get_residue().amino_symbol) for rb in right_boundaries]
+            observed_boundaries = [(rb.fragment.peak_idx, rb.residue.amino_symbol) for rb in right_boundaries]
             for (idx,res) in expected_boundaries:
                 print(res, idx, round(sim_bpl[idx], 4), end='\t')
                 if (idx,res) in observed_boundaries:
                     print('●')
                 else:
                     print('◌')
-            input()
+            # input()
 
     def test_mirror_symmetry(self):
         c = 0.3

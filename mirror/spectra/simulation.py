@@ -5,14 +5,18 @@ def y_series_param():
     param = oms.Param()
     param.setValue("add_b_ions", "false")
     param.setValue("add_y_ions", "true")
+    param.setValue("add_metainfo", "true")
     return param
 
 Y_SERIES_PARAM = y_series_param()
 
-def b_series_param():
+def b_series_param(first=False):
     param = oms.Param()
     param.setValue("add_y_ions", "false")
     param.setValue("add_b_ions", "true")
+    param.setValue("add_metainfo", "true")
+    if first:
+        param.setValue("add_first_prefix_ion", "true")
     return param
 
 B_SERIES_PARAM = b_series_param()

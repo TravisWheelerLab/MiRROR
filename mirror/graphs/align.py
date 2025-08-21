@@ -1,7 +1,8 @@
+from typing import Callable
 from itertools import pairwise
 
 from .align_types import AbstractAlignment, LocalAlignment, AbstractCostModel, LocalCostModel
-from .graph_types import DAG, StrongProductDAG
+from .graph_types import StrongProductDAG
 from .minimal_nodes import propagate
 from .minimal_paths import backtrace
 
@@ -18,9 +19,10 @@ def _all_skips(fragment: list[tuple[int, int]]):
 def align(
     product_graph: StrongProductDAG,
     cost_model: AbstractCostModel,
-    threshold = inf,
-    precision = 10,
-    path_filter = lambda x: True,
+    threshold: float = inf,
+    precision: int = 10,
+    path_filter: Callable = lambda x: True,
+    sources: list[tuple[int,int]] = None,
 ) -> list[AbstractAlignment]:
     # set up; alignment type, cost function, 
     if isinstance(cost_model, LocalCostModel):
@@ -29,7 +31,8 @@ def align(
         raise ValueError(f"unsupported cost model: {type(cost_model)}")
     cost_fn = cost_model(product_graph)
     # enumerate alignments
-    sources = list(product_graph.sources())
+    if sources is None:
+        sources = list(product_graph.sources())
     sinks = list(product_graph.sinks())
     aligned_paths = []
     for source in sources:

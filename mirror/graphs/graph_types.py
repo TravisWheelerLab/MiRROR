@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Iterator, Any
+from typing import Iterator, Any, Self
 from abc import ABC, abstractmethod
 from itertools import chain, product
 
@@ -17,6 +17,19 @@ class DAG:
             self._sources = [i for i in range(self.order()) if list(self.adj_in(i)) == []]
         else:
             raise ValueError("not a directed acyclic graph!")
+
+    @classmethod
+    def from_edges(cls,
+        edges: Iterator[tuple[int,int]],
+        weights: Iterator[Any],
+        weight_key: str,
+    ) -> Self:
+        g = DiGraph()
+        g.add_edges_from(
+            (i, j, {weight_key: w}) for ((i, j), w) in zip(edges, weights))
+        return cls(
+            graph = g,
+            weight_key = weight_key)
             
     def order(self) -> int:
         return self.graph.order()
@@ -48,7 +61,11 @@ class DAG:
     def sources(self) -> list[int]:
         return self._sources
 
-class NodeLabeledDAG(DAG):
+    def __repr__(self) -> str:
+        return f"""DAG(\nedges={self.graph.edges(data=True)})"""
+
+class ReindexedDAG(DAG):
+    """A DAG that can be constructed from a graph (or edges) with arbitrary node labels. A dict will be used to internally reindex the nodes with sequential integers. Indices are mapped to labels by `get_node_label` and labels to node indices by `get_node_idx`."""
     def __init__(self,
         graph: DiGraph,
         weight_key: str,
@@ -60,7 +77,7 @@ class NodeLabeledDAG(DAG):
             G = self._original_graph,
             mapping = self._node_dict
         )
-        super(NodeLabeledDAG, self).__init__(relabeled_graph, weight_key)
+        super(ReindexedDAG, self).__init__(relabeled_graph, weight_key)
     
     def get_node_idx(self,
         node_label,
@@ -71,6 +88,10 @@ class NodeLabeledDAG(DAG):
         node_idx: int
     ) -> Any:
         return self._node_labels[node_idx]
+
+    def __repr__(self) -> str:
+        rep = super(ReindexedDAG, self).__repr__()
+        return rep[:-1] + f"\nlabels={self._node_labels})"
 
 @dataclass
 class ProductDAG(ABC, DAG):
