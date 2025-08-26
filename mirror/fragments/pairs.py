@@ -1,4 +1,4 @@
-from typing import Self, Iterator
+from typing import Self, Any, Iterator
 from dataclasses import dataclass
 
 from ..spectra.types import PeakList
@@ -33,6 +33,16 @@ class PairedFragments:
         return cls(
             *soln,
             offset = calculate_offset(soln))
+
+    @classmethod
+    def from_dict(cls,
+        data: dict[str,Any],
+    ) -> Self:
+        return cls(
+            left_fragment = FragmentState(**data['left_fragment']),
+            right_fragment = FragmentState(**data['right_fragment']),
+            residue = ResidueState(**data['residue']),
+            offset = data['offset'])
 
     def cost(self) -> float:
         """Return sum cost from left fragment, right fragment, and residue states."""

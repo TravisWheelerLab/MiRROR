@@ -1,7 +1,8 @@
-from typing import Self, Iterator, Iterable, Callable
+from typing import Self, Iterator, Iterable, Callable, Any
 from dataclasses import dataclass, asdict
 from abc import ABC, abstractmethod
 
+from ..util import measure_mirror_symmetry
 from ..spectra.types import PeakList
 from .solvers import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, BisectFragmentSolver
 from .pivots import AbstractPivot
@@ -28,6 +29,15 @@ class BoundaryFragment:
             fragment = fragment,
             residue = soln[2],
             series = series)
+
+    @classmethod
+    def from_dict(cls,
+        data: dict[str,Any],
+    ) -> Self:
+        return cls(
+            fragment = FragmentState(**data["fragment"]),
+            residue = ResidueState(**data["residue"]),
+            series = data["series"])
 
     def cost(self) -> float:
         """Aggregate cost from fragment and residue components."""
@@ -63,23 +73,30 @@ class ReflectedBoundaryFragment(BoundaryFragment):
             series = series,
             pivot_point = pivot_point)
 
+    @classmethod
+    def from_dict(cls,
+        data: dict[str,Any],
+    ) -> Self:
+        return cls(
+            fragment = FragmentState(**data["fragment"]),
+            residue = ResidueState(**data["residue"]),
+            series = data["series"],
+            pivot_point = data["pivot_point"])
+
 def _find_boundaries(
     peaks: PeakList,    
     tolerance: float,
-    residue_state_space: ResidueStateSpace,
-    fragment_state_space: FragmentStateSpace,
+    residue_space: ResidueStateSpace,
+    fragment_space: FragmentStateSpace,
     transformation: Callable = None,
     target_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
 ) -> Iterator[tuple[FragmentState,FragmentState,ResidueState]]:
     solver = BisectFragmentSolver.from_half_space(
         mz = peaks,
         tolerance = tolerance,
-        state_space = (fragment_state_space, residue_state_space),
+        state_space = (fragment_space, residue_space),
         transformation = transformation,
         target_mass_data = target_data)
-    print("input mz\n", peaks.mz)
-    print("solver mz/idx\n", list(zip(solver._right_mass.tolist(), [int(x[0]) for x in solver._right_mass_index_unraveler])))
-    print("solver targets/idx\n", list(zip(solver._target_masses.tolist(),solver._target_mass_index_unraveler.tolist())))
     min_residue_mass, max_residue_mass = solver.get_extremal_masses()
     ref_peak, ref_charge = solver.set_reference(0)
     assert ref_peak == 0. and ref_charge == 1
@@ -93,15 +110,15 @@ def _find_boundaries(
 def find_left_boundaries(
     peaks: PeakList,
     tolerance: float,
-    residue_state_space: ResidueStateSpace,
-    fragment_state_space: FragmentStateSpace,
+    residue_space: ResidueStateSpace,
+    fragment_space: FragmentStateSpace,
     target_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
 ) -> Iterator[BoundaryFragment]:
     boundaries = _find_boundaries(
         peaks = peaks,
         tolerance = tolerance,
-        residue_state_space = residue_state_space,
-        fragment_state_space = fragment_state_space,
+        residue_space = residue_space,
+        fragment_space = fragment_space,
         transformation = None,
         target_data = target_data)
     yield from [
@@ -112,8 +129,8 @@ def find_right_boundaries(
     pivots: list[AbstractPivot],
     peaks: PeakList,
     tolerance: float,
-    residue_state_space: ResidueStateSpace,
-    fragment_state_space: FragmentStateSpace,
+    residue_space: ResidueStateSpace,
+    fragment_space: FragmentStateSpace,
     target_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
 ) -> list[list[ReflectedBoundaryFragment]]:
     n = len(pivots)
@@ -124,8 +141,8 @@ def find_right_boundaries(
         boundaries = _find_boundaries(
             peaks = peaks,
             tolerance = tolerance,
-            residue_state_space = residue_state_space,
-            fragment_state_space = fragment_state_space,
+            residue_space = residue_space,
+            fragment_space = fragment_space,
             transformation = lambda x: reflector - x,
             target_data = target_data)
         results[i].extend([
@@ -140,12 +157,21 @@ def rescore_pivots(
     peaks: PeakList,
     symmetry_tolerance: float,
     score_threshold: float,
-) -> Iterator[AbstractPivot]:
+) -> tuple[list[AbstractPivot],list[int]]:
     left_bound = min(lb.fragment.peak_idx for lb in left_boundaries)
+    rescored_pivots = [] # list[tuple(int, float, Pivot)]
     for (i, pivot) in enumerate(pivots):
-        right_bound = max(rb.fragment.peak_idx for rb in right_boundaries)
-        assymmetry_score = util.measure_mirror_symmetry(
-            sorted_arr = pivots.mz[left_bound: right_bound + 1],
-            pivot_point = pivot.pivot_point())
-        if assymmetry_score < score_threshold:
-            yield pivot.rescore(assymmetry_score)
+        if right_boundaries[i]:
+            right_bound = max(rb.fragment.peak_idx for rb in right_boundaries[i])
+            assymmetry_score = measure_mirror_symmetry(
+                sorted_arr = peaks.mz[left_bound: right_bound + 1],
+                pivot_point = pivot.get_pivot_point(),
+                tolerance = symmetry_tolerance)
+            if assymmetry_score < score_threshold:
+                rescored_pivots.append((
+                    i,
+                    pivot.score,
+                    pivot))
+    rescored_pivots.sort(key = lambda x: x[1])
+    pivot_idx, _, pivot_rescored = zip(*rescored_pivots)
+    return list(pivot_rescored), list(pivot_idx)

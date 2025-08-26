@@ -266,22 +266,17 @@ PIVOT_SCORE_THRESHOLD_FACTOR = 1.
 
 MONO_ANNOTATION_PARAMS = AnnotationParams(
     fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
-    fragment_state_space = FRAGMENT_SPACE,
-    residue_state_space = MONO_RESIDUE_SPACE,
+    fragment_space = FRAGMENT_SPACE,
+    extremal_fragment_space = EXTREMAL_FRAGMENT_SPACE,
+    residue_space = MONO_RESIDUE_SPACE,
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
     pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
 
 AVG_ANNOTATION_PARAMS = AnnotationParams(
     fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
-    fragment_state_space = FRAGMENT_SPACE,
-    residue_state_space = AVG_RESIDUE_SPACE,
-    pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
-    pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
-
-BOUNDARY_ANNOTATION_PARAMS = AnnotationParams(
-    fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
-    fragment_state_space = EXTREMAL_FRAGMENT_SPACE,
-    residue_state_space = MONO_RESIDUE_SPACE,
+    fragment_space = FRAGMENT_SPACE,
+    extremal_fragment_space = EXTREMAL_FRAGMENT_SPACE,
+    residue_space = AVG_RESIDUE_SPACE,
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
     pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
 

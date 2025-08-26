@@ -53,6 +53,15 @@ class OverlapPivot(AbstractPivot):
                     masses = masses)
         raise ValueError(f"pivot could not be formed on indices {indices}")
 
+    @classmethod
+    def from_dict(cls,
+        data: dict[str,Any],
+    ) -> Self:
+        return cls(
+            indices = tuple(data["indices"]),
+            masses = tuple(data["masses"]),
+            score = data["score"])
+    
     def get_pivot_point(self) -> float:
         return sum(self.masses) / 4
 
@@ -74,6 +83,15 @@ class VirtualPivot(AbstractPivot):
     frequency: int
     score: float = 0
 
+    @classmethod
+    def from_dict(cls,
+        data: dict[str,Any],
+    ) -> Self:
+        return cls(
+            pivot_point = data["pivot_point"],
+            frequency = data["frequency"],
+            score = data["score"])
+    
     def get_pivot_point(self) -> float:
         return self.pivot_point
 
@@ -151,10 +169,11 @@ def _find_overlap_pivots(
                     break
     
 def find_overlap_pivots(
-    spectrum: Iterable[float],
+    peaks: PeakList,
     pairs: list[PairedFragments],
     tolerance: float,
 ) -> Iterator[OverlapPivot]:
+    spectrum = peaks.mz
     pairs = np.unique([p.peak_indices() for p in pairs], axis = 0)
     return [OverlapPivot.from_indices(ind, spectrum)
         for ind in _find_overlap_pivots(spectrum, pairs, tolerance)]
