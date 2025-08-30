@@ -63,9 +63,11 @@ class TestSuffixArray(unittest.TestCase):
         counts = [64,10,2,1,0]
         prefix_result = None
         for i in range(len(full_query)):
-            query = full_query[:i + 1]
-            bisect_result = suffix_array.bisect([query], prefix_result)[0]
-            count_result = suffix_array.count([query])[0]
+            query_chr = full_query[i]
+            query_pfx = full_query[:i + 1]
+            bisect_result = suffix_array.bisect([query_chr], prefix_result)[0]
+            count_result = suffix_array.count([query_pfx])[0]
+            print(f"[{i}]:\n{query_pfx} => {count_result}\n{query_chr} => {bisect_result.count} {bisect_result.lcp}")
             self.assertEqual(
                 count_result,
                 bisect_result.count)
@@ -75,3 +77,6 @@ class TestSuffixArray(unittest.TestCase):
             if not(prefix_result is None):
                 self.assertLessEqual(bisect_result.count, prefix_result.count)
             prefix_result = bisect_result
+
+    def test_repr(self):
+        print(self._get_suffix_array())

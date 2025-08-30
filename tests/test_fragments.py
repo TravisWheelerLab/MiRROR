@@ -252,7 +252,7 @@ class TestPairs(unittest.TestCase):
         self._test_sims(VALIDATION_SIMS, MONO_ANNOTATION_PARAMS)
         # self._test_sims(VALIDATION_SIMS, AVG_ANNOTATION_PARAMS)
 
-from mirror.fragments.pivots import AbstractPivot, find_overlap_pivots, find_virtual_pivots
+from mirror.fragments.pivots import Pivot, find_overlap_pivots, find_virtual_pivots
 from mirror.annotation import reindex_by_fragment_masses
 from time import time
 class TestPivots(unittest.TestCase):
@@ -347,7 +347,8 @@ class TestBoundaries(unittest.TestCase):
         for (i, (peptide, mode, charges, sim_bpl)) in enumerate(VALIDATION_SIMS):
             sim_pivot = VirtualPivot(
                 pivot_point = simulate_pivot(peptide),
-                frequency = 1)
+                frequency = 1,
+                score = 0.)
             right_boundaries = find_right_boundaries(
                 pivots = [sim_pivot],
                 peaks = sim_bpl,
@@ -358,13 +359,14 @@ class TestBoundaries(unittest.TestCase):
             print(f"pivot = {sim_pivot.pivot_point}")
             expected_boundaries = list(sim_bpl.get_right_boundaries())
             observed_boundaries = [(rb.fragment.peak_idx, rb.residue.amino_symbol) for rb in right_boundaries]
+            print("observed:",observed_boundaries)
             for (idx,res) in expected_boundaries:
                 print(res, idx, round(sim_bpl[idx], 4), end='\t')
                 if (idx,res) in observed_boundaries:
                     print('●')
                 else:
                     print('◌')
-            # input()
+            input()
 
     def test_mirror_symmetry(self):
         c = 0.3

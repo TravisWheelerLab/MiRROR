@@ -3,7 +3,7 @@ from itertools import chain, combinations
 from math import ceil
 from bisect import bisect_left, bisect_right
 
-from numba import jit
+import numba
 import numpy as np
 
 # TODO: rewrite
@@ -57,27 +57,70 @@ if __name__ == "__main__":
     print(x)
     print(dx)
 
+@numba.njit
+def _merge_count(
+    left_arr: np.ndarray,
+    right_arr: np.ndarray,
+    n: int,
+    tolerance: float,
+    pivot_point: float,
+) -> int:
+    prev_match = (pivot_point, pivot_point)
+    num_symmetries = 0
+    l = 0
+    r = 0
+    while l < n and r < n:
+        x = left_arr[l]
+        z = right_arr[r]
+        if abs(x - z) <= tolerance:
+            # hit: count a symmetry, incr indices.
+            num_symmetries += 1
+            prev_match = (x, z)
+            l += 1
+            r += 1
+        elif abs(z - prev_match[1]) <= tolerance:
+            num_symmetries += 1
+            r += 1
+        elif abs(x - prev_match[0]) <= tolerance:
+            num_symmetries += 1    
+            l += 1
+        elif x < z:
+            r += 1
+        else: # z < x
+            l += 1
+    #
+    return num_symmetries
+
 def measure_mirror_symmetry(
     sorted_arr: np.ndarray,
     pivot_point: float,
-    tolerance: float):
-    """Reflects sorted_arr about pivot_point to create the query set; uses bisect to find the minimum distance of each query to any point in the original sorted_arr; returns the sum these minimum distances."""
-    reflected_arr = 2 * pivot_point - sorted_arr
-    n = len(sorted_arr)
-    left_bound = sorted_arr[0]
-    right_bound = sorted_arr[-1]
-    symmetries = 0
-    for j,q in enumerate(reflected_arr):
-        I = range(
-            bisect_left(sorted_arr, q - tolerance),
-            bisect_right(sorted_arr, q + tolerance))
-        for i in I:
-            p = sorted_arr[i]
-            dif = abs(p - q)
-            if dif <= tolerance:
-                symmetries += 1
-                break
-    return symmetries
+    tolerance: float,
+) -> int:
+    """Measures mirror symmetry in time linear to the length of the array.
+    
+    Uses bisect to index the pivot point into the sorted array, then applies a merge-like routine to match the set below the pivot point to the reflection of the set above the pivot point. 
+    
+    Args:
+    - sorted_arr: np.ndarray, a list of floats in ascending order.
+    - pivot_point: float, a candidate point of mirror symmetry. sorted_arr[0] < pivot_point < sorted_arr[-1].
+    - tolerance: float, the maximum difference between a point and a reflected point such that they can be counted as symmetric.
+    
+    Returns:
+    - num_symmetries: int, the number of points symmetric under the reflection parametized by the pivot point."""
+    # left_arr is the reverse order of everything below the pivot
+    lo = bisect_left(sorted_arr, pivot_point)
+    left_arr = sorted_arr[:lo][::-1]
+    # right_arr is the reflection of everything above the pivot.
+    hi = bisect_right(sorted_arr, pivot_point)
+    right_arr = (2 * pivot_point) - sorted_arr[hi:]
+    # merge to count symmetries
+    n = min(lo, hi)
+    return _merge_count(
+        left_arr,
+        right_arr,
+        n,
+        tolerance,
+        pivot_point)
 
 def binsort(
     arr: Iterable,

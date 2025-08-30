@@ -1,16 +1,24 @@
+# python dependencies
 from typing import Iterator, Iterable, Self
 from dataclasses import dataclass
-
+# horizontal dependencies
 from .graph_types import ReindexedDAG
-from .align_types import FuzzyLocalCostModel, AbstractAlignment, LocalAlignment, ProductPathWeightFilter
+from .align_types import FuzzyLocalCostModel, AbstractAlignment, LocalAlignment, AlignmentFilter
 from .align import align
 from .ensemble_types import EnsembleAlignment
 from .ensemble import assemble_alignments
 from .concatenation_types import ConcatenationAlignment
 from .concatenation import concatenate_ensembles
-
+# module dependencies
 from ..util import binsort, disjoint_pairs
-from ..fragments import PairedFragments, BoundaryFragment, ReflectedBoundaryFragment, AbstractPivot, OverlapPivot, VirtualPivot
+from ..fragments import PairedFragments, BoundaryFragment, ReflectedBoundaryFragment, Pivot, OverlapPivot, VirtualPivot
+from ..sequences.suffix_array import SuffixArray
+
+class SuffixArrayAlignmentFilter(AlignmentFilter):
+    def __init__(
+        self,        
+    ):
+        pass
 
 @dataclass
 class SpectrumGraph:
@@ -30,6 +38,8 @@ class SpectrumGraph:
         edges = [p.peak_indices() for p in pairs]
         if reverse:
             edges = [(j,i) for (i,j) in edges]
+        print("edges",edges)
+        print("boundaries",[x.fragment.peak_idx for x in boundaries])
         dag = ReindexedDAG.from_edges(
             edges = edges,
             weights = [(p.right_fragment, p.residue) for p in pairs],
@@ -37,27 +47,34 @@ class SpectrumGraph:
         b_boundaries = [dag.get_node_idx(x.fragment.peak_idx) for x in boundaries if x.series == 'b']
         y_boundaries = [dag.get_node_idx(x.fragment.peak_idx) for x in boundaries if x.series == 'y']
         return cls(dag, b_boundaries, y_boundaries)
-        
+
 def construct_spectrum_graphs(
     pairs: list[PairedFragments],
     left_boundaries: list[BoundaryFragment],
     right_boundaries: list[ReflectedBoundaryFragment],
-    pivot: AbstractPivot,
+    pivot: Pivot,
 ) -> tuple[SpectrumGraph,SpectrumGraph,list[PairedFragments]]:
     """Construct spectrum graphs over PairedFragments as edges, *BoundaryFragments as sources, and Pivot-induced sinks."""
-    pivot_point = pivot.get_pivot_point()
-    # filter left pairs to those below the pivot and excluding any (_,sink) types.
-    left_sinks = [lb.fragment.peak_idx for lb in left_boundaries]
-    left_pairs = [p for p in pairs if p.fragment_masses()[1] < pivot_point and (p.peak_indices()[1] not in left_sinks)]
+    pivot_point = pivot.pivot_point
+    left_sources = set(lb.fragment.peak_idx for lb in left_boundaries)
+    right_sources = set(rb.fragment.peak_idx for rb in right_boundaries)
 
-    # filter right pairs to those above the pivot and excluding any (sink,_) types.
-    right_sinks = [rb.fragment.peak_idx for rb in right_boundaries]
-    right_pairs = [p for p in pairs if p.fragment_masses()[0] > pivot_point and (p.peak_indices()[0] not in right_sinks)]
+    left_pairs = []
+    right_pairs = []
+    cut_pairs = []
 
-    # store the edges not represented in either graph. they will be needed later.
-    cut_pairs = [p for p in pairs if p.fragment_masses()[0] < pivot_point < p.fragment_masses()[1]]
+    for p in pairs:
+        left_idx, right_idx = p.peak_indices()
+        left_mass, right_mass = p.fragment_masses()
+        if (right_mass < pivot_point) and (right_idx not in left_sources):
+            left_pairs.append(p)
+        if (left_mass > pivot_point) and (left_idx not in right_sources):
+            right_pairs.append(p)
+        if (left_mass < pivot_point < right_mass):
+            cut_pairs.append(p)
 
     # construct the two graphs; reverse the right edges so they point towards the pivot (sinks).
+    print(pivot_point)
     incr_graph = SpectrumGraph.from_pairs(
             pairs = left_pairs,
             boundaries = left_boundaries,
@@ -71,6 +88,30 @@ def construct_spectrum_graphs(
         incr_graph,
         decr_graph,
         cut_pairs)
+
+def _align_spectrum_graphs(
+    graphs: tuple[SpectrumGraph,SpectrumGraph],
+    cost_model_type: FuzzyLocalCostModel,
+    cost_threshold: float,
+    suffix_array: SuffixArray,
+) -> list[AbstractAlignment]:
+    pass
+
+def _align_prefixes(
+    graphs: tuple[SpectrumGraph,SpectrumGraph],
+    cost_model_type: FuzzyLocalCostModel,
+    cost_threshold: float,
+    suffix_array: SuffixArray,
+) -> list[AbstractAlignment]:
+    pass 
+
+def _align_suffixes(
+    graphs: tuple[SpectrumGraph,SpectrumGraph],
+    cost_model_type: FuzzyLocalCostModel,
+    cost_threshold: float,
+    suffix_array: SuffixArray,
+) -> list[AbstractAlignment]:
+    pass 
 
 def align_spectrum_graphs(
     graphs: tuple[SpectrumGraph,SpectrumGraph],
@@ -110,7 +151,7 @@ def pair_alignments(
     alignments: tuple[list[AbstractAlignment],list[AbstractAlignment]],
     graphs: tuple[SpectrumGraph,SpectrumGraph],
     cut_pairs: list[PairedFragments],
-    pivot: AbstractPivot,
+    pivot: Pivot,
     score_threshold: float,
 ) -> Iterator[tuple[AbstractAlignment,AbstractAlignment]]:
     prefixes, suffixes = alignments

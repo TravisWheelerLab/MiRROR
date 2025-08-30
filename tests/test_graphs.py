@@ -537,6 +537,8 @@ class TestConcatenation(unittest.TestCase):
 
 from mirror.graphs.spectrum_graphs import SpectrumGraph, construct_spectrum_graphs
 from mirror.fragments import FragmentState, ResidueState, PairedFragments, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment
+from mirror.annotation import AnnotationResult
+from tests.test_annotation import VALIDATION_ANNOTATION_FILES
 
 class TestSpectrumGraphs(unittest.TestCase):
 
@@ -562,7 +564,7 @@ class TestSpectrumGraphs(unittest.TestCase):
         pairs = [PairedFragments.from_solution((lf,rf,r))
             for ((lf,rf),r) in zip(pairwise(fragments),residues[1:-1])]
         # virtual pivot
-        pivot = VirtualPivot(pivot_point,1.)
+        pivot = VirtualPivot(pivot_point,0.,1)
         # left boundary
         left_boundaries = [BoundaryFragment.from_solution((None,fragments[0],residues[0]))]
         # right boundary
@@ -570,27 +572,23 @@ class TestSpectrumGraphs(unittest.TestCase):
 
         return [(pairs,left_boundaries,right_boundaries,pivot)]
 
-    def _simple_params(self):
-        """test cases generated without loss or charge states from the VALIDATION_PEPTIDES set."""
-
-    def _complex_params(self):
-        """test cases generated with loss and charge states from the VALIDATION_PEPTIDES set."""
-
     def _test_construct(self, pairs, left_boundaries, right_boundaries, pivot):
         incr_graph, decr_graph, cut_pairs = construct_spectrum_graphs(pairs, left_boundaries, right_boundaries, pivot)
-        print("incr",incr_graph)
-        print("decr",decr_graph)
-        print("cut",cut_pairs)
         
-    def test1_construct(self):
-        for params in self._dummy_params():
+    def test_construct(self):
+        for (i, params) in enumerate(self._dummy_params()):
+            print(f"dummy {i}")
             self._test_construct(*params)
-
-#    def _test_align(self, graphs, model, threshold):
-#        pfx_aln, sfx_aln = align_spectrum_graphs(graphs, model, threshold)
-#        print("prefix alignments", pfx_aln)
-#        print("suffix alignments", sfx_aln)
-#
-#    def test2_align(self):
-#        for params in self._dummy_params():
-#            self._test_align(*self._test_construct(*params))
+            input()
+        for fpath in VALIDATION_ANNOTATION_FILES:
+            name = fpath.split('/')[-1].split('.')[0]
+            anno = AnnotationResult.read(fpath)
+            print(anno)
+            for (i, pivot) in enumerate(anno.pivots):
+                print(f"annotation {name} pivot {i}")
+                self._test_construct(
+                    anno.pairs,
+                    anno.left_boundaries,
+                    anno.right_boundaries[i],
+                    pivot)
+                input()

@@ -10,20 +10,25 @@ from mirror.annotation import AnnotationParams, AnnotationResult, annotate
 
 from tests.test_spectra import VALIDATION_SIMS
 
+VALIDATION_ANNOTATION_DIR = "./data/output/annotation/"
+VALIDATION_ANNOTATION_FILES = [
+    VALIDATION_ANNOTATION_DIR + f"{i}_{peptide}_{mode}_{charges}.ann" for (i, (peptide, mode, charges, _)) in enumerate(VALIDATION_SIMS)]
+
 class TestAnnotation(unittest.TestCase):
 
     def test(self,
         params = MONO_ANNOTATION_PARAMS,
-        dir = "./data/output/annotation/"):
+        dir = VALIDATION_ANNOTATION_DIR,
+        sims = VALIDATION_ANNOTATION_FILES
+    ):
         print(params)
-        for (i, (peptide, mode, charges, sim_bpl)) in enumerate(VALIDATION_SIMS):
+        for (i, ((peptide, mode, charges, sim_bpl), fpath)) in enumerate(zip(VALIDATION_SIMS, VALIDATION_ANNOTATION_FILES)):
             print(i, peptide, mode, charges)
             print(sim_bpl.mz)
             anno = annotate(sim_bpl, MONO_ANNOTATION_PARAMS)
-            fpath = dir + f"{i}_{peptide}_{mode}_{charges}.ann"
+            print(anno._profile)
             anno.write(fpath)
             anno2 = AnnotationResult.read(fpath)
-            print(anno._profile)
             try:
                 for (a, a2) in zip(anno.pairs, anno2.pairs):
                     self.assertEqual(asdict(a), asdict(a2))

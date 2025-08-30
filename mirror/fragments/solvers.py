@@ -92,7 +92,7 @@ class ResidueState:
 
     def cost(self) -> float:
         """Returns mass delta, +1 if modification_id != 0."""
-        return (self.modification_id != 0) + self.delta
+        return (self.modification_id != 0)
 
     @classmethod
     def from_index(cls,

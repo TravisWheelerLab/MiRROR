@@ -107,7 +107,7 @@ class FuzzyLocalCostModel(LocalCostModel):
                 raise ValueError(f"both edges are stationary! {edge} {weight}")
         return cost_function
 
-class ProductPathWeightFilter(Callable[[Iterable[int]], bool]):
+class AlignmentFilter(Callable[[Iterable[int]], bool]):
     def __init__(self,
         weight_sequence_filter: Callable[[list[Any]], bool],
         graph: ProductDAG,

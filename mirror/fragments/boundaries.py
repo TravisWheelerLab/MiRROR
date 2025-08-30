@@ -5,9 +5,9 @@ from abc import ABC, abstractmethod
 from ..util import measure_mirror_symmetry
 from ..spectra.types import PeakList
 from .solvers import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, BisectFragmentSolver
-from .pivots import AbstractPivot
+from .pivots import Pivot
 
-@dataclass
+@dataclass(slots=True)
 class BoundaryFragment:
     """A boundary fragment occurring on the low end of the spectrum."""
     fragment: FragmentState
@@ -47,7 +47,7 @@ class BoundaryFragment:
         dict_repr = str(asdict(self))
         return f"BoundaryFragment{dict_repr}"
 
-@dataclass
+@dataclass(slots=True)
 class ReflectedBoundaryFragment(BoundaryFragment):
     """A boundary fragment occurring on the high end of the spectrum. Implements the additional get_pivot_point method which returns the float value about which the fragment m/z of this boundary was reflected."""
     fragment: FragmentState
@@ -84,7 +84,9 @@ class ReflectedBoundaryFragment(BoundaryFragment):
             pivot_point = data["pivot_point"])
 
 def _find_boundaries(
-    peaks: PeakList,    
+    peaks: PeakList,
+    min_mz: float,
+    max_mz: float,
     tolerance: float,
     residue_space: ResidueStateSpace,
     fragment_space: FragmentStateSpace,
@@ -101,8 +103,9 @@ def _find_boundaries(
     ref_peak, ref_charge = solver.set_reference(0)
     assert ref_peak == 0. and ref_charge == 1
     for i in range(solver.n_query()):
-        peak, charge, mass = solver.set_query(i)
-        if mass > max_residue_mass:
+        peak_idx, charge, mass = solver.set_query(i)
+        peak_mz = peaks[peak_idx] * charge
+        if mass > max_residue_mass or not(min_mz < peak_mz < max_mz):
             break
         elif mass > min_residue_mass:
             yield from solver.get_solutions()
@@ -116,6 +119,8 @@ def find_left_boundaries(
 ) -> Iterator[BoundaryFragment]:
     boundaries = _find_boundaries(
         peaks = peaks,
+        min_mz = 0,
+        max_mz = peaks[-1] + 1,
         tolerance = tolerance,
         residue_space = residue_space,
         fragment_space = fragment_space,
@@ -126,38 +131,40 @@ def find_left_boundaries(
         for soln in boundaries]
 
 def find_right_boundaries(
-    pivots: list[AbstractPivot],
+    pivot_points: list[float],
     peaks: PeakList,
     tolerance: float,
     residue_space: ResidueStateSpace,
     fragment_space: FragmentStateSpace,
     target_data: tuple[list[float],list[tuple[int,int,int,int]]] = None,
 ) -> list[list[ReflectedBoundaryFragment]]:
-    n = len(pivots)
+    n = len(pivot_points)
     results = [[] for _ in range(n)]
     for i in range(n):
-        pivot_point = pivots[i].get_pivot_point()
-        reflector = 2 * pivot_point
+        pt = pivot_points[i]
+        reflector = 2 * pt
         boundaries = _find_boundaries(
             peaks = peaks,
+            min_mz = pt,
+            max_mz = fragment_space.charges[-1] * (peaks[-1] + 1),
             tolerance = tolerance,
             residue_space = residue_space,
             fragment_space = fragment_space,
             transformation = lambda x: reflector - x,
             target_data = target_data)
         results[i].extend([
-            ReflectedBoundaryFragment.from_solution(soln, pivot_point)
+            ReflectedBoundaryFragment.from_solution(soln, pt)
             for soln in boundaries])
     return results
 
 def rescore_pivots(
-    pivots: Iterator[AbstractPivot],
+    pivots: Iterable[Pivot],
     left_boundaries: Iterator[BoundaryFragment],
     right_boundaries: Iterable[Iterator[ReflectedBoundaryFragment]],
     peaks: PeakList,
     symmetry_tolerance: float,
     score_threshold: float,
-) -> tuple[list[AbstractPivot],list[int]]:
+) -> tuple[list[Pivot],list[int]]:
     left_bound = min(lb.fragment.peak_idx for lb in left_boundaries)
     rescored_pivots = [] # list[tuple(int, float, Pivot)]
     for (i, pivot) in enumerate(pivots):
@@ -165,13 +172,16 @@ def rescore_pivots(
             right_bound = max(rb.fragment.peak_idx for rb in right_boundaries[i])
             assymmetry_score = measure_mirror_symmetry(
                 sorted_arr = peaks.mz[left_bound: right_bound + 1],
-                pivot_point = pivot.get_pivot_point(),
+                pivot_point = pivot.pivot_point,
                 tolerance = symmetry_tolerance)
             if assymmetry_score < score_threshold:
                 rescored_pivots.append((
                     i,
-                    pivot.score,
-                    pivot))
-    rescored_pivots.sort(key = lambda x: x[1])
-    pivot_idx, _, pivot_rescored = zip(*rescored_pivots)
-    return list(pivot_rescored), list(pivot_idx)
+                    pivot,
+                    pivot.score))
+    if len(rescored_pivots) == 0:
+        return pivots, list(range(len(pivots)))
+    else:
+        rescored_pivots.sort(key = lambda x: x[2])
+        pivot_idx, pivot_rescored, _ = zip(*rescored_pivots)
+        return list(pivot_rescored), list(pivot_idx)
