@@ -338,7 +338,7 @@ class TestAlign(unittest.TestCase):
             first_graph = aaaa_graph,
             second_graph = bbaa_graph)
         
-        only_a_filter = ProductPathWeightFilter(
+        only_a_filter = AlignmentFilter(
             weight_sequence_filter = lambda weights: all(w == 'a' for w in weights),
             graph = product_graph)
 
@@ -535,60 +535,30 @@ class TestConcatenation(unittest.TestCase):
     def test_complex(self):
         pass
 
-from mirror.graphs.spectrum_graphs import SpectrumGraph, construct_spectrum_graphs
+from mirror.graphs.spectrum_graphs import SpectrumGraph, partition_pairs, align_prefixes, align_suffixes, pair_alignments
 from mirror.fragments import FragmentState, ResidueState, PairedFragments, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment
 from mirror.annotation import AnnotationResult
 from tests.test_annotation import VALIDATION_ANNOTATION_FILES
+from copy import deepcopy
 
 class TestSpectrumGraphs(unittest.TestCase):
 
-    def _dummy_params(self):
-        """a palindromic single series example with a virtual pivot."""
-        fragments = [
-            FragmentState(0,1.,0,0.,'b',1),
-            FragmentState(1,2.,0,0.,'',1),
-            FragmentState(2,4.,0,0.,'',1),
-            FragmentState(3,5.,0,0.,'',1),
-            FragmentState(4,7.,0,0.,'',1),
-            FragmentState(5,8.,0,0.,'b',1)]
-        residues = [
-            ResidueState(1.,0.,0,1.,'a',0,0.,''),
-            ResidueState(1.,0.,0,1.,'a',0,0.,''),
-            ResidueState(2.,0.,0,2.,'b',0,0.,''),
-            ResidueState(1.,0.,0,1.,'a',0,0.,''),
-            ResidueState(2.,0.,0,2.,'b',0,0.,''),
-            ResidueState(1.,0.,0,1.,'a',0,0.,''),
-            ResidueState(1.,0.,0,1.,'a',0,0.,'')]
-        pivot_point = 4.5
-        # pairs
-        pairs = [PairedFragments.from_solution((lf,rf,r))
-            for ((lf,rf),r) in zip(pairwise(fragments),residues[1:-1])]
-        # virtual pivot
-        pivot = VirtualPivot(pivot_point,0.,1)
-        # left boundary
-        left_boundaries = [BoundaryFragment.from_solution((None,fragments[0],residues[0]))]
-        # right boundary
-        right_boundaries = [ReflectedBoundaryFragment.from_solution((None,fragments[-1],residues[-1]),pivot_point)]
-
-        return [(pairs,left_boundaries,right_boundaries,pivot)]
-
-    def _test_construct(self, pairs, left_boundaries, right_boundaries, pivot):
-        incr_graph, decr_graph, cut_pairs = construct_spectrum_graphs(pairs, left_boundaries, right_boundaries, pivot)
+    def _test_construct(self, pivot_point, pairs, left_boundaries, right_boundaries):
+        left_data, right_data, cut_pairs = partition_pairs(pivot_point, pairs, left_boundaries, right_boundaries)
+        incr_graph = SpectrumGraph.from_pairs(*left_data, reverse=False)
+        decr_graph = SpectrumGraph.from_pairs(*right_data, reverse=True)
         
     def test_construct(self):
-        for (i, params) in enumerate(self._dummy_params()):
-            print(f"dummy {i}")
-            self._test_construct(*params)
-            input()
         for fpath in VALIDATION_ANNOTATION_FILES:
             name = fpath.split('/')[-1].split('.')[0]
             anno = AnnotationResult.read(fpath)
-            print(anno)
-            for (i, pivot) in enumerate(anno.pivots):
-                print(f"annotation {name} pivot {i}")
+            pairs = anno.get_pairs()
+            left_boundaries = anno.get_left_boundaries()
+            pivot_clusters = anno.get_pivot_clusters()
+            for (i, pivots) in enumerate(pivot_clusters):
+                print(f"annotation {name} cluster {i}")
                 self._test_construct(
-                    anno.pairs,
-                    anno.left_boundaries,
-                    anno.right_boundaries[i],
-                    pivot)
-                input()
+                    anno.get_pivot_point(i),
+                    pairs,
+                    left_boundaries,
+                    anno.get_right_boundaries(i))

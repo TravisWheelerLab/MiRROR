@@ -1,6 +1,7 @@
 # python dependencies
 from typing import Iterator, Iterable, Self
 from dataclasses import dataclass
+import itertools as it
 # horizontal dependencies
 from .graph_types import ReindexedDAG
 from .align_types import FuzzyLocalCostModel, AbstractAlignment, LocalAlignment, AlignmentFilter
@@ -26,6 +27,7 @@ class SpectrumGraph:
     dag: ReindexedDAG
     b_boundaries: list[int]
     y_boundaries: list[int]
+    unk_boundaries: list[int]
 
     @classmethod
     def from_pairs(cls,
@@ -38,55 +40,44 @@ class SpectrumGraph:
         edges = [p.peak_indices() for p in pairs]
         if reverse:
             edges = [(j,i) for (i,j) in edges]
-        print("edges",edges)
-        print("boundaries",[x.fragment.peak_idx for x in boundaries])
         dag = ReindexedDAG.from_edges(
             edges = edges,
             weights = [(p.right_fragment, p.residue) for p in pairs],
             weight_key = weight_key)
         b_boundaries = [dag.get_node_idx(x.fragment.peak_idx) for x in boundaries if x.series == 'b']
         y_boundaries = [dag.get_node_idx(x.fragment.peak_idx) for x in boundaries if x.series == 'y']
-        return cls(dag, b_boundaries, y_boundaries)
+        unk_boundaries = [dag.get_node_idx(x.fragment.peak_idx) for x in boundaries if x.series not in ['b','y']]
+        return cls(dag, b_boundaries, y_boundaries, unk_boundaries)
 
-def construct_spectrum_graphs(
+def partition_pairs(
+    pivot_point: float,
     pairs: list[PairedFragments],
     left_boundaries: list[BoundaryFragment],
     right_boundaries: list[ReflectedBoundaryFragment],
-    pivot: Pivot,
 ) -> tuple[SpectrumGraph,SpectrumGraph,list[PairedFragments]]:
     """Construct spectrum graphs over PairedFragments as edges, *BoundaryFragments as sources, and Pivot-induced sinks."""
-    pivot_point = pivot.pivot_point
-    left_sources = set(lb.fragment.peak_idx for lb in left_boundaries)
-    right_sources = set(rb.fragment.peak_idx for rb in right_boundaries)
-
+    # partition pairs into left, right, and cut.
     left_pairs = []
     right_pairs = []
     cut_pairs = []
-
     for p in pairs:
         left_idx, right_idx = p.peak_indices()
         left_mass, right_mass = p.fragment_masses()
-        if (right_mass < pivot_point) and (right_idx not in left_sources):
+        if (right_mass < pivot_point):
             left_pairs.append(p)
-        if (left_mass > pivot_point) and (left_idx not in right_sources):
+        if (left_mass > pivot_point):
             right_pairs.append(p)
         if (left_mass < pivot_point < right_mass):
             cut_pairs.append(p)
+    # remove singletons from boundaries
+    left_nodes = set(it.chain.from_iterable(p.peak_indices() for p in left_pairs))
+    left_boundaries = [x for x in left_boundaries if x.fragment.peak_idx in left_nodes]
+    right_nodes = set(it.chain.from_iterable(p.peak_indices() for p in right_pairs))
+    right_boundaries = [x for x in right_boundaries if x.fragment.peak_idx in right_nodes]
 
-    # construct the two graphs; reverse the right edges so they point towards the pivot (sinks).
-    print(pivot_point)
-    incr_graph = SpectrumGraph.from_pairs(
-            pairs = left_pairs,
-            boundaries = left_boundaries,
-            reverse = False)
-    decr_graph = SpectrumGraph.from_pairs(
-            pairs = right_pairs,
-            boundaries = right_boundaries,
-            reverse = True)
-    
     return (
-        incr_graph,
-        decr_graph,
+        (left_pairs, left_boundaries),
+        (right_pairs, right_boundaries),
         cut_pairs)
 
 def _align_spectrum_graphs(
@@ -97,7 +88,7 @@ def _align_spectrum_graphs(
 ) -> list[AbstractAlignment]:
     pass
 
-def _align_prefixes(
+def align_prefixes(
     graphs: tuple[SpectrumGraph,SpectrumGraph],
     cost_model_type: FuzzyLocalCostModel,
     cost_threshold: float,
@@ -105,7 +96,7 @@ def _align_prefixes(
 ) -> list[AbstractAlignment]:
     pass 
 
-def _align_suffixes(
+def align_suffixes(
     graphs: tuple[SpectrumGraph,SpectrumGraph],
     cost_model_type: FuzzyLocalCostModel,
     cost_threshold: float,

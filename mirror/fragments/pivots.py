@@ -187,20 +187,35 @@ def _screen_pivots(
 ) -> Iterable[Pivot]:
     # calibrate tolerance to the minimum pairwise distance between peaks
     tolerance = min(tolerance, min([y - x for (x, y) in it.pairwise(peaks)]) / 2)
+    
     # mask points by their symmetry score
     point_scores = np.array([util.measure_mirror_symmetry(peaks, pt, tolerance) for pt in points])
     points_mask = point_scores > (point_scores.max() / 2)
     pivots_mask = points_mask[idx_arr]
+    
     # apply mask to pivots/points/idx_arr and cast to python types.
-    pivots = [p.rescore(s) for (p, s) in zip(
+    new_pivots = [p.rescore(s) for (p, s) in zip(
         pivots[pivots_mask],
         point_scores[idx_arr][pivots_mask].tolist())]
-    points = points[points_mask].tolist()
-    idx_arr = idx_arr[pivots_mask].tolist()
-    
-    return pivots, points, idx_arr
-    
+    new_points = points[points_mask].tolist()
 
+    # reindex the pivot_idx -> point_idx map.
+    old_pivot_idx = np.arange(len(pivots))[pivots_mask]
+    point_reindexer = np.arange(len(points))
+    new_point_idx = np.arange(len(new_points))
+    point_reindexer[points_mask] = new_point_idx
+   ## one-liner - test_annotation in 44s
+   ## new_idx_arr = point_reindexer[idx_arr[old_pivot_idx[pivots_mask]]].tolist()
+   ## comprehension - test_annotation in 44s
+    new_idx_arr = np.zeros_like(new_pivots)
+    for new_pvt_idx, old_pvt_idx in enumerate(old_pivot_idx):
+        old_pt_idx = idx_arr[old_pvt_idx]
+        new_pt_idx = point_reindexer[old_pt_idx]
+        new_idx_arr[new_pvt_idx] = new_pt_idx.tolist()
+    new_idx_arr = new_idx_arr.tolist()
+
+    return new_pivots, new_points, new_idx_arr
+    
 def find_pivots(
     peaks: PeakList,
     pairs: list[PairedFragments],

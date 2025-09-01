@@ -156,32 +156,3 @@ def find_right_boundaries(
             ReflectedBoundaryFragment.from_solution(soln, pt)
             for soln in boundaries])
     return results
-
-def rescore_pivots(
-    pivots: Iterable[Pivot],
-    left_boundaries: Iterator[BoundaryFragment],
-    right_boundaries: Iterable[Iterator[ReflectedBoundaryFragment]],
-    peaks: PeakList,
-    symmetry_tolerance: float,
-    score_threshold: float,
-) -> tuple[list[Pivot],list[int]]:
-    left_bound = min(lb.fragment.peak_idx for lb in left_boundaries)
-    rescored_pivots = [] # list[tuple(int, float, Pivot)]
-    for (i, pivot) in enumerate(pivots):
-        if right_boundaries[i]:
-            right_bound = max(rb.fragment.peak_idx for rb in right_boundaries[i])
-            assymmetry_score = measure_mirror_symmetry(
-                sorted_arr = peaks.mz[left_bound: right_bound + 1],
-                pivot_point = pivot.pivot_point,
-                tolerance = symmetry_tolerance)
-            if assymmetry_score < score_threshold:
-                rescored_pivots.append((
-                    i,
-                    pivot,
-                    pivot.score))
-    if len(rescored_pivots) == 0:
-        return pivots, list(range(len(pivots)))
-    else:
-        rescored_pivots.sort(key = lambda x: x[2])
-        pivot_idx, pivot_rescored, _ = zip(*rescored_pivots)
-        return list(pivot_rescored), list(pivot_idx)

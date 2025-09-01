@@ -4,14 +4,14 @@ from multiprocessing import Pool
 from time import time
 import itertools as it
 import functools as ft
-import itertools as itA
+import itertools as it
 import json
 
 import numpy as np
 
 from . import util
 from .spectra.types import PeakList, BenchmarkPeakList
-from .fragments import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, PairedFragments, Pivot, OverlapPivot, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment, find_pairs, find_pivots, find_left_boundaries, find_right_boundaries, rescore_pivots
+from .fragments import FragmentState, FragmentStateSpace, ResidueState, ResidueStateSpace, PairedFragments, Pivot, OverlapPivot, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment, find_pairs, find_pivots, find_left_boundaries, find_right_boundaries
 
 @dataclass
 class AnnotationParams:
@@ -22,38 +22,64 @@ class AnnotationParams:
     pivot_symmetry_tolerance: float
     pivot_score_threshold_factor: float
 
-@dataclass
+@dataclass(slots=True)
 class AnnotationResult:
-    pairs: list[PairedFragments]
-    left_boundaries: list[BoundaryFragment]
-    right_boundaries: list[list[ReflectedBoundaryFragment]]
-    pivots: list[Pivot]
-    pivot_index: list[int]
+    _pairs: list[PairedFragments]
+    _left_boundaries: list[BoundaryFragment]
+    _right_boundaries: list[list[ReflectedBoundaryFragment]]
+    _pivots: np.ndarray
+    _pivot_points: list[float]
+    _pivot_clusters: list[np.ndarray]
     _profile: dict[str,float] = None
 
-    def __post_init__(self):
-        assert len(self.pivots) == len(self.pivot_index)
-        assert len(set(self.pivot_index)) == len(self.right_boundaries)
+    @classmethod
+    def from_data(cls,
+        pairs,
+        left_boundaries,
+        right_boundaries,
+        pivots,
+        pivot_points,
+        idx_arr,
+        profile,
+    ) -> Self:
+        pivot_clusters = [[] for _ in range(len(pivot_points))]
+        for pvt_idx in range(len(pivots)):
+            pt_idx = idx_arr[pvt_idx]
+            pivot_clusters[pt_idx].append(pvt_idx)
+        return cls(
+            _pairs = pairs,
+            _left_boundaries = left_boundaries,
+            _right_boundaries = right_boundaries,
+            _pivots = np.array(pivots),
+            _pivot_points = pivot_points,
+            _pivot_clusters = [np.array(x) for x in pivot_clusters],
+            _profile = profile)
 
     @classmethod
     def read(cls, filepath: str) -> Self:
         with open(filepath, 'r') as f:
             anno = json.load(f)
             return cls(
-                pairs = [
-                    PairedFragments.from_dict(x) for x in anno['pairs']],
-                left_boundaries = [
-                    BoundaryFragment.from_dict(x) for x in anno['left_boundaries']],
-                right_boundaries = [
-                    [ReflectedBoundaryFragment.from_dict(x) for x in X] for X in anno['right_boundaries']],
-                pivots = [
-                    OverlapPivot.from_dict(x) if ('indices' in x) else VirtualPivot.from_dict(x) for x in anno['pivots']],
-                pivot_index = anno['pivot_index'],
+                _pairs = [
+                    PairedFragments.from_dict(x) for x in anno['_pairs']],
+                _left_boundaries = [
+                    BoundaryFragment.from_dict(x) for x in anno['_left_boundaries']],
+                _right_boundaries = [
+                    [ReflectedBoundaryFragment.from_dict(x) for x in X] for X in anno['_right_boundaries']],
+                _pivots = np.array([
+                    OverlapPivot.from_dict(x) if ('indices' in x) else VirtualPivot.from_dict(x) for x in anno['_pivots']]),
+                _pivot_points = anno['_pivot_points'],
+                _pivot_clusters = [
+                    np.array(x) for x in anno['_pivot_clusters']],
                 _profile = anno['_profile'])
         
     def write(self, filepath: str):
         with open(filepath, 'w') as f:
-            json.dump(asdict(self), f, indent = 4)
+            anno = asdict(self)
+            # numpy types don't get converted by 'asdict' so do it manually.
+            anno['_pivots'] = [asdict(x) for x in anno['_pivots']]
+            anno['_pivot_clusters'] = [x.tolist() for x in anno['_pivot_clusters']]
+            json.dump(anno, f, indent = 4)
 
     def get_pairs(self) -> list[PairedFragments]:
         return self._pairs
@@ -61,11 +87,14 @@ class AnnotationResult:
     def get_left_boundaries(self) -> list[BoundaryFragment]:
         return self._left_boundaries
 
-    def get_pivots(self) -> list[Pivot]:
-        return self._pivots
+    def get_pivot_clusters(self) -> list[Pivot]:
+        return [self._pivots[c] for c in self._pivot_clusters]
 
-    def get_right_boundaries(self, pivot_id: int) -> list[ReflectedBoundaryFragment]:
-        return self._right_boundaries[self._pivot_index[pivot_id]]
+    def get_pivot_point(self, i: int) -> float:
+        return self._pivot_points[i]
+
+    def get_right_boundaries(self, i: int) -> list[ReflectedBoundaryFragment]:
+        return self._right_boundaries[i]
 
 def _localize_into_ideal_masses(
     pairs: list[PairedFragments],
@@ -124,7 +153,7 @@ def annotate(
 
     # find structures of pairs that reflect about a common point of symmetry.
     pivot_time = time()
-    pivots, pivot_points, indexer = list(find_pivots(
+    pivots, pivot_points, idx_arr = list(find_pivots(
         peaks = peaks,
         pairs = fragment_pairs,
         comparison_tolerance = 2 * params.fragment_search_tolerance,
@@ -145,28 +174,17 @@ def annotate(
     right_boundaries = list(find_right_boundaries(
         pivot_points = pivot_points,
         peaks = peaks,
-        tolerance = params.fragment_search_tolerance,
+        tolerance = 0.1,#params.fragment_search_tolerance,
         residue_space = params.residue_space,
         fragment_space = params.extremal_fragment_space))
     rb_time = time() - rb_time
-
-    # score and filter pivots according to their symmetry and right boundary quality.
-    rescore_time = time()
-    # expected_num_symmetries = 2 # need a better way to set this
-    # rescored_pivots, pivot_index = rescore_pivots(
-    #     pivots = pivots,
-    #     left_boundaries = left_boundaries,
-    #     right_boundaries = right_boundaries,
-    #     peaks = peaks,
-    #     symmetry_tolerance = params.pivot_symmetry_tolerance,
-    #     score_threshold = expected_num_symmetries * params.pivot_score_threshold_factor)
-    rescore_time = time() - rescore_time
-    
+  
     # wrap everything up as an AnnotationResult object
-    return AnnotationResult(
+    return AnnotationResult.from_data(
         pairs = fragment_pairs,
         left_boundaries = left_boundaries,
         right_boundaries = right_boundaries,
-        pivots = pivots,#rescored_pivots
-        pivot_index = indexer,#pivot_index,
-        _profile = {"pair": pair_time, "localize": localize_time, "pivot": pivot_time, "lb": lb_time, "rb": rb_time, "rescore": rescore_time})
+        pivots = pivots,
+        pivot_points = pivot_points,
+        idx_arr = idx_arr,
+        profile = {"pair": pair_time, "localize": localize_time, "pivot": pivot_time, "lb": lb_time, "rb": rb_time,})
