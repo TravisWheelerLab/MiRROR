@@ -78,6 +78,11 @@ class ReindexedDAG(DAG):
             mapping = self._node_dict
         )
         super(ReindexedDAG, self).__init__(relabeled_graph, weight_key)
+
+    def __contains__(self,
+        node_label,
+    ) -> bool:
+        return node_label in self._node_dict
     
     def get_node_idx(self,
         node_label,

@@ -23,17 +23,20 @@ def align(
     precision: int = 10,
     path_filter: Callable = lambda x: True,
     sources: list[tuple[int,int]] = None,
+    sinks: list[tuple[int,int]] = None,
 ) -> list[AbstractAlignment]:
     # set up; alignment type, cost function, 
     if isinstance(cost_model, LocalCostModel):
         alignment_type = LocalAlignment
     else:
-        raise ValueError(f"unsupported cost model: {type(cost_model)}")
+        alignment_type = LocalAlignment
+        # raise ValueError(f"unsupported cost model: {type(cost_model)}")
     cost_fn = cost_model(product_graph)
     # enumerate alignments
     if sources is None:
         sources = list(product_graph.sources())
-    sinks = list(product_graph.sinks())
+    if sinks is None:
+        sinks = list(product_graph.sinks())
     aligned_paths = []
     for source in sources:
         node_cost = propagate(
@@ -48,8 +51,7 @@ def align(
                 node_cost = node_cost,
                 threshold = threshold,
                 source = source,
-                sink = sink,
-                path_filter = path_filter))
+                sink = sink))
     # filter alignments
     aligned_paths = [a for a in aligned_paths if not _all_skips([product_graph.unravel(v) for v in a[1]])]
     return list(map(

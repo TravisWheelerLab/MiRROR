@@ -535,30 +535,101 @@ class TestConcatenation(unittest.TestCase):
     def test_complex(self):
         pass
 
-from mirror.graphs.spectrum_graphs import SpectrumGraph, partition_pairs, align_prefixes, align_suffixes, pair_alignments
-from mirror.fragments import FragmentState, ResidueState, PairedFragments, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment
+from mirror.graphs.spectrum_graphs import SpectrumGraphPair, partition_pairs, align_spectrum_graphs,pair_alignments, SpectrumGraphCostModel
+from mirror.fragments import FragmentState, ResidueState, PairedFragments, OverlapPivot, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment
 from mirror.annotation import AnnotationResult
 from tests.test_annotation import VALIDATION_ANNOTATION_FILES
 from copy import deepcopy
 
-class TestSpectrumGraphs(unittest.TestCase):
+from tqdm import tqdm
 
-    def _test_construct(self, pivot_point, pairs, left_boundaries, right_boundaries):
-        left_data, right_data, cut_pairs = partition_pairs(pivot_point, pairs, left_boundaries, right_boundaries)
-        incr_graph = SpectrumGraph.from_pairs(*left_data, reverse=False)
-        decr_graph = SpectrumGraph.from_pairs(*right_data, reverse=True)
+class TestSpectrumGraphs(unittest.TestCase):
+    _graph_pairs = []
+
+    def _test_from_annotation(self, pairs, pivot_point, pivots, left_boundaries, right_boundaries, verbose):
+        graph_pair = SpectrumGraphPair.from_annotation(
+            pairs,
+            pivot_point,
+            pivots,
+            left_boundaries,
+            right_boundaries)
+        num_pfx = len(set(graph_pair.prefix_sources))
+        num_sfx = len(set(graph_pair.suffix_sources))
+        num_snk = len(set(graph_pair.related_sinks))
+        if verbose:
+            print(f"""graph pair
+-left:\t{graph_pair.left.order(), graph_pair.left.size()}
+-right:\t{graph_pair.right.order(), graph_pair.right.size()}
+-prod:\t{graph_pair.strong_product.order(), graph_pair.strong_product.size()}
+-pfx:\t{num_pfx} <- ({len(left_boundaries)})
+-sfx:\t{num_sfx} <- ({len(right_boundaries)})
+-snk:\t{num_snk} <- ({len([p for p in pivots if isinstance(p, OverlapPivot)])})""")
+            input()
+        return graph_pair
         
-    def test_construct(self):
-        for fpath in VALIDATION_ANNOTATION_FILES:
+    def test_from_annotation(self, verbose=True, progress=False):
+        if progress:
+            annotation_files = tqdm(VALIDATION_ANNOTATION_FILES)
+        else:
+            annotation_files = VALIDATION_ANNOTATION_FILES
+        for fpath in annotation_files:
             name = fpath.split('/')[-1].split('.')[0]
             anno = AnnotationResult.read(fpath)
             pairs = anno.get_pairs()
             left_boundaries = anno.get_left_boundaries()
             pivot_clusters = anno.get_pivot_clusters()
             for (i, pivots) in enumerate(pivot_clusters):
-                print(f"annotation {name} cluster {i}")
-                self._test_construct(
-                    anno.get_pivot_point(i),
+                if verbose:
+                    print(f"annotation {name} cluster {i}")
+                pivot_point = anno.get_pivot_point(i)
+                right_boundaries = anno.get_right_boundaries(i)
+                graph_pair = self._test_from_annotation(
                     pairs,
+                    pivot_point,
+                    pivots,
                     left_boundaries,
-                    anno.get_right_boundaries(i))
+                    right_boundaries,
+                    verbose)
+                self._graph_pairs.append(graph_pair)
+    
+    def test_align_spectrum_graphs(self, verbose=True):
+        if self._graph_pairs == []:
+            self.test_from_annotation(verbose=False,progress=True)
+        cost_threshold = 3
+        for (i, graph_pair) in enumerate(self._graph_pairs):
+            # each prefix source is a (b_lo, y_hi) product node.
+            # each suffix source is a (b_hi, y_lo) product node.
+            # consider all combinations of sources.
+            n_pfx = 0
+            n_sfx = 0
+            unq_pfx_src = set(graph_pair.prefix_sources)
+            unq_sfx_src = set(graph_pair.suffix_sources)
+            sources = list(it.product(unq_pfx_src,unq_sfx_src))
+            if len(sources) > 10_000:
+                print(f"skipping graph pair {i}, too many sources.")
+                continue
+            for (pfx_src, sfx_src) in tqdm(sources, desc=f"aligning graph pair {i}"):
+                # each sink product pair is an overlap pivot;
+                # if there are no overlap pivots, it's all-to-all.
+                for (pfx_snk, sfx_snk) in graph_pair.related_sinks:
+                    cost_model = SpectrumGraphCostModel(
+                        graph_pair,
+                        [pfx_src, sfx_src],
+                        [pfx_snk, sfx_snk])
+                    pfx_aln = align_spectrum_graphs(
+                        topology = graph_pair.strong_product,
+                        cost_model = cost_model,
+                        cost_threshold = cost_threshold,
+                        sources = [pfx_src],
+                        sinks = [pfx_snk],
+                        suffix_array = None)
+                    sfx_aln = align_spectrum_graphs(
+                        topology = graph_pair.strong_product,
+                        cost_model = cost_model,
+                        cost_threshold = cost_threshold,
+                        sources = [sfx_src],
+                        sinks = [sfx_snk],
+                        suffix_array = None)
+                    n_pfx += len(pfx_aln)
+                    n_sfx += len(sfx_aln)
+            print(n_pfx, n_sfx)

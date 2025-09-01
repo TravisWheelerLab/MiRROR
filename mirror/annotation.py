@@ -146,10 +146,13 @@ def annotate(
     # create fragment masses and reindexed pairs
     localize_time = time()
     n_peaks = len(peaks)
-    fragment_pairs, peaks = _localize_into_ideal_masses(
-        pairs = fragment_pairs,
-        fragment_space = params.fragment_space)
+    # fragment_pairs, peaks = _localize_into_ideal_masses(
+    #     pairs = fragment_pairs,
+    #     fragment_space = params.fragment_space)
     localize_time = time() - localize_time
+   ## these peaks have been effectively de-charged, so we don't need to look for charged boundaries.
+    # extremal_fragment_space = params.extremal_fragment_space
+    # extremal_fragment_space.charges = [1]
 
     # find structures of pairs that reflect about a common point of symmetry.
     pivot_time = time()
@@ -164,7 +167,7 @@ def annotate(
     lb_time = time()
     left_boundaries = list(find_left_boundaries(
         peaks = peaks,
-        tolerance = 0.1,#params.fragment_search_tolerance,
+        tolerance = 0.1,
         residue_space = params.residue_space,
         fragment_space = params.extremal_fragment_space))
     lb_time = time() - lb_time
@@ -174,7 +177,7 @@ def annotate(
     right_boundaries = list(find_right_boundaries(
         pivot_points = pivot_points,
         peaks = peaks,
-        tolerance = 0.1,#params.fragment_search_tolerance,
+        tolerance = 0.1,
         residue_space = params.residue_space,
         fragment_space = params.extremal_fragment_space))
     rb_time = time() - rb_time
