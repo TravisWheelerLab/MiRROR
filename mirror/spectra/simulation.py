@@ -60,7 +60,7 @@ def list_mz(spec: oms.MSSpectrum):
         np.array([peak.getMZ() for peak in spec])
     
     :spec: a pyopenms.MSSpectrum object."""
-    return [peak.getMZ() for peak in spec]
+    return np.array([peak.getMZ() for peak in spec])
 
 def list_intensity(spec: oms.MSSpectrum):
     """Creates a numpy array of the intensities of a pyopenms.MSSpectrum object.
@@ -68,7 +68,7 @@ def list_intensity(spec: oms.MSSpectrum):
         np.array([peak.getIntensity() for peak in spec])
     
     :spec: a pyopenms.MSSpectrum object."""
-    return [peak.getIntensity() for peak in spec]
+    return np.array([peak.getIntensity() for peak in spec])
 
 def simulate_simple_peaks(peptide: str):
     return list_mz(generate_fragment_spectrum(peptide, DEFAULT_PARAM))
@@ -81,3 +81,7 @@ def simulate_pivot(peptide: str):
     y = list_mz(generate_fragment_spectrum(peptide, Y_SERIES_PARAM))
     true_pivot = [*b[0:2],*y[-3:-1]]
     return np.mean(true_pivot)
+
+def simulate_noise(peaks: np.array) -> np.array:
+    noise = (np.random.uniform(size=peaks.shape) * (peaks.max() - peaks.min())) + peaks.min()
+    return np.sort(peaks.tolist() + noise.tolist())

@@ -116,8 +116,8 @@ class PeakList:
     def __len__(self) -> int:
         return self.n
     
-    def __getitem__(self, i: int) -> float:
-        return self.mz[i]
+    def __getitem__(self, index):
+        return self.mz[index]
     
     def __iter__(self) -> Iterator:
         return self.mz.__iter__()
