@@ -9,9 +9,7 @@ from pylibsufr import read_sequence_file, SufrBuilderArgs, SuffixArray as SufrSu
 #=============================================================================#
 
 class SuffixArray:
-    """Wraps a `pylibsufr.SuffixArray` object, itself a binding to the `SuffixArray` 
-    struct in the `libsufr` Rust crate. Only the `write`, `read`, `create`, `bisect`, 
-    and `count` methods are implemented."""
+    """Wraps a `pylibsufr.SuffixArray` object, itself a binding to the `SuffixArray` struct in the `libsufr` Rust crate. Only the `write`, `read`, `create`, `bisect`, and `count` methods are implemented."""
     def __init__(self,
         suffix_array: SufrSuffixArray,
         path_to_suffix_array: str,

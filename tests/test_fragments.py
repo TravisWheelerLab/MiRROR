@@ -23,6 +23,7 @@ class TestSolvers(unittest.TestCase):
         return FragmentStateSpace(
             loss_masses = [0, 22/70, sqrt(2)/2],
             loss_symbols = ["", "π/10", "√2/2"],
+            applicable_losses = [[],[],[],[]],
             charges = [1,2,3])
 
     def test01_fragment_space(self):

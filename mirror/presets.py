@@ -23,7 +23,8 @@ LOSS_MASSES = np.array([
     LOSS_CH2NO_MASS,
     2. * LOSS_H2O_MASS,
     2. * LOSS_NH3_MASS,
-    LOSS_H2O_MASS + LOSS_NH3_MASS])
+    LOSS_H2O_MASS + LOSS_NH3_MASS,
+])
 N_LOSSES = len(LOSS_MASSES)
 
 EXTREMAL_LOSS_MASSES = np.array([LOSS_Y_MASS, LOSS_B_MASS])
@@ -45,9 +46,33 @@ LOSS_SYMBOLS = np.array([
     LOSS_CH2NO_SYMBOL,
     SEP.join(2 * [LOSS_H2O_SYMBOL]),
     SEP.join(2 * [LOSS_NH3_SYMBOL]),
-    SEP.join([LOSS_H2O_SYMBOL] + [LOSS_NH3_SYMBOL])])
+    SEP.join([LOSS_H2O_SYMBOL] + [LOSS_NH3_SYMBOL]),
+])
 
 EXTREMAL_LOSS_SYMBOLS = np.array([LOSS_Y_SYMBOL, LOSS_B_SYMBOL])
+
+APPLICABLE_LOSSES = [
+    [0,],
+    [0,1],
+    [0,1],
+    [0,],
+    [0,],
+    [0,2],
+    [0,1],
+    [0,],
+    [0,],
+    [0,],
+    [0,],
+    [0,1],
+    [0,],
+    [0,],
+    [0,],
+    [0,2],
+    [0,2],
+    [0,],
+    [0,],
+    [0,],
+]
 
 CHARGE_1 = 1
 CHARGE_2 = 2
@@ -56,17 +81,22 @@ CHARGE_3 = 3
 CHARGES = [
     CHARGE_1, 
     CHARGE_2,
-    CHARGE_3]
+    CHARGE_3,
+]
 
 FRAGMENT_SPACE = FragmentStateSpace(
     loss_masses = LOSS_MASSES,
     loss_symbols = LOSS_SYMBOLS,
-    charges = CHARGES)
+    applicable_losses = APPLICABLE_LOSSES,
+    charges = CHARGES,
+)
 
 EXTREMAL_FRAGMENT_SPACE = FragmentStateSpace(
     loss_masses = (EXTREMAL_LOSS_MASSES.reshape(N_EXTREMAL_LOSSES, 1) + LOSS_MASSES.reshape(1, N_LOSSES)).flatten(),
     loss_symbols = (EXTREMAL_LOSS_SYMBOLS.reshape(N_EXTREMAL_LOSSES, 1) + SEP + LOSS_SYMBOLS.reshape(1, N_LOSSES)).flatten(),
-    charges = CHARGES)
+    applicable_losses = None,
+    charges = CHARGES,
+)
 
 AMINO_A_SYMBOL = 'A'
 AMINO_R_SYMBOL = 'R'
@@ -89,7 +119,7 @@ AMINO_W_SYMBOL = 'W'
 AMINO_Y_SYMBOL = 'Y'
 AMINO_V_SYMBOL = 'V'
 
-AMINO_SYMBOLS = [
+AMINO_SYMBOLS = np.array([
     AMINO_A_SYMBOL,
     AMINO_R_SYMBOL,
     AMINO_N_SYMBOL,
@@ -109,7 +139,8 @@ AMINO_SYMBOLS = [
     AMINO_T_SYMBOL,
     AMINO_W_SYMBOL,
     AMINO_Y_SYMBOL,
-    AMINO_V_SYMBOL]
+    AMINO_V_SYMBOL,
+])
 
 AMINO_A_MONO_MASS = 71.037
 AMINO_R_MONO_MASS = 156.10
@@ -132,7 +163,7 @@ AMINO_W_MONO_MASS = 186.08
 AMINO_Y_MONO_MASS = 163.06
 AMINO_V_MONO_MASS = 99.068
 
-AMINO_MONO_MASSES = [
+AMINO_MONO_MASSES = np.array([
     AMINO_A_MONO_MASS,
     AMINO_R_MONO_MASS,
     AMINO_N_MONO_MASS,
@@ -152,7 +183,8 @@ AMINO_MONO_MASSES = [
     AMINO_T_MONO_MASS,
     AMINO_W_MONO_MASS,
     AMINO_Y_MONO_MASS,
-    AMINO_V_MONO_MASS]
+    AMINO_V_MONO_MASS,
+])
 
 MOD_NULL_MASS = 0.
 MOD_PHOSPHOSERINE_MASS = 97.9769
@@ -163,7 +195,8 @@ MODIFICATION_MASSES = [
     MOD_NULL_MASS,
     MOD_PHOSPHOSERINE_MASS,
     MOD_METHIONINE_SULFOXIDE_MASS,
-    MOD_METHIONINE_SULFONE_MASS]
+    MOD_METHIONINE_SULFONE_MASS,
+]
 
 MOD_NULL_SYMBOL = ""
 MOD_PHOSPHOSERINE_SYMBOL = "SEP"
@@ -174,7 +207,8 @@ MODIFICATION_SYMBOLS = [
     MOD_NULL_SYMBOL,
     MOD_PHOSPHOSERINE_SYMBOL,
     MOD_METHIONINE_SULFOXIDE_SYMBOL,
-    MOD_METHIONINE_SULFONE_SYMBOL]
+    MOD_METHIONINE_SULFONE_SYMBOL,
+]
 
 APPLICABLE_MODIFICATIONS = [
     [0,],
@@ -206,7 +240,8 @@ MONO_RESIDUE_SPACE = ResidueStateSpace(
     modification_masses = MODIFICATION_MASSES,
     modification_symbols = MODIFICATION_SYMBOLS,
     applicable_modifications = APPLICABLE_MODIFICATIONS,
-    max_num_modifications = MAX_NUM_MODIFICATIONS)
+    max_num_modifications = MAX_NUM_MODIFICATIONS,
+)
 
 AMINO_A_AVG_MASS = 71.08
 AMINO_R_AVG_MASS = 156.2
@@ -229,7 +264,7 @@ AMINO_W_AVG_MASS = 186.2
 AMINO_Y_AVG_MASS = 163.2
 AMINO_V_AVG_MASS = 99.13
 
-AMINO_AVG_MASSES = [
+AMINO_AVG_MASSES = np.array([
     AMINO_A_AVG_MASS,
     AMINO_R_AVG_MASS,
     AMINO_N_AVG_MASS,
@@ -249,7 +284,8 @@ AMINO_AVG_MASSES = [
     AMINO_T_AVG_MASS,
     AMINO_W_AVG_MASS,
     AMINO_Y_AVG_MASS,
-    AMINO_V_AVG_MASS]
+    AMINO_V_AVG_MASS,
+])
 
 AVG_RESIDUE_SPACE = ResidueStateSpace(
     amino_masses = AMINO_AVG_MASSES,
@@ -257,7 +293,8 @@ AVG_RESIDUE_SPACE = ResidueStateSpace(
     modification_masses = MODIFICATION_MASSES,
     modification_symbols = MODIFICATION_SYMBOLS,
     applicable_modifications = APPLICABLE_MODIFICATIONS,
-    max_num_modifications = MAX_NUM_MODIFICATIONS)
+    max_num_modifications = MAX_NUM_MODIFICATIONS,
+)
 
 FRAGMENT_SEARCH_TOLERANCE = 0.01
 
@@ -270,7 +307,8 @@ MONO_ANNOTATION_PARAMS = AnnotationParams(
     extremal_fragment_space = EXTREMAL_FRAGMENT_SPACE,
     residue_space = MONO_RESIDUE_SPACE,
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
-    pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
+    pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR,
+)
 
 AVG_ANNOTATION_PARAMS = AnnotationParams(
     fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
@@ -278,6 +316,7 @@ AVG_ANNOTATION_PARAMS = AnnotationParams(
     extremal_fragment_space = EXTREMAL_FRAGMENT_SPACE,
     residue_space = AVG_RESIDUE_SPACE,
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
-    pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR)
+    pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR,
+)
 
 VALIDATION_PEPTIDES = ["NREQSTK","AEEHANR","GNAGGLHHHR","HHVLHHQTVDK","HHSTIPQK","FTHQHKPDER","CEACPKPGTHAHK","HHTIAHYK","KPGVHQPQR","AAHLAAHEAAK","GHSCYRPR","HHNIIR","HLAEHEVK","HGLTNTASHTR","INPDNHNEK","HGATVVNHVK","HLNGHGSPPATNSSHR","HASNIHVEK","ELHVHPK"]

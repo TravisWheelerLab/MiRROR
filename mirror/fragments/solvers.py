@@ -12,8 +12,7 @@ import numpy as np
 class FragmentStateSpace:
     loss_masses: list[float]
     loss_symbols: list[str]
-#    applicable_losses: list[list[int]] # amino_idx -> {loss_idx applicable to amino}.
-#    max_num_losses: int                # restricts the number of losses that can be applied to a fragment.
+    applicable_losses: list[list[int]] # amino idx -> {applicable loss indices}.
     charges: list[int]
 
     @classmethod
@@ -21,6 +20,7 @@ class FragmentStateSpace:
         return cls(
             loss_masses = [0.],
             loss_symbols = [''],
+            applicable_losses = [[0] for _ in range(20)],
             charges = [1])
 
     def n_losses(self) -> int:

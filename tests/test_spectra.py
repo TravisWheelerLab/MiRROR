@@ -107,7 +107,6 @@ class TestSpectraRegistration(unittest.TestCase):
                     complex_noisy = simulate_noise(complex)
                     sn[-1].append(_register(simple, simple_noisy, radius)[0])
                     cn[-1].append(_register(complex, complex_noisy, radius)[0])
-        
         print("simple | complex", [np.mean(x).round(4).tolist() for x in sc])
         print("complex | simple", [np.mean(x).round(4).tolist() for x in cs])
         print("simple | noisy simple", [np.mean(x).round(4).tolist() for x in sn])
