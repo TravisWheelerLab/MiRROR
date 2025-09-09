@@ -68,13 +68,13 @@ class TestSpectraTypes(unittest.TestCase):
                     self.assertTrue(all([abs(difs[0] - d) < 0.01 for d in difs]))
                     self.assertTrue(all([abs(target_dif - d) < 0.01 for d in difs]))
 
-from mirror.spectra.registration import SpectrumRegistration, _register
+from mirror.spectra.registration import Registration, _register
 from mirror.spectra.simulation import simulate_simple_peaks, simulate_complex_peaks, simulate_noise
 from mirror.presets import AMINO_SYMBOLS
 class TestSpectraRegistration(unittest.TestCase):
 
-    def test_SpectrumRegistration(self):
-        """Test SpectrumRegistration construction and scoring."""
+    def test_Registration(self):
+        """Test Registration construction and scoring."""
         mz = np.arange(10)
         intensity = np.empty(10)
         intensity[0::2] = np.ones(5)
@@ -82,8 +82,8 @@ class TestSpectraRegistration(unittest.TestCase):
         peaks = PeakList(mz = mz, intensity = intensity)
         matching1 = (0., [(i,i) for i in range(0,10,2)])
         matching2 = (0., [(i,i) for i in range(1,10,2)])
-        reg1 = SpectrumRegistration.from_fastdtw(0, peaks, peaks, matching1)
-        reg2 = SpectrumRegistration.from_fastdtw(1, peaks, peaks, matching2)
+        reg1 = Registration.from_fastdtw(0, peaks, peaks, matching1)
+        reg2 = Registration.from_fastdtw(1, peaks, peaks, matching2)
         self.assertGreater(reg1.score(), reg2.score())
 
     def test__register_noise(self):
@@ -105,8 +105,8 @@ class TestSpectraRegistration(unittest.TestCase):
                 for _ in range(10):
                     simple_noisy = simulate_noise(simple)
                     complex_noisy = simulate_noise(complex)
-                    sn[-1].append(_register(simple, simple_noisy, radius)[0])
-                    cn[-1].append(_register(complex, complex_noisy, radius)[0])
+                    sn[-1].append(_register(simple_noisy, simple, radius)[0])
+                    cn[-1].append(_register(complex_noisy, complex, radius)[0])
         print("simple | complex", [np.mean(x).round(4).tolist() for x in sc])
         print("complex | simple", [np.mean(x).round(4).tolist() for x in cs])
         print("simple | noisy simple", [np.mean(x).round(4).tolist() for x in sn])
@@ -122,7 +122,7 @@ class TestSpectraRegistration(unittest.TestCase):
             dels.append([])
             muts.append([])
             for (i, peptide) in enumerate(VALIDATION_PEPTIDES):
-                if n >= len(peptide):
+                if n >= len(peptide) - 2:
                     continue
                 ref_peaks = simulate_simple_peaks(peptide)
                 peptide_locs = np.arange(len(peptide))
@@ -138,8 +138,8 @@ class TestSpectraRegistration(unittest.TestCase):
                         ins_peptide.insert(loc, np.random.choice(AMINO_SYMBOLS))
                     ins_peptide = ''.join(ins_peptide)
                     mut_peptide = ''.join(mut_peptide)
-                    del_peptide = ''.join(x for x in peptide if x is not None)
-                    for (query_pep, result_arrs) in [(mut_peptide, muts), (del_peptide, dels), (ins_peptide, ins)]:
+                    del_peptide = ''.join(x for x in del_peptide if x is not None)
+                    for (query_pep, result_arrs) in [(mut_peptide, muts),(del_peptide, dels), (ins_peptide, ins)]:
                         query_peaks = simulate_simple_peaks(query_pep)
                         result_arrs[-1].append(_register(query_peaks, ref_peaks, 1)[0])
         print("| dist", np.arange(1,10).tolist())
