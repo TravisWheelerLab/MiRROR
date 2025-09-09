@@ -15,7 +15,7 @@ from pyopenms import MSSpectrum
 from ..io import mgf, read_mgf, mzlib, read_mzlib
 from ..util import merge_in_order, interleave
 
-from .simulation import generate_fragment_spectrum, DEFAULT_PARAM, COMPLEX_PARAM
+from .simulation import simulate_pivot, generate_fragment_spectrum, DEFAULT_PARAM, COMPLEX_PARAM
 
 @dataclass
 class SpectrumParams:
@@ -253,29 +253,11 @@ class BenchmarkPeakList(AnnotatedPeakList):
                     # dif = self.mz[l_idx] - self.mz[r_idx]
                     yield (l_idx, r_idx, residue)#, dif)
 
-    # def get_pivots(self) -> Iterator[tuple[float,Any]]:
-    #     """Identify overlap and virtual pivots in the spectrum. Virtual pivots are only returned if no overlap pivots can be found. Overlap pivots take the form (pivot point, (pair, pair)) while virtual pivots take the form (pivot point, None)."""
+    def get_pivot(self) -> float:
+        """Return the ideal pivot point of the simulated fragment masses.
 
-    #     midpoints = []
-    #     # step 1 - look for overlap pivots
-    #     c = 0
-    #     for (l,r) in it.pairwise(range(self.m + 1)):
-    #         pairs = list(self.get_pairs(l,r))
-    #         for (i, (l1, r1, res)) in enumerate(pairs):
-    #             for (l2, r2, _) in pairs[i + 1:]: # all residues are the same in a call to get_pairs
-    #                 pivot_point = (self[l1] + self[l2] + self[r1] + self[r2]) / 4
-    #                 midpoints.append(pivot_point)
-    #                 if (l1 < l2 < r1 < r2) or (l2 < l1 < r2 < r1):
-    #                     c += 1
-    #                     yield (
-    #                         round(pivot_point, 2),
-    #                         ((l1,r1),(l2,r2)))
-    #     if c == 0:
-    #         # step 2 - when there are no overlap pivots, return the mode of virtual pivots.
-    #         midpoints = [round(x, 2) for x in midpoints]
-    #         yield (
-    #             stat.mode(midpoints),
-    #             None)
+            simulate_pivot(self.peptide)"""
+        return simulate_pivot(self.peptide)
 
     @staticmethod
     def _get_extremal(arr: Iterator[int], weights: Iterable[int], extrema: int, reverse: bool = False) -> Iterator[int]:

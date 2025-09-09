@@ -9,6 +9,7 @@ dependencies = [
     "matplotlib>=3.10.5",
     "mzpaf>=0.2.0b0",
     "mzspeclib>=1.0.7",
+    "nbconvert>=7.16.6",
     "networkx>=3.5",
     "numba==0.61.2",
     "numpy<=2.2",

@@ -87,6 +87,9 @@ class AnnotationResult:
     def get_left_boundaries(self) -> list[BoundaryFragment]:
         return self._left_boundaries
 
+    def n_clusters(self) -> int:
+        return len(self._pivot_clusters)
+
     def get_pivot_clusters(self) -> list[Pivot]:
         return [self._pivots[c] for c in self._pivot_clusters]
 
@@ -153,7 +156,7 @@ def annotate(
    ## these peaks have been effectively de-charged, so we don't need to look for charged boundaries.
     # extremal_fragment_space = params.extremal_fragment_space
     # extremal_fragment_space.charges = [1]
-
+    
     # find structures of pairs that reflect about a common point of symmetry.
     pivot_time = time()
     pivots, pivot_points, idx_arr = list(find_pivots(
@@ -162,7 +165,7 @@ def annotate(
         comparison_tolerance = 2 * params.fragment_search_tolerance,
         symmetry_tolerance = params.pivot_symmetry_tolerance))
     pivot_time = time() - pivot_time
-
+    
     # BoundaryPeaks have m/z that is within a shift transformation of a (FragmentState,ResidueState) solution.
     lb_time = time()
     left_boundaries = list(find_left_boundaries(
@@ -171,7 +174,7 @@ def annotate(
         residue_space = params.residue_space,
         fragment_space = params.extremal_fragment_space))
     lb_time = time() - lb_time
-
+    
     # ReflectedBoundaryPeaks have m/z that is within a reflection and shift of a (FragmentState,ResidueState) solution. the reflection is parametized by a pivot, so right_boundaries is a nested list that shares its index with pivots.
     rb_time = time()
     right_boundaries = list(find_right_boundaries(
@@ -181,7 +184,7 @@ def annotate(
         residue_space = params.residue_space,
         fragment_space = params.extremal_fragment_space))
     rb_time = time() - rb_time
-  
+    
     # wrap everything up as an AnnotationResult object
     return AnnotationResult.from_data(
         pairs = fragment_pairs,

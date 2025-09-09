@@ -23,20 +23,21 @@ def partition_pairs(
 ) -> tuple[list[PairedFragments],list[PairedFragments],list[PairedFragments]]:
     """Construct spectrum graphs over PairedFragments as edges, *BoundaryFragments as sources, and Pivot-induced sinks."""
     # partition pairs into left, right, and cut based on their position relative to the pivot point and min/max left/right boundaries.
-    left_bound = min(lb.fragment.peak_idx for lb in left_boundaries)
-    right_bound = max(rb.fragment.peak_idx for rb in right_boundaries)
+    left_bound = min(lb.fragment.fragment_mass for lb in left_boundaries)
+    right_bound = max(2 * pivot_point - rb.fragment.fragment_mass for rb in right_boundaries)
     left_pairs = []
     right_pairs = []
     cut_pairs = []
     for p in pairs:
         left_idx, right_idx = p.peak_indices()
         left_mass, right_mass = p.fragment_masses()
-        if (right_mass < pivot_point) and (left_idx >= left_bound):
-            left_pairs.append(p)
-        if (left_mass > pivot_point) and (right_idx <= right_bound):
-            right_pairs.append(p)
-        if (left_mass < pivot_point < right_mass):
+        if left_mass < pivot_point < right_mass:
             cut_pairs.append(p)
+        elif left_bound <= right_mass < pivot_point:
+            left_pairs.append(p)
+        elif pivot_point < left_mass <= right_bound:
+            right_pairs.append(p)
+    print(left_bound, pivot_point, right_bound, '\n', len(left_pairs),len(right_pairs),len(cut_pairs))
     return (
         left_pairs,
         right_pairs,

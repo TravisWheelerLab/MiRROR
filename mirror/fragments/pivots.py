@@ -32,6 +32,18 @@ class OverlapPivot(Pivot):
     score: float
     indices: tuple[int,int,int,int]
     masses: tuple[float,float,float,float]
+
+    def index_pairs(self) -> tuple[tuple[int,int],tuple[int,int]]:
+        return (
+            (
+                self.indices[0],
+                self.indices[2],
+            ),
+            (
+                self.indices[1],
+                self.indices[3],
+            ),
+        )
     
     @classmethod
     def from_indices(cls,
