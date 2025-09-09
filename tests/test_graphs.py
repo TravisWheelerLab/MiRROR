@@ -535,6 +535,7 @@ class TestConcatenation(unittest.TestCase):
     def test_complex(self):
         pass
 
+from mirror.spectra import simulate_pivot
 from mirror.graphs.spectrum_graphs import SpectrumGraphPair, partition_pairs, align_spectrum_graphs,pair_alignments, SpectrumGraphCostModel
 from mirror.fragments import FragmentState, ResidueState, PairedFragments, OverlapPivot, VirtualPivot, BoundaryFragment, ReflectedBoundaryFragment
 from mirror.annotation import AnnotationResult
@@ -551,17 +552,6 @@ class TestSpectrumGraphs(unittest.TestCase):
             pivots,
             left_boundaries,
             right_boundaries)
-        num_pfx = len(set(graph_pair.prefix_sources))
-        num_sfx = len(set(graph_pair.suffix_sources))
-        num_snk = len(set(graph_pair.related_sinks))
-        if verbose:
-            print(f"""graph pair
--left:\t{graph_pair.left.order(), graph_pair.left.size()}
--right:\t{graph_pair.right.order(), graph_pair.right.size()}
--prod:\t{graph_pair.strong_product.order(), graph_pair.strong_product.size()}
--pfx:\t{num_pfx} <- ({len(left_boundaries)})
--sfx:\t{num_sfx} <- ({len(right_boundaries)})
--snk:\t{num_snk} <- ({len([p for p in pivots if isinstance(p, OverlapPivot)])})""")
         return graph_pair
     
     def test_from_annotation(self, verbose=True, progress=False):
@@ -571,14 +561,15 @@ class TestSpectrumGraphs(unittest.TestCase):
             annotation_files = VALIDATION_ANNOTATION_FILES
         for fpath in annotation_files:
             name = fpath.split('/')[-1].split('.')[0]
+            _, peptide, mode, charges = name.split('_')
             anno = AnnotationResult.read(fpath)
             pairs = anno.get_pairs()
             left_boundaries = anno.get_left_boundaries()
             pivot_clusters = anno.get_pivot_clusters()
+            true_pivot = simulate_pivot(peptide)
             for (i, pivots) in enumerate(pivot_clusters):
-                if verbose:
-                    print(f"annotation {name} cluster {i}")
                 pivot_point = anno.get_pivot_point(i)
+                pvt_err = pivot_point - true_pivot
                 right_boundaries = anno.get_right_boundaries(i)
                 graph_pair = self._test_from_annotation(
                     pairs,
@@ -587,6 +578,11 @@ class TestSpectrumGraphs(unittest.TestCase):
                     left_boundaries,
                     right_boundaries,
                     verbose)
+                num_pfx = len(set(graph_pair.prefix_sources))
+                num_sfx = len(set(graph_pair.suffix_sources))
+                num_snk = len(set(graph_pair.related_sinks))
+                if (num_pfx == 0 or num_sfx == 0 or num_snk == 0) and verbose:
+                    print(f"unsolvable:\n\t{name} cluster {i+1}/{len(pivot_clusters)}\n\tnum_pfx {num_pfx} ({len(left_boundaries)}) num_sfx {num_sfx} ({len(right_boundaries)}) num_snk {num_snk} pvt_err {pvt_err}")
                 self._graph_pairs.append((
                     f"{name}-cluster_{i}",
                     graph_pair))
@@ -595,24 +591,43 @@ class TestSpectrumGraphs(unittest.TestCase):
     def test_align_spectrum_graphs(self, verbose=True):
         if self._graph_pairs == []:
             self.test_from_annotation(verbose=False,progress=True)
-        cost_threshold = 3
+        cost_threshold = 10
         for (i, (label, graph_pair)) in enumerate(self._graph_pairs):
             # each prefix source is a (b_lo, y_hi) product node.
             # each suffix source is a (b_hi, y_lo) product node.
             # consider all combinations of sources.
             n_pfx = 0
             n_sfx = 0
+            n_aln = 0
             unq_pfx_src = set(graph_pair.prefix_sources)
             unq_sfx_src = set(graph_pair.suffix_sources)
             sources = list(it.product(unq_pfx_src,unq_sfx_src))
-            print(label)
-            if len(sources) > 10_000:
-                print(f"skipping graph pair {i}, too many sources.")
+            sinks = graph_pair.related_sinks
+            num_src = len(sources)
+            num_snk = len(sinks)
+            peptide = label.split('_')[1]
+            true_pivot = simulate_pivot(peptide)
+            pvt_err = graph_pair.pivot_point - true_pivot
+            if verbose:
+                print(f"""
+{label}
+pivot error {pvt_err}
+sources {num_src} ({len(unq_pfx_src)} x {len(unq_sfx_src)})
+sinks {num_snk}""")
+            if abs(pvt_err) > 1:
+                print("\tskip: bad pivot")
+                continue
+            elif len(unq_pfx_src) == 0 or len(unq_sfx_src) == 0 or len(sinks) == 0:
+                print("\tskip: no sources/no sinks")
+                continue
+            elif len(sources) > 10_000:
+                print("\tskip: too many sources")
                 continue
             for (pfx_src, sfx_src) in tqdm(sources, desc=f"aligning graph pair {i}"):
                 # each sink product pair is an overlap pivot;
                 # if there are no overlap pivots, it's all-to-all.
-                for (pfx_snk, sfx_snk) in graph_pair.related_sinks:
+                for (pfx_snk, sfx_snk) in sinks:
+                    n_aln += 1
                     cost_model = SpectrumGraphCostModel(
                         graph_pair,
                         [pfx_src, sfx_src],
@@ -633,4 +648,4 @@ class TestSpectrumGraphs(unittest.TestCase):
                         suffix_array = None)
                     n_pfx += len(pfx_aln)
                     n_sfx += len(sfx_aln)
-            print(n_pfx, n_sfx)
+            print(f"\tran {n_aln} alignments -> {n_pfx, n_sfx}")

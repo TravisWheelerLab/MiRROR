@@ -37,7 +37,6 @@ def partition_pairs(
             left_pairs.append(p)
         elif pivot_point < left_mass <= right_bound:
             right_pairs.append(p)
-    print(left_bound, pivot_point, right_bound, '\n', len(left_pairs),len(right_pairs),len(cut_pairs))
     return (
         left_pairs,
         right_pairs,
@@ -75,6 +74,7 @@ def construct_graph(
 @dataclasses.dataclass(slots=True)
 class SpectrumGraphPair:
     """Product graph types, prefix and suffix partitions of the source node product, and sink node products related by pivot structures."""
+    pivot_point: float
     left: ReindexedDAG
     right: ReindexedDAG
     strong_product: StrongProductDAG
@@ -129,6 +129,7 @@ class SpectrumGraphPair:
         # TODO: if there are no overlap pivots, construct the sink products from the cut pairs.
         strong_product = StrongProductDAG(left, right)
         return cls(
+            pivot_point = pivot_point,
             left = left,
             right = right,
             strong_product = strong_product,
