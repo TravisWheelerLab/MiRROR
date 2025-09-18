@@ -62,11 +62,12 @@ class ReflectedBoundaryFragment(BoundaryFragment):
     ) -> Self:
         """Construct a boundary from its solution, as returned by a solver, and the series symbol."""
         fragment = soln[1]
-        series = 'unk'
         if 'y' in fragment.loss_symbol:
             series = 'y'
         elif 'b' in fragment.loss_symbol:
             series = 'b'
+        else:
+            series = 'unk'
         return cls(
             fragment = fragment,
             residue = soln[2],

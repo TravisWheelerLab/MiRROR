@@ -1,10 +1,27 @@
 from typing import Self, Any, Iterator, Iterable
 import dataclasses
+import itertools as it
 
 import numpy as np
 
 from .suffix_array import SuffixArray, BisectResult
 from ..fragments import FragmentStateSpace, ResidueStateSpace
+
+def _construct_all_kmers(
+    k: int,
+    masses: np.ndarray,
+    symbols: np.ndarray,
+    applicable_modifications: list[list[int]],
+) -> list[tuple[float,str]]:
+    """arg 'k' is the int kmer length, arg 'masses' is a 1d np array of n floats. arg 'symbols' is a 1d np array of n strings. returns a list of n^k (float, str) tuples, where each float is a sum of 'k' elements in 'masses', and each str is a concatenation of 'k' elements in 'symbols'."""
+    n = len(masses)
+    ind = list(range(n))
+    kmer_ind = [list(i) for i in it.product(*[ind] * k)]
+    return [(
+            sum(masses[i]),
+            ''.join(symbols[i]),
+            list(set(x for j in i for x in applicable_modifications[j])),
+        ) for i in kmer_ind]
 
 @dataclasses.dataclass(slots=True)
 class PeptideMassQueryEngine:
@@ -42,13 +59,6 @@ class PeptideMassQueryEngine:
                 result_masses.extend(res_mass)
                 result_states.extend(res_states)
         return np.array(result_sequences), np.array(result_masses), np.array(result_states)
-
-    def augment(self,
-        sequences: list[str],
-    ):
-        """Generate augmentations of a collection of sequences, which describe all possible loss and modification states."""
-        # TODO
-        return None
 
 def _query(
     engine: PeptideMassQueryEngine,

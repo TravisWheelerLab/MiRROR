@@ -9,7 +9,7 @@ from bisect import bisect_left, bisect_right
 from mirror.spectra.simulation import simulate_simple_peaks, simulate_complex_peaks, simulate_pivot
 from mirror.spectra.types import PeakList, BenchmarkPeakList
 from mirror.io import read_mzlib
-from mirror.presets import VALIDATION_PEPTIDES, MONO_ANNOTATION_PARAMS, AVG_ANNOTATION_PARAMS
+from mirror.presets import VALIDATION_PEPTIDES, MONO_ANNOTATION_PARAMS
 from mirror.annotation import AnnotationParams
 import mirror.util as util
 
@@ -255,7 +255,6 @@ class TestPairs(unittest.TestCase):
     def test_sims(self):
         """Run the find_pairs function on a set of simulated spectra."""
         self._test_sims(VALIDATION_SIMS, MONO_ANNOTATION_PARAMS)
-        # self._test_sims(VALIDATION_SIMS, AVG_ANNOTATION_PARAMS)
 
 from mirror.fragments.pivots import Pivot, find_overlap_pivots, find_virtual_pivots
 from mirror.annotation import _localize_into_ideal_masses
@@ -333,18 +332,28 @@ class TestBoundaries(unittest.TestCase):
                 tolerance = 0.1,
                 residue_space = params.residue_space,
                 fragment_space = params.extremal_fragment_space))
+            dimer_boundaries = list(find_left_boundaries(
+                peaks = sim_bpl,
+                tolerance = 0.1,
+                residue_space = params.dimer_space,
+                fragment_space = params.extremal_fragment_space))
+            trimer_boundaries = list(find_left_boundaries(
+                peaks = sim_bpl,
+                tolerance = 0.1,
+                residue_space = params.trimer_space,
+                fragment_space = params.extremal_fragment_space))
             print(i, peptide, mode, charges)
             print(sim_bpl.mz)
             expected_boundaries = list(sim_bpl.get_left_boundaries())
-            observed_boundaries = [(lb.fragment.peak_idx, lb.residue.amino_symbol) for lb in left_boundaries]
-            print("observed:",observed_boundaries)
+            observed_boundaries = [(lb.fragment.peak_idx, lb.residue.amino_symbol) for lb in left_boundaries + dimer_boundaries + trimer_boundaries]
+            print("observed:",len(observed_boundaries),len(params.dimer_space.amino_masses),len(params.trimer_space.amino_masses))
             for (idx,res) in expected_boundaries:
                 print(res, idx, round(sim_bpl[idx], 4), end='\t')
                 if (idx,res) in observed_boundaries:
                     print('●')
                 else:
                     print('◌')
-            # input()
+            input()
 
     def test_right_boundaries(self, params = MONO_ANNOTATION_PARAMS):
         """Run the find_right_boundaries function on simulated spectra."""
@@ -360,18 +369,30 @@ class TestBoundaries(unittest.TestCase):
                 tolerance = 0.1,
                 residue_space = params.residue_space,
                 fragment_space = params.extremal_fragment_space)[0]
+            dimer_boundaries = find_right_boundaries(
+                pivot_points = [sim_pivot.pivot_point],
+                peaks = sim_bpl,
+                tolerance = 0.1,
+                residue_space = params.dimer_space,
+                fragment_space = params.extremal_fragment_space)[0]
+            trimer_boundaries = find_right_boundaries(
+                pivot_points = [sim_pivot.pivot_point],
+                peaks = sim_bpl,
+                tolerance = 0.1,
+                residue_space = params.trimer_space,
+                fragment_space = params.extremal_fragment_space)[0]
             print(i, peptide, mode, charges)
             print(f"pivot = {sim_pivot.pivot_point}")
             expected_boundaries = list(sim_bpl.get_right_boundaries())
-            observed_boundaries = [(rb.fragment.peak_idx, rb.residue.amino_symbol) for rb in right_boundaries]
-            print("observed:",observed_boundaries)
+            observed_boundaries = [(rb.fragment.peak_idx, rb.residue.amino_symbol) for rb in right_boundaries + dimer_boundaries + trimer_boundaries]
+            print("observed:",len(observed_boundaries),len(params.dimer_space.amino_masses),len(params.trimer_space.amino_masses))
             for (idx,res) in expected_boundaries:
                 print(res, idx, round(sim_bpl[idx], 4), end='\t')
                 if (idx,res) in observed_boundaries:
                     print('●')
                 else:
                     print('◌')
-            # input()
+            input()
 
     def _test_mirror_symmetry(self):
         c = 0.3

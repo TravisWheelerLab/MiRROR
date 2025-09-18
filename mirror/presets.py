@@ -1,6 +1,8 @@
 from .fragments import FragmentStateSpace, ResidueStateSpace
 from .annotation import AnnotationParams
 
+from .sequences.queries import _construct_all_kmers
+
 import numpy as np
 
 # this will be a plaintext configuration file.
@@ -232,6 +234,26 @@ APPLICABLE_MODIFICATIONS = [
     [0,],
     [0,]]
 
+_DIMERS_MONO = _construct_all_kmers(
+    2,
+    AMINO_MONO_MASSES,
+    AMINO_SYMBOLS,
+    APPLICABLE_MODIFICATIONS,
+)
+DIMER_MONO_MASSES, DIMER_MONO_SYMBOLS, DIMER_APPLICABLE_MODIFICATIONS = zip(*_DIMERS_MONO)
+DIMER_MONO_MASSES = np.array(DIMER_MONO_MASSES)
+DIMER_SYMBOLS = np.array(DIMER_MONO_SYMBOLS)
+
+_TRIMERS_MONO = _construct_all_kmers(
+    3,
+    AMINO_MONO_MASSES,
+    AMINO_SYMBOLS,
+    APPLICABLE_MODIFICATIONS,
+)
+TRIMER_MONO_MASSES, TRIMER_MONO_SYMBOLS, TRIMER_APPLICABLE_MODIFICATIONS = zip(*_TRIMERS_MONO)
+TRIMER_MONO_MASSES = np.array(TRIMER_MONO_MASSES)
+TRIMER_SYMBOLS = np.array(TRIMER_MONO_SYMBOLS)
+
 MAX_NUM_MODIFICATIONS = 3
 
 MONO_RESIDUE_SPACE = ResidueStateSpace(
@@ -240,6 +262,24 @@ MONO_RESIDUE_SPACE = ResidueStateSpace(
     modification_masses = MODIFICATION_MASSES,
     modification_symbols = MODIFICATION_SYMBOLS,
     applicable_modifications = APPLICABLE_MODIFICATIONS,
+    max_num_modifications = MAX_NUM_MODIFICATIONS,
+)
+
+MONO_DIMER_SPACE = ResidueStateSpace(
+    amino_masses = DIMER_MONO_MASSES,
+    amino_symbols = DIMER_SYMBOLS,
+    modification_masses = MODIFICATION_MASSES,
+    modification_symbols = MODIFICATION_SYMBOLS,
+    applicable_modifications = DIMER_APPLICABLE_MODIFICATIONS,
+    max_num_modifications = MAX_NUM_MODIFICATIONS,
+)
+
+MONO_TRIMER_SPACE = ResidueStateSpace(
+    amino_masses = TRIMER_MONO_MASSES,
+    amino_symbols = TRIMER_SYMBOLS,
+    modification_masses = MODIFICATION_MASSES,
+    modification_symbols = MODIFICATION_SYMBOLS,
+    applicable_modifications = TRIMER_APPLICABLE_MODIFICATIONS,
     max_num_modifications = MAX_NUM_MODIFICATIONS,
 )
 
@@ -306,15 +346,8 @@ MONO_ANNOTATION_PARAMS = AnnotationParams(
     fragment_space = FRAGMENT_SPACE,
     extremal_fragment_space = EXTREMAL_FRAGMENT_SPACE,
     residue_space = MONO_RESIDUE_SPACE,
-    pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
-    pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR,
-)
-
-AVG_ANNOTATION_PARAMS = AnnotationParams(
-    fragment_search_tolerance = FRAGMENT_SEARCH_TOLERANCE,
-    fragment_space = FRAGMENT_SPACE,
-    extremal_fragment_space = EXTREMAL_FRAGMENT_SPACE,
-    residue_space = AVG_RESIDUE_SPACE,
+    dimer_space = MONO_DIMER_SPACE,
+    trimer_space = MONO_TRIMER_SPACE,
     pivot_symmetry_tolerance = PIVOT_SYMMETRY_TOLERANCE,
     pivot_score_threshold_factor = PIVOT_SCORE_THRESHOLD_FACTOR,
 )

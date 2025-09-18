@@ -19,6 +19,8 @@ class AnnotationParams:
     fragment_space: FragmentStateSpace
     extremal_fragment_space: FragmentStateSpace
     residue_space: ResidueStateSpace
+    dimer_space: ResidueStateSpace
+    trimer_space: ResidueStateSpace
     pivot_symmetry_tolerance: float
     pivot_score_threshold_factor: float
 
