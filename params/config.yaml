@@ -1,0 +1,18 @@
+# top-level arguments
+input: data/spectra/test.mzlib.txt
+
+defaults:
+- annotation: annotation-mono
+- alignment: alignment-gapped-local
+- enumeration: enumeration
+- _self_
+
+# application parameters and info
+app:
+  name: mrror
+  version: 0.1.0
+  descr: |
+    Masses in Reflection Reveal Ordered Residues
+    --------------------------------------------
+    MRROR is a de novo peptide sequencing tool that uses fast symmetry detection, sparse graph alignment, and suffix array-powered sequence search to generate optimal peptide candidates from arbitrary mass spectra. 
+  minimal_output: true
