@@ -1,10 +1,16 @@
-from typing import Iterator, Iterable, Callable
+from typing import Iterator, Iterable, Callable, Any
 import itertools as it
 
 from .fragments.types import FragmentStateSpace, ResidueStateSpace
 
 import numba
 import numpy as np
+
+def normalize_dict(
+    data: dict[Any,float],
+) -> dict[Any,float]:
+    n = sum(data.values())
+    return {k: data[k] / n for k in data}
 
 def bisect_left(
     targets: np.ndarray,
@@ -18,7 +24,7 @@ def bisect_right(
 ) -> np.ndarray:
     return np.searchsorted(targets, queries, side = 'right')
 
-@numba.njit
+@numba.jit(nopython=True)
 def merge_compare(
     left_arr: np.ndarray,
     right_arr: np.ndarray,
@@ -74,7 +80,7 @@ def _mirror_symmetries(
         right_arr = (2 * pivot_point) - sorted_arr[hi:]
         # right_arr is the reflection of everything above the pivot.
         
-        n = min(lo, hi)
+        n = min(len(left_arr), len(right_arr))
         match_left, match_right = merge_compare(
             left_arr,
             right_arr,

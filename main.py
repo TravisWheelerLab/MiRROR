@@ -8,7 +8,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from mrror.io import read_mzlib, read_mgf
 from mrror.util import in_alphabet
-from mrror.spectra.types import PeaksDataset, Peaks
+from mrror.spectra.types import PeaksDataset, Peaks, SimulatedPeaks
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
 # from mrror.alignment import AlignmentParams, AlignmentResult
 # from mrror.enumeration import EnumerationParams, EnumerationResult
@@ -19,7 +19,7 @@ class AppParams:
     name: str
     version: str
     descr: str
-    minimal_output: bool
+    verbosity: int
     _header: str
 
     @classmethod
@@ -36,7 +36,7 @@ class AppParams:
         )
 
     def __repr__(self) -> str:
-        if self.minimal_output:
+        if self.verbosity == 0:
             return f"{self.name} v{self.version}"
         else:
             return f"{self.name} v{self.version}\n{self._header}\n{self.descr}"
@@ -56,7 +56,9 @@ def main(cfg: DictConfig) -> None:
 
     anno_params = AnnotationParams.from_config(cfg['annotation'])
     alphabet = anno_params.residue_space.amino_symbols
-    print(anno_params)
+    annotate(SimulatedPeaks.from_peptide("TEST"), anno_params)
+    if app_cfg.verbosity > 1:
+        print(anno_params)
     # configures spectrum annotation, describing the state spaces of fragments and residues, as well as search and filtration parameters.
 
     # configures graph alignment, setting alignment model, strategy, and threshold.
@@ -80,13 +82,21 @@ def main(cfg: DictConfig) -> None:
         peaks_data = PeaksDataset.from_peptide(input)
     else:
         raise ValueError(f"Unrecognized input type. The input string {input} cannot be parsed!")
-    print(f"> {input} [{input_type}]\n\n{peaks_data}")
+    print(f"> {input} [{input_type}]")
+    if app_cfg.verbosity > 2:
+        print(peaks_data)
     # parses the input field and from it constructs a spectrum.
 
+    anno_results = [annotate(peaks, anno_params, verbose=cfg['app'].verbosity > 1) for peaks in peaks_data]
+    anno_runtime = sum(t for res in anno_results for t in res._profile.values())
+    print(f"| annotated in {anno_runtime}s")
+    algn_results = []
+    algn_runtime = sum(t for res in algn_results for t in res._profile.values())
+    print(f"| aligned in {algn_runtime}s")
+    enmr_results = []
+    enmr_runtime = sum(t for res in enmr_results for t in res._profile.values())
+    print(f"| enumerated in {enmr_runtime}s")
     # run annotation, alignment, and enumeration phases.
-    anno_results = [annotate(peaks, anno_params) for peaks in peaks_data]
-    algn_results = None
-    enmr_results = None
 
 if __name__ == "__main__":
     main()

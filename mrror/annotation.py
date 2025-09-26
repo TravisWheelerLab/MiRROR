@@ -3,7 +3,7 @@ from time import time
 from typing import Self, Any
 # standard
 
-from .util import augment_masses
+from .util import augment_masses, normalize_dict
 from .spectra.types import Peaks, AugmentedPeaks
 from .fragments.types import FragmentStateSpace, ResidueStateSpace
 from .fragments.pairs import PairResult, find_pairs
@@ -159,6 +159,7 @@ class AnnotationResult:
 def annotate(
     peaks: Peaks,
     params: AnnotationParams,
+    verbose: bool = False,
 ) -> AnnotationResult:
     profile = {}
     
@@ -187,7 +188,8 @@ def annotate(
         tolerance = params.query_tolerance,
         target_masses = pair_target_masses,
     )
-    print(pairs)
+    if verbose:
+        print(pairs)
     profile["pairs"] = time() - t
     # peak pairs
         
@@ -199,7 +201,8 @@ def annotate(
         symmetry_tolerance = params.symmetry_tolerance,
         score_factor = params.pivot_score_factor,
     )
-    print(pivots)
+    if verbose:
+        print(pivots)
     profile["pivots"] = time() - t
     # pivots
     
@@ -209,7 +212,8 @@ def annotate(
         tolerance = params.query_tolerance,
         target_masses = boundary_target_masses,
     )
-    print(left_boundaries)
+    if verbose:
+        print(left_boundaries)
     profile["left_boundaries"] = time() - t
     # low-mz boundaries
     
@@ -224,10 +228,13 @@ def annotate(
             tolerance = params.query_tolerance,
             target_masses = boundary_target_masses,
         ) for refl in reflected_peaks]
-    print(right_boundaries)
+    if verbose:
+        print(right_boundaries)
     profile["right_boundaries"] = time() - t
     # high-mz boundaries
 
+    if verbose:
+        print(profile, normalize_dict(profile))
     return AnnotationResult.from_data(
         peaks,
         decharged_peaks,

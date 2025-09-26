@@ -70,10 +70,10 @@ def _find_virtual_pivots(
     # return the bin values and the normalized bin counts
     return maximal_bin_values
 
-@numba.jit
+@numba.jit(nopython=True)
 def _find_overlap_pivots(
-    spectrum: Iterable[float],
-    pairs: Iterable[tuple[int,int]],
+    spectrum: np.ndarray, # [float; n]
+    pairs: np.ndarray, # [[int; 2]; m]
     tolerance: float,
 ) -> Iterator[tuple[int,int]]:
     n = len(spectrum)
