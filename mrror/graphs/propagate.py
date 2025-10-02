@@ -162,33 +162,31 @@ def make_initial_conditions(
     ) for node in product_sources]
 
 def propagate_cost(
-    left_adj: list[np.ndarray], # [[int; _]; n_l]
-    left_sources: list[int],
-    right_adj: list[np.ndarray], # [[int; _]; n_r]
-    right_sources: list[int],
+    right: Adj,
+    left: Adj,
     paired_nodes: list[tuple[int,int]],
     pair_costs: list[float],
     unpaired_cost: float,
     threshold: float,
-    cost_model: tuple[float,float,float],
+    cost_model: tuple[float,float,float,float],
 ) -> SparseWeightedProductAdj:
     pair_cost_table = make_pair_cost_table(
-      len(right_adj),
+      right.order,
       paired_nodes,
       pair_costs,
     )
     unpaired_cost = _cost_ty(unpaired_cost)
     initial_conditions = make_initial_conditions(
-        len(right_adj),
-        left_sources,
-        right_sources,
+        right.order,
+        left.sources,
+        right.sources,
         pair_cost_table,
         unpaired_cost,
     )
     cost_model = make_cost_model(cost_model)
     prop_res = _propagate_cost(
-        left_adj,
-        right_adj,
+        left.adj,
+        right.adj,
         initial_conditions,
         pair_cost_table,
         unpaired_cost,

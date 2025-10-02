@@ -8,11 +8,16 @@ from omegaconf import DictConfig, OmegaConf
 
 from mrror.io import read_mzlib, read_mgf
 from mrror.util import in_alphabet
+from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import PeaksDataset, Peaks, SimulatedPeaks
+
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
-# from mrror.alignment import AlignmentParams, AlignmentResult
-# from mrror.enumeration import EnumerationParams, EnumerationResult
+from mrror.alignment import AlignmentParams, AlignmentResult, align
+from mrror.enumeration import EnumerationParams, EnumerationResult, enumerate_candidates
 # library
+
+def _sum_profiles(results, precision=4):
+    return round(sum(t for res in results for t in res._profile.values()), precision)
 
 @dataclasses.dataclass(slots=True)
 class AppParams:
@@ -20,26 +25,28 @@ class AppParams:
     version: str
     descr: str
     verbosity: int
-    _header: str
+    time_precision: int
+    header_symbol: str
 
     @classmethod
     def from_dict(
         cls,
         cfg: DictConfig,
-        symbol = "::",
+        header_symbol = "::",
     ) -> Self:
-        symbol = ' ' + symbol + ' '
-        repeats = shutil.get_terminal_size().columns // len(symbol)
         return cls(
             **cfg,
-            _header = symbol * repeats,
+            header_symbol = header_symbol,
         )
 
     def __repr__(self) -> str:
+        symbol = ' ' + self.header_symbol + ' '
+        repeats = shutil.get_terminal_size().columns // len(symbol)
+        header = symbol * repeats
         if self.verbosity == 0:
             return f"{self.name} v{self.version}"
         else:
-            return f"{self.name} v{self.version}\n{self._header}\n{self.descr}"
+            return f"{self.name} v{self.version}\n{header}\n{self.descr}"
 
 class InputType(enum.Enum):
     MZLIB = "mzSpecLib"
@@ -52,17 +59,24 @@ class InputType(enum.Enum):
 def main(cfg: DictConfig) -> None:
     app_cfg = AppParams.from_dict(cfg['app'])
     print(app_cfg)
-    # prints the name + version unless app.minimal_input=false, in which case the MRROR title card is printed.
-
+    # configures the application.
+    
     anno_params = AnnotationParams.from_config(cfg['annotation'])
     alphabet = anno_params.residue_space.amino_symbols
-    annotate(SimulatedPeaks.from_peptide("TEST"), anno_params)
     if app_cfg.verbosity > 1:
         print(anno_params)
-    # configures spectrum annotation, describing the state spaces of fragments and residues, as well as search and filtration parameters.
-
-    # configures graph alignment, setting alignment model, strategy, and threshold.
-
+    # configures spectrum annotation, describes the state spaces of fragments and residues, as well as search and filtration parameters.
+    
+    algn_params = AlignmentParams.from_config(cfg['alignment'])
+    if app_cfg.verbosity > 1:
+        print(algn_params)
+    # configures graph alignment. describes a cost model, alignment mode, and cost threshold.
+    
+    enmr_params = EnumerationParams.from_config(cfg['enumeration'])
+    if app_cfg.verbosity > 1:
+        print(enmr_params)
+    # configures candidate enumeration.
+    
     input = cfg['input']
     input_type = (
         InputType.MZLIB if input.endswith(".mzlib.txt") else 
@@ -87,16 +101,39 @@ def main(cfg: DictConfig) -> None:
         print(peaks_data)
     # parses the input field and from it constructs a spectrum.
 
-    anno_results = [annotate(peaks, anno_params, verbose=cfg['app'].verbosity > 1) for peaks in peaks_data]
-    anno_runtime = sum(t for res in anno_results for t in res._profile.values())
+    targets = TargetMassStateSpace.from_state_spaces(
+        anno_params.residue_space,
+        anno_params.fragment_space,
+        anno_params.boundary_fragment_space
+    )
+    # admissible target masse for pair deltas and boundaries.
+
+    annotate(SimulatedPeaks.from_peptide("TEST"), targets, anno_params)
+    # precompile numba.jit functions
+    
+    anno_results = [
+        annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 1)
+        for peaks in peaks_data
+    ]
+    anno_runtime = _sum_profiles(anno_results, precision=app_cfg.time_precision)
     print(f"| annotated in {anno_runtime}s")
-    algn_results = []
-    algn_runtime = sum(t for res in algn_results for t in res._profile.values())
+    # runs spectrum annotation. identifies initial and terminal fragments, and pairs of fragments whose difference encodes the mass of a residue.
+    
+    algn_results = [
+    #    align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
+    #    for anno_res in anno_results
+    ]
+    algn_runtime = _sum_profiles(algn_results, precision=app_cfg.time_precision)
     print(f"| aligned in {algn_runtime}s")
-    enmr_results = []
-    enmr_runtime = sum(t for res in enmr_results for t in res._profile.values())
+    # runs graph alignment. constructs spectrum graphs and their (sparse) product via cost propagation.
+    
+    enmr_results = [
+    #    enumerate_candidates(algn_res, targets, enmr_params, verbose=app_cfg.verbosity > 1)
+    #    for algn_res in algn_results
+    ]
+    enmr_runtime = _sum_profiles(enmr_results, precision=app_cfg.time_precision)
     print(f"| enumerated in {enmr_runtime}s")
-    # run annotation, alignment, and enumeration phases.
+    # runs candidate enumeration. candidate substrings are generated by depth-first search on the product graph, then stitched together using annotated data and an optional suffix array.
 
 if __name__ == "__main__":
     main()

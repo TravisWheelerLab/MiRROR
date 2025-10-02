@@ -1,10 +1,11 @@
 import dataclasses
 from typing import Self
+import itertools as it
 # standard
 
 import numpy as np
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class FragmentStateSpace:
     loss_masses: np.ndarray
     # [float; m]
@@ -26,7 +27,7 @@ class FragmentStateSpace:
     def n_losses(self) -> int:
         return len(self.loss_masses)
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class ResidueStateSpace:
     amino_masses: np.ndarray
     # [float; k]
@@ -50,3 +51,68 @@ class ResidueStateSpace:
 
     def get_modifications(self, amino_id: int) -> list[float]:
         return self.modification_masses[self.applicable_modifications[amino_id]]
+
+@dataclasses.dataclass(slots=True)
+class TargetMassStateSpace:
+    pair_masses: np.ndarray
+    pair_indices: np.ndarray
+    boundary_masses: np.ndarray
+    boundary_indices: np.ndarray
+    
+    # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
+    @staticmethod
+    def _augment_masses(
+        left_fragment_space: FragmentStateSpace,
+        right_fragment_space: FragmentStateSpace,
+        residue_space: ResidueStateSpace,
+    ) -> tuple[list[float],list[tuple[int,int,int,int]]]:
+        # generate the unconditional augments as the 3-tensor sum of orthogonal amino, left loss, and right loss vectors.
+        # it is shaped/typed as a 4-tensor because we'll need the extra dimension later when adding in the conditional
+        # modification augments.
+        amino_masses = residue_space.amino_masses.reshape(residue_space.n_aminos(), 1, 1, 1)
+        left_loss_masses = left_fragment_space.loss_masses.reshape(1, left_fragment_space.n_losses(), 1, 1)
+        right_loss_masses = right_fragment_space.loss_masses.reshape(1, 1, right_fragment_space.n_losses(), 1)
+        ## recall: the residue mass = right fragment mass - left fragment mass. that means:
+        ## left loss decreases the left fragment mass, which increases the observed residue mass.
+        ## right loss decreases the right fragment mass, which decreases the observed residue mass.
+        unconditional_augment_tensor = amino_masses + left_loss_masses - right_loss_masses
+        # iterate along the amino (first) axis, construct the conditional augment vectors and apply them to the unconditional augment matrix associated to each amino id.
+        augmented_masses = []
+        augmented_indices = []
+        for amino_id in range(residue_space.n_aminos()):
+            unc_aug_matrix = unconditional_augment_tensor[amino_id, :, :, :]
+            con_aug_vector = residue_space.get_modifications(amino_id).reshape(1, 1, 1, residue_space.n_modifications(amino_id))
+            amino_aug_tensor = unc_aug_matrix + con_aug_vector
+            amino_aug_masses = amino_aug_tensor.flatten()
+            augmented_masses.extend(amino_aug_masses)
+            _, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(range(len(amino_aug_masses)), amino_aug_tensor.shape)
+            amino_aug_indices = zip(it.repeat(amino_id), left_loss_ind, right_loss_ind, modification_ind)
+            augmented_indices.extend(amino_aug_indices)
+        # argsort by augmented mass and reorder the indices accordingly to construct the index unaveler.
+        augmented_masses = np.array(augmented_masses)
+        augmented_indices = np.array(augmented_indices)
+        index_key = np.argsort(augmented_masses)
+        return augmented_masses[index_key], augmented_indices[index_key]
+
+    @classmethod
+    def from_state_spaces(cls,
+        residue_space: ResidueStateSpace,
+        fragment_space: FragmentStateSpace,
+        boundary_space: FragmentStateSpace,
+    ):
+        pair_masses, pair_indices = cls._augment_masses(
+            fragment_space,
+            fragment_space,
+            residue_space,
+        )
+        boundary_masses, boundary_indices = cls._augment_masses(
+            FragmentStateSpace.trivial(),
+            boundary_space,
+            residue_space,
+        )
+        return cls(
+            pair_masses,
+            pair_indices,
+            boundary_masses,
+            boundary_indices,
+        )
