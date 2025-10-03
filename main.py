@@ -108,7 +108,7 @@ def main(cfg: DictConfig) -> None:
     )
     # admissible target masse for pair deltas and boundaries.
 
-    annotate(SimulatedPeaks.from_peptide("TEST"), targets, anno_params)
+    enumerate_candidates(align(annotate(SimulatedPeaks.from_peptide("TEST"), targets, anno_params, verbose=True), targets, algn_params, verbose=True), targets, enmr_params)
     # precompile numba.jit functions
     
     anno_results = [

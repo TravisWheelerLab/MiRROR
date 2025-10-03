@@ -1,48 +1,34 @@
 import enum
 from typing import Iterator
+from heapq import heappush, heappop
 
-from ..heapq_numba import heappop as heappop_numba, heappush  as heappush_numba
-from .types import SparseWeightedProductAdj, _index_ty, _label_ty, _cost_ty
+from .types import Adj, SparseWeightedProductAdj
 
 import numpy as np
-import numba
 
-class EdgeType(enum.Enum):
-    DIRECT = 1
-    VERTICAL = 2
-    HORIZONTAL = 3
-
-@numba.jit(nopython=True)
-def cost_fn(t: EdgeType, cost_model: tuple[float,float,float]):
-    if t == EdgeType.DIRECT:
-        return cost_model[0]
-    elif t == EdgeType.VERTICAL:
-        return cost_model[1]
-    elif t == EdgeType.HORIZONTAL:
-        return cost_model[2]
-
-@numba.jit(nopython=True)
 def strong_product_neighbors(
     left_adj: list[list[int]],
     right_adj: list[list[int]],
     node: tuple[int,int],
-) -> Iterator[tuple[int,int,EdgeType]]:
+    direct: float,
+    vgap: float,
+    hgap: float,
+) -> Iterator[tuple[int,int,float]]:
     u, w = node
     
     for v in left_adj[u]:
         for x in right_adj[w]:
-            yield (v, x, EdgeType.DIRECT)
+            yield (v, x, direct)
     # direct edges
     
     for v in left_adj[u]:
-        yield (v, w, EdgeType.VERTICAL)
+        yield (v, w, vgap)
     # vertical box edges
     
     for x in right_adj[w]:
-        yield (u, x, EdgeType.HORIZONTAL)
+        yield (u, x, hgap)
     # horizontal box edges
 
-@numba.jit(f"{_label_ty}({_label_ty},{_label_ty},{_label_ty})",nopython=True)
 def ravel(
     i: int,
     j: int,
@@ -50,7 +36,6 @@ def ravel(
 ) -> int:
     return (i * n) + j
 
-@numba.jit(f"Tuple(({_label_ty},{_label_ty}))({_label_ty},{_label_ty})",nopython=True)
 def unravel(
     k: int,
     n: int,
@@ -60,17 +45,16 @@ def unravel(
         n % n,
     )
 
-_pq_state_ty = numba.types.Tuple((_cost_ty,_label_ty,_label_ty))
-
-@numba.jit(nopython=True)
 def _propagate_cost(
     left_adj: list[np.ndarray],
     right_adj: list[np.ndarray],
+    matched_nodes: set[int],
     initial_conditions: list[tuple[float,int,int]],
-    pair_cost_table: dict[int,float],
-    unpaired_cost: float,
     threshold: float,
-    cost_model: tuple[float,float,float],
+    match: float,
+    sub: float,
+    vgap: float,
+    hgap: float,
 ) -> tuple[
     int,             # number of nodes in the sparse product graph.
     dict[int,int],   # node indexer.
@@ -81,21 +65,21 @@ def _propagate_cost(
 ]:
     right_order = len(right_adj)
 
-    pq = numba.typed.List.empty_list(_pq_state_ty)
+    pq = []
     for entry_state in initial_conditions:
-        heappush_numba(pq, entry_state)
+        heappush(pq, entry_state)
     # construct priority queue from initial conditions
     
     n = 0
-    node_index = numba.typed.Dict.empty(key_type=_label_ty,value_type=_index_ty)
-    sparse_edge_src = numba.typed.List.empty_list(_index_ty)
-    sparse_edge_tgt = numba.typed.List.empty_list(_index_ty)
-    sparse_cost = numba.typed.List.empty_list(_cost_ty)
-    sparse_labels = numba.typed.List.empty_list(_label_ty)
+    node_index = {}
+    sparse_edge_src = []
+    sparse_edge_tgt = []
+    sparse_cost = []
+    sparse_labels = []
     # return types
 
     while len(pq) > 0:
-        path_cost, prev_node, curr_node = heappop_numba(pq)
+        path_cost, prev_node, curr_node = heappop(pq)
         
         if not((path_cost > threshold) or (curr_node in node_index)):
             # terminate paths that either
@@ -108,13 +92,12 @@ def _propagate_cost(
             n += 1
             # reached a new node; record its index, label, and cost.
 
-            neighbors = strong_product_neighbors(left_adj, right_adj, unravel(curr_node, right_order))
-            for (l, r, edge_type) in neighbors:
+            neighbors = strong_product_neighbors(left_adj, right_adj, unravel(curr_node, right_order), 0., vgap, hgap)
+            for (l, r, edge_cost) in neighbors:
                 next_node = ravel(l, r, right_order)
-                edge_cost = cost_fn(edge_type, cost_model)
-                pair_cost = pair_cost_table.get(next_node, unpaired_cost)
-                new_cost = path_cost + edge_cost + pair_cost
-                heappush_numba(pq, (new_cost, curr_node, next_node))
+                node_cost = match if next_node in matched_nodes else sub
+                new_cost = path_cost + edge_cost + node_cost
+                heappush(pq, (new_cost, curr_node, next_node))
                 # record the next step into the graph with cost determined by edge type and predetermined node costs
 
         if not(prev_node == curr_node):
@@ -131,76 +114,31 @@ def _propagate_cost(
         sparse_labels,
     )
 
-def make_cost_model(
-    cost_model: tuple[float,float,float],
-):
-    return tuple([_cost_ty(x) for x in cost_model])
-
-def make_pair_cost_table(
-    right_order: int,
-    paired_nodes: list[tuple[int,int]],
-    pair_costs: list[float],
-) -> dict[int,float]:
-    table = numba.typed.Dict.empty(_label_ty,_cost_ty)
-    for ((u, w), cost) in zip(paired_nodes, pair_costs):
-        pair = _label_ty(ravel(u, w, right_order))
-        table[pair] = _cost_ty(cost)
-    return table
-
-def make_initial_conditions(
-    right_order: int,
-    left_sources: list[int],
-    right_sources: list[int],
-    pair_cost_table: dict[int,float],
-    unpaired_cost: float,
-):
-    product_sources = [ravel(u, w, right_order) for u in left_sources for w in right_sources]
-    return [(
-        _cost_ty(pair_cost_table.get(node, unpaired_cost)),
-        _label_ty(node),
-        _label_ty(node),
-    ) for node in product_sources]
-
 def propagate_cost(
     right: Adj,
     left: Adj,
-    paired_nodes: list[tuple[int,int]],
-    pair_costs: list[float],
-    unpaired_cost: float,
+    matched_nodes: list[tuple[int,int]],
     threshold: float,
     cost_model: tuple[float,float,float,float],
 ) -> SparseWeightedProductAdj:
-    pair_cost_table = make_pair_cost_table(
-      right.order,
-      paired_nodes,
-      pair_costs,
-    )
-    unpaired_cost = _cost_ty(unpaired_cost)
-    initial_conditions = make_initial_conditions(
-        right.order,
-        left.sources,
-        right.sources,
-        pair_cost_table,
-        unpaired_cost,
-    )
-    cost_model = make_cost_model(cost_model)
-    prop_res = _propagate_cost(
-        left.adj,
+    right_order = right.order
+    matched_nodes = set([ravel(u, w, right_order) for (u,w) in matched_nodes])
+    product_sources = [ravel(u, w, right_order) for u in left.sources for w in right.sources]
+    match, sub, vgap, hgap = cost_model
+    initial_conditions = [(
+        match if v in matched_nodes else sub,
+        v,
+        v,
+    ) for v in product_sources]
+    prop_result = _propagate_cost(
         right.adj,
+        left.adj,
+        matched_nodes,
         initial_conditions,
-        pair_cost_table,
-        unpaired_cost,
         threshold,
-        cost_model,
+        match,
+        sub,
+        vgap,
+        hgap,
     )
-    n, node_index, sparse_edge_src, sparse_edge_tgt, sparse_cost, sparse_labels = prop_res
-    sparse_adj = [[] for _ in range(n)]
-    for (i, j) in zip(sparse_edge_src, sparse_edge_tgt):
-        sparse_adj[i].append(j)
-    return SparseWeightedProductAdj(
-        n,
-        node_index,
-        sparse_adj,
-        sparse_cost,
-        sparse_labels,
-    )
+    return SparseWeightedProductAdj.from_edges(*prop_result)

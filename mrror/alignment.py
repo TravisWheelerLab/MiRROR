@@ -5,6 +5,8 @@ from typing import Self, Any
 
 from .fragments.types import TargetMassStateSpace
 from .graphs.types import Adj, SparseWeightedProductAdj
+from .graphs.spectrum_graphs import construct_spectrum_graphs
+from .graphs.propagate import propagate_cost
 from .annotation import AnnotationResult, AnnotationParams
 # local
 
@@ -15,44 +17,58 @@ class AlignmentResult:
     sparse_prod: list[SparseWeightedProductAdj]
     lo_adj: list[Adj]
     hi_adj: list[Adj]
+    cut_adj: list[Adj]
 
 @dataclasses.dataclass(slots=True)
 class AlignmentParams:
-    cost_model: tuple[float,float,float,float]
-    # (substitution, match, vertical gap, horizontal gap)
     cost_threshold: float
+    cost_model: tuple[float,float,float,float]
     # suffix_array: SuffixArray
 
     @classmethod
-    def from_config(cls, *args, **kwargs):
-        pass
+    def from_config(cls, cfg):
+        return cls(
+            cost_threshold = cfg['cost_threshold'],
+            cost_model = list(cfg['cost_model'].values()),
+        )
 
 def align(
     anno: AnnotationResult,
     targets: TargetMassStateSpace,
     params: AlignmentParams,
-    pair_target_space: tuple[np.ndarray,np.ndarray],
-    boundary_target_space: tuple[np.ndarray,np.ndarray],
     verbose: bool = False,
 ) -> AlignmentResult:
     profile = {}
-    pair_target_masses, pair_target_indices = pair_target_space
-    boundary_target_masses, boundary_target_spaces = boundary_target_space
 
-    lo_adj, hi_adj = construct_spectrum_graphs(
-        anno.decharged_peaks,
+    t = time()
+    lo_adj, hi_adj, cut_adj = construct_spectrum_graphs(
+        anno.peaks,
         anno.pairs,
         anno.left_boundaries,
-        anno.pivots.cluster_points,
+        anno.pivots,
         anno.right_boundaries,
     )
+    profile["construct"] = time() - t
+    if verbose:
+        print(lo_adj)
+        print(hi_adj)
+        print(cut_adj)
 
+    t = time()
     sparse_prod = [propagate_cost(
         left = lo,
         right = hi,
-        paired_nodes = anno.pivots.symmetries[i],
-        pair_costs = np.fill(len(anno.pivots.symmetries[i]), params.paired_cost),
-        unpaired_cost = params.unpaired_cost,
+        matched_nodes = anno.pivots.symmetries[i],
         threshold = params.cost_threshold,
         cost_model = params.cost_model,
-    )]
+    ) for (i,(lo,hi)) in enumerate(zip(lo_adj, hi_adj))]
+    profile["propagate"] = time() - t
+    if verbose:
+        print(sparse_prod)
+
+    return AlignmentResult(
+        sparse_prod,
+        lo_adj,
+        hi_adj,
+        cut_adj,
+    )

@@ -1,6 +1,7 @@
 import dataclasses
 # standard
 
+from ..spectra.types import AugmentedPeaks
 from ..util import bisect_left, bisect_right
 # local
 
@@ -10,8 +11,13 @@ import numpy as np
 class BoundaryResult:
     index: np.ndarray
     # [int; l]
+
+    charge: np.ndarray
+    # [int; l]
+
     states: np.ndarray
     # [(int,int); l]
+
     mass: np.ndarray
     # [float; l]
 
@@ -29,14 +35,15 @@ def _find_boundaries(
     query_data = np.vstack([
         query_lo,
         query_hi,
-    ]).T
+    ])
     # find the query range for each left index
 
     left_mask = (query_hi - query_lo) > 0
-    query_data = query_data[left_mask]
+    query_data = query_data[:,left_mask]
+    query_lo, query_hi = query_data
     # remove indices with empty query ranges
 
-    query_indices = np.hstack([np.arange(lo,hi) for (lo,hi) in query_data])
+    query_indices = np.hstack([np.arange(lo,hi) for (lo,hi) in zip(query_lo,query_hi)])
     # expand query ranges into indices.
 
     query_masses = peaks[query_indices]
@@ -51,8 +58,8 @@ def _find_boundaries(
         query_indices,
         hits_lo,
         hits_hi,
-    ]).T
-    result_data = result_data[result_mask]
+    ])
+    result_data = result_data[:,result_mask]
     query_masses = query_masses[result_mask]
     # remove results with no hits
 
@@ -62,18 +69,19 @@ def _find_boundaries(
     )
     
 def find_boundaries(
-    peaks: np.ndarray,
+    peaks: AugmentedPeaks,
     tolerance: float,
     target_masses: np.ndarray,
 ) -> BoundaryResult:
     results, queries = _find_boundaries(
-        peaks,
+        peaks.mz,
         tolerance,
         target_masses,
     )
     return BoundaryResult(
-        index = results[:,1],
-        states = results[:,1:],
+        index = peaks.get_original_indices(results[0,:]),
+        charge = peaks.get_augmenting_charges(results[0,:]),
+        states = results[1:,:],
         mass = queries,
     )
    

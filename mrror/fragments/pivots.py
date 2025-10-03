@@ -2,9 +2,10 @@ import dataclasses
 from typing import Self, Iterator, Iterable
 # standard
 
+from ..spectra.types import Peaks
 from ..util import mirror_symmetries
-
 from .pairs import PairResult
+# local
 
 import numba
 import numpy as np
@@ -73,11 +74,11 @@ def _find_virtual_pivots(
 @numba.jit(nopython=True)
 def _find_overlap_pivots(
     spectrum: np.ndarray, # [float; n]
-    pairs: np.ndarray, # [[int; 2]; m]
+    pairs: np.ndarray, # [[int; m]; 2]
     tolerance: float,
 ) -> Iterator[tuple[int,int]]:
     n = len(spectrum)
-    for (i, i2) in pairs:
+    for (i, i2) in zip(pairs[0,:],pairs[1,:]):
         mass_i = spectrum[i2] - spectrum[i]
         for j in range(i + 1, i2):
             for j2 in range(i2 + 1, n):
@@ -166,7 +167,7 @@ def _screen_pivots(
     )
     
 def find_pivots(
-    peaks: np.ndarray,
+    peaks: Peaks,
     pairs: PairResult,
     query_tolerance: float,
     symmetry_tolerance: float,
@@ -177,8 +178,9 @@ def find_pivots(
 ) -> PivotResult:
     if not(find_overlap or find_virtual):
         raise ValueError("both find_overlap and find_virtual are False. there are no other ways to find pivots.")
+    mz = peaks.mz
     pivot_points, pivot_indices = zip(*_find_pivots(
-        peaks,
+        mz,
         pairs,
         query_tolerance,
         find_overlap,
@@ -193,7 +195,7 @@ def find_pivots(
     # cluster by pivot point
 
     scr_result = _screen_pivots(
-        peaks,
+        mz,
         cluster_points,
         pivot_cluster_ids,
         symmetry_tolerance,

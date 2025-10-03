@@ -3,6 +3,11 @@ from typing import Self
 import itertools as it
 # standard
 
+from .pairs import PairResult
+from .pivots import PivotResult
+from .boundaries import BoundaryResult
+#local
+
 import numpy as np
 
 @dataclasses.dataclass(slots=True)

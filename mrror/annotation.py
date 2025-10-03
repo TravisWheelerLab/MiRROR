@@ -1,14 +1,14 @@
-import dataclasses
+import dataclasses, json
 from time import time
 from typing import Self, Any
 # standard
 
 from .util import normalize_dict
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMassStateSpace
-from .fragments.pairs import PairResult, find_pairs
-from .fragments.pivots import PivotResult, find_pivots
-from .fragments.boundaries import BoundaryResult, find_boundaries 
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMassStateSpace, PairResult, PivotResult, BoundaryResult
+from .fragments.pairs import find_pairs
+from .fragments.pivots import find_pivots
+from .fragments.boundaries import find_boundaries 
 # local
 
 import numpy as np
@@ -16,8 +16,6 @@ import numpy as np
 @dataclasses.dataclass(slots=True)
 class AnnotationResult:
     peaks: Peaks
-    decharged_peaks: AugmentedPeaks
-    reflected_peaks: list[AugmentedPeaks]
     pairs: PairResult
     pivots: PivotResult
     left_boundaries: BoundaryResult
@@ -28,19 +26,15 @@ class AnnotationResult:
     @classmethod
     def from_data(cls,
         peaks: Peaks,
-        decharged_peaks: AugmentedPeaks,
-        reflected_peaks: list[AugmentedPeaks],
         pairs: PairResult,
         pivots: PivotResult,
         left_boundaries: BoundaryResult,
         right_boundaries: list[BoundaryResult],
         profile: dict[str,float],
     ) -> Self:
-        assert len(pivots) == len(right_boundaries) == len(reflected_peaks)
+        assert len(pivots) == len(right_boundaries)
         return cls(
             peaks = peaks,
-            decharged_peaks = decharged_peaks,
-            reflected_peaks = reflected_peaks,
             pairs = pairs,
             pivots = pivots,
             left_boundaries = left_boundaries,
@@ -56,9 +50,6 @@ class AnnotationResult:
             anno = json.load(f)
             return cls(
                 peaks = Peaks.from_data(**anno['peaks']),
-                decharged_peaks = AugmentedPeaks.from_data(**anno['decharged_peaks']),
-                reflected_peaks = [AugmentedPeaks.from_data(**x)
-                    for x in anno['reflected_peaks']],
                 pairs = PairResult.from_dict(anno['pairs']),
                 pivots = PivotResult.from_dict(anno['pivots']),
                 left_boundaries = BoundaryResult.from_dict(anno['left_boundaries']),
@@ -162,6 +153,9 @@ def annotate(
     verbose: bool = False,
 ) -> AnnotationResult:
     profile = {}
+
+    if verbose:
+        print(peaks)
     
     t = time()
     decharged_peaks = AugmentedPeaks.from_peaks(
@@ -169,11 +163,13 @@ def annotate(
         charges=params.fragment_space.charges,
     )
     profile["augment"] = time() - t
+    if verbose:
+        print(decharged_peaks)
     # construct augmented mz and target masses
     
     t = time()
     pairs = find_pairs(
-        peaks = decharged_peaks.mz,
+        peaks = decharged_peaks,
         tolerance = params.query_tolerance,
         target_masses = targets.pair_masses,
     )
@@ -184,7 +180,7 @@ def annotate(
     
     t = time()
     pivots = find_pivots(
-        peaks = peaks.mz,
+        peaks = peaks,
         pairs = pairs,
         query_tolerance = params.query_tolerance,
         symmetry_tolerance = params.symmetry_tolerance,
@@ -197,7 +193,7 @@ def annotate(
     
     t = time()
     left_boundaries = find_boundaries(
-        peaks = decharged_peaks.mz,
+        peaks = decharged_peaks,
         tolerance = params.query_tolerance,
         target_masses = targets.boundary_masses,
     )
@@ -214,7 +210,7 @@ def annotate(
         ) for pivot_pt in pivots.cluster_points]
     ## cluster points correspond to reflections
     right_boundaries = [find_boundaries(
-            peaks = refl.mz,
+            peaks = refl,
             tolerance = params.query_tolerance,
             target_masses = targets.boundary_masses,
         ) for refl in reflected_peaks]
@@ -225,11 +221,9 @@ def annotate(
     # high-mz boundaries
     
     if verbose:
-        print(profile, normalize_dict(profile))
+        print(json.dumps(profile, indent=4))
     return AnnotationResult.from_data(
         peaks,
-        decharged_peaks,
-        reflected_peaks,
         pairs,
         pivots,
         left_boundaries,

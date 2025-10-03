@@ -1,8 +1,6 @@
 from typing import Iterator, Iterable, Callable, Any
 import itertools as it
 
-from .fragments.types import FragmentStateSpace, ResidueStateSpace
-
 import numba
 import numpy as np
 

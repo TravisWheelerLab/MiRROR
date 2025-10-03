@@ -14,6 +14,9 @@ class Peaks:
     intensity: np.ndarray
     # [float; n]
 
+    def __len__(self) -> int:
+        return len(self.mz)
+
     @classmethod
     def from_data(cls,
         mz: Iterable,
@@ -106,7 +109,17 @@ class AugmentedPeaks(Peaks):
     indices: np.ndarray
     # [int; n]
     charges: np.ndarray
-    # [int; n]    
+    # [int; n]
+
+    def get_original_indices(self,
+        augmented_indices: np.ndarray,
+    ) -> np.ndarray:
+        return self.indices[augmented_indices]
+
+    def get_augmenting_charges(self,
+        augmented_indices: np.ndarray,
+    ) -> np.ndarray:
+        return self.charges[augmented_indices]
 
     @classmethod
     def from_data(cls,
