@@ -2,7 +2,7 @@ import enum
 from typing import Iterator
 from heapq import heappush, heappop
 
-from .types import Adj, SparseWeightedProductAdj
+from .types import SparseAdj, SparseWeightedProductAdj
 
 import numpy as np
 
@@ -108,15 +108,15 @@ def _propagate_cost(
     return (
         n,
         node_index,
+        sparse_labels,
         sparse_edge_src,
         sparse_edge_tgt,
         sparse_cost,
-        sparse_labels,
     )
 
 def propagate_cost(
-    right: Adj,
-    left: Adj,
+    right: SparseAdj,
+    left: SparseAdj,
     matched_nodes: list[tuple[int,int]],
     threshold: float,
     cost_model: tuple[float,float,float,float],
@@ -141,4 +141,7 @@ def propagate_cost(
         vgap,
         hgap,
     )
-    return SparseWeightedProductAdj.from_edges(*prop_result)
+    return SparseWeightedProductAdj.from_edges(
+        *prop_result,
+        right_order,
+    )

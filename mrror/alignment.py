@@ -1,11 +1,11 @@
-import dataclasses
+import dataclasses, json
 from time import time
 from typing import Self, Any
 # standard
 
 from .fragments.types import TargetMassStateSpace
 from .graphs.types import Adj, SparseWeightedProductAdj
-from .graphs.spectrum_graphs import construct_spectrum_graphs
+from .graphs.spectrum_graphs import construct_spectrum_topology
 from .graphs.propagate import propagate_cost
 from .annotation import AnnotationResult, AnnotationParams
 # local
@@ -14,6 +14,8 @@ import numpy as np
 
 @dataclasses.dataclass(slots=True)
 class AlignmentResult:
+    fragment_masses: np.ndarray
+    symmetries: list[np.ndarray]
     sparse_prod: list[SparseWeightedProductAdj]
     lo_adj: list[Adj]
     hi_adj: list[Adj]
@@ -41,7 +43,7 @@ def align(
     profile = {}
 
     t = time()
-    lo_adj, hi_adj, cut_adj = construct_spectrum_graphs(
+    fragment_masses, symmetries, (lo_adj, hi_adj, cut_adj) = construct_spectrum_topology(
         anno.peaks,
         anno.pairs,
         anno.left_boundaries,
@@ -66,7 +68,11 @@ def align(
     if verbose:
         print(sparse_prod)
 
+    if verbose:
+        print(json.dumps(profile, indent=4))
     return AlignmentResult(
+        fragment_masses,
+        symmetries,
         sparse_prod,
         lo_adj,
         hi_adj,
