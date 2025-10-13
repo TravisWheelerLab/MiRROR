@@ -39,6 +39,7 @@ def enumerate_candidates(
     if verbose:
         print(aligned_paths)
         for (graph, pathspace) in zip(algn.sparse_prod,aligned_paths):
+            pathspace = sorted(pathspace,key=lambda x: -x[0])
             for cost, path in pathspace:
                 unraveled_path = [graph.unravel(x) for x in path]
                 print(cost, [(int(u),int(w)) for (u,w) in unraveled_path])
