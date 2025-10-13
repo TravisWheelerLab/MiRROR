@@ -1,124 +1,91 @@
 import dataclasses
+from typing import Self, Any
 
 import numpy as np
-import numba
-
-_cost_ty = numba.types.float32 # weights
-_index_ty = numba.types.uint32 # internal node indices
-_label_ty = numba.types.uint32 # external node labels
+import networkx as nx
 
 @dataclasses.dataclass(slots=True)
-class Adj:
-    adj: list[np.ndarray]
-    order: int
-    sources: list[int]
+class SpectrumGraph:
+    graph: nx.DiGraph
+    boundaries: np.ndarray
+    boundary_source: int
+
+    def order(self) -> int:
+        """Returns the successor of the largest node.
+        This graph is sparse, so calling self.graph.order()
+        will return the number of nodes, but that value will
+        not `ravel` or `unravel` correctly, so we need the true
+        order to be one greater than the largest node label."""
+        return max(self.graph.nodes) + 1
 
     @classmethod
-    def from_adj(cls,
-        adj: list[list[int]],
-    ):
-        order = len(adj)
-        in_degree = np.zeros(order)
-        for v in range(order):
-            for w in adj[v]:
-                in_degree[w] += 1
-        return cls(
-            adj = [np.array(x) for x in adj],
-            order = order,
-            sources = [x for x in range(order) if in_degree[x] == 0],
-        )
-
-    @classmethod
-    def from_edges(cls,
+    def from_edges_and_boundaries(
+        cls,
         edges: np.ndarray,
-        reverse: bool = False,
-        directed: bool = True,
-    ):
-        if reverse:
-            edges = edges[::-1,:]
-        elif not(directed):
-            edges = np.concat([edges,edges[::-1,:]],axis=1)
-        lo = edges.min()
-        hi = edges.max()
-        edges = edges - lo
-        order = hi - lo + 1
-        adj = [[] for _ in range(order)]
-        edge_src, edge_tgt = edges
-        for (i, j) in zip(edge_src, edge_tgt):
-            adj[i].append(j)
-        return cls.from_adj(adj)
-
-@dataclasses.dataclass(slots=True)
-class SparseAdj:
-    order: int # number of nodes = number of labels. indices run [0 .. n-1]
-    node_index: dict[int,int] # label -> index.
-    node_labels: list[int] # index -> label.
-    adj: list[np.ndarray] # index -> neighbor indices
-    sources: list[int]
-
-    @classmethod
-    def from_edges(cls,
-        edges: np.ndarray,
-        reverse: bool = False,
-        directed: bool = True,
-    ):
-        node_labels, edge_reindexer = np.unique_inverse(edges)
-        order = node_labels.size
-        node_indices = np.arange(order)
-        edges = node_indices[edge_reindexer]
-        if reverse:
-            edges = edges[::-1,:]
-        elif not(directed):
-            edges = np.concat([edges,edges[::-1,:]],axis=1)
-        adj = [[] for _ in range(order)]
-        in_degree = np.zeros(order)
-        for (i, j) in zip(edges[0,:], edges[1,:]):
-            adj[i].append(j)
-            in_degree[j] += 1
+        boundaries: np.ndarray,
+    ) -> Self:
+        g = nx.DiGraph()
+        g.add_weighted_edges_from(edges.T)
+        boundary_source = max(edges.max(),boundaries.max()) + 1
+        print(f"SpectrumGraph.from_edges_and_boundaries\n\tedges={edges}\n\tboundaries={boundaries}\n\tboundary_source={boundary_source}\n")
+        if not(boundaries is None):
+            boundary_edges = np.vstack([
+                np.full(boundaries.shape[1],boundary_source),
+                boundaries,
+            ])
+            print(f"\tboundary_edges={boundary_edges}\n")
+            g.add_weighted_edges_from(boundary_edges.T)
+        print(f"\tall edges: {g.edges}\n")
         return cls(
-            order = order,
-            node_index = { label: index for (label, index) in zip(node_labels, node_indices)},
-            node_labels = node_labels,
-            adj = [np.array(x) for x in adj],
-            sources = [i for i in range(order) if in_degree[i] == 0],
+            g,
+            boundaries,
+            boundary_source,
         )
 
 @dataclasses.dataclass(slots=True)
-class SparseWeightedProductAdj:
-    order: int
-    node_index: dict[int,int]    
-    node_labels: list[int]
-    adj: list[np.ndarray]
-    node_cost: list[float] # index -> cost
-    right_order: int
+class PivotGraph:
+    graph: nx.DiGraph
 
-    def ravel(self, u: int, w: int) -> int:
-        return (u * self.right_order) + w
+    @classmethod
+    def from_edges(
+        cls,
+        edges: np.ndarray,
+    ) -> Self:
+        g = nx.DiGraph()
+        g.add_weighted_edges_from(edges.T)
+        return cls(g)
 
-    def unravel(self, v) -> tuple[int,int]:
+@dataclasses.dataclass(slots=True)
+class WeightedProductGraph:
+    graph: nx.DiGraph
+    right_operand_order: int
+    weights: dict[int,float]
+
+    @classmethod
+    def from_edges(
+        cls,
+        edges: np.ndarray,
+        right_operand_order: int,
+    ) -> Self:
+        g = nx.DiGraph()
+        g.add_weighted_edges_from(edges.T)
+        return cls(
+            g,
+            right_operand_order,
+        )
+
+    def ravel(
+        self,
+        left_node: int,
+        right_node: int,
+    ) -> int:
+        return (left_node * self.right_operand_order) + right_node
+
+    def unravel(
+        self,
+        product_node: int,
+    ) -> tuple[int,int]:
         return (
-            u // self.right_order,
-            u % self.right_order,
-        )
-
-    @classmethod
-    def from_edges(cls,
-        order,
-        node_idx,
-        labels,
-        edge_src,
-        edge_tgt,
-        cost,
-        right_order,
-    ):
-        adj = [[] for _ in range(order)]
-        for (i, j) in zip(edge_src, edge_tgt):
-            adj[i].append(j)
-        return cls(
-            order,
-            node_idx,
-            labels,
-            [np.array(x) for x in adj],
-            cost,
-            right_order,
+            product_node // self.right_operand_order,
+            product_node % self.right_operand_order,
         )

@@ -96,7 +96,7 @@ def main(cfg: DictConfig) -> None:
         peaks_data = PeaksDataset.from_peptide(input)
     else:
         raise ValueError(f"Unrecognized input type. The input string {input} cannot be parsed!")
-    print(f"> {input} [{input_type}]")
+    print(f"* {input} [{input_type}]")
     if app_cfg.verbosity > 2:
         print(peaks_data)
     # parses the input field and from it constructs a spectrum.
@@ -108,7 +108,7 @@ def main(cfg: DictConfig) -> None:
     )
     # admissible target masse for pair deltas and boundaries.
 
-    enumerate_candidates(align(annotate(SimulatedPeaks.from_peptide("TEST"), targets, anno_params, verbose=True), targets, algn_params, verbose=True), targets, enmr_params)
+    enumerate_candidates(align(annotate(SimulatedPeaks.from_peptide("PEPTIDE"), targets, anno_params, verbose=True), targets, algn_params, verbose=True), targets, enmr_params, verbose=True)
     # precompile numba.jit functions
     
     anno_results = [

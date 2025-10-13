@@ -4,8 +4,8 @@ from typing import Self, Any
 # standard
 
 from .fragments.types import TargetMassStateSpace
-from .graphs.types import Adj, SparseWeightedProductAdj
-from .graphs.spectrum_graphs import construct_spectrum_topology
+from .graphs.types import SpectrumGraph, PivotGraph, WeightedProductGraph
+from .graphs.spectrum_topology import construct_spectrum_topology
 from .graphs.propagate import propagate_cost
 from .annotation import AnnotationResult, AnnotationParams
 # local
@@ -16,16 +16,15 @@ import numpy as np
 class AlignmentResult:
     fragment_masses: np.ndarray
     symmetries: list[np.ndarray]
-    sparse_prod: list[SparseWeightedProductAdj]
-    lo_adj: list[Adj]
-    hi_adj: list[Adj]
-    cut_adj: list[Adj]
+    sparse_prod: list[WeightedProductGraph]
+    lo_adj: list[SpectrumGraph]
+    hi_adj: list[SpectrumGraph]
+    pivot_adj: list[PivotGraph]
 
 @dataclasses.dataclass(slots=True)
 class AlignmentParams:
     cost_threshold: float
     cost_model: tuple[float,float,float,float]
-    # suffix_array: SuffixArray
 
     @classmethod
     def from_config(cls, cfg):
@@ -43,7 +42,7 @@ def align(
     profile = {}
 
     t = time()
-    fragment_masses, symmetries, (lo_adj, hi_adj, cut_adj) = construct_spectrum_topology(
+    fragment_masses, symmetries, lo_adj, hi_adj, pivot_adj = construct_spectrum_topology(
         anno.peaks,
         anno.pairs,
         anno.left_boundaries,
@@ -52,29 +51,37 @@ def align(
     )
     profile["construct"] = time() - t
     if verbose:
-        print(lo_adj)
-        print(hi_adj)
-        print(cut_adj)
+        print("spectrum topology")
+        print(f"{fragment_masses}\n")
+        for (i,(sym, lo, hi, pivot)) in enumerate(zip(symmetries,lo_adj,hi_adj,pivot_adj)):
+            print(f"sym[{i}]:\n\t{sym}")
+            print(f"lo[{i}]:\n\t{lo.graph.edges(data=True)}")
+            print(f"hi[{i}]:\n\t{hi.graph.edges(data=True)}")
+            print(f"pivot[{i}]:\n\t{pivot.graph.edges(data=True)}")
 
     t = time()
-    sparse_prod = [propagate_cost(
+    product_graphs = [propagate_cost(
         left = lo,
+        left_sources = [lo.boundary_source],
         right = hi,
-        matched_nodes = anno.pivots.symmetries[i],
+        right_sources = [hi.boundary_source],
+        matched_nodes = sym,
         threshold = params.cost_threshold,
         cost_model = params.cost_model,
-    ) for (i,(lo,hi)) in enumerate(zip(lo_adj, hi_adj))]
+    ) for (lo,hi,sym) in zip(lo_adj, hi_adj,symmetries)]
     profile["propagate"] = time() - t
     if verbose:
-        print(sparse_prod)
+        print("propagate")
+        for (i,prod) in enumerate(product_graphs):
+            print(f"prod[{i}]:\n\t{prod.graph.edges}\n\t{prod.weights}")
 
     if verbose:
-        print(json.dumps(profile, indent=4))
+       print(json.dumps(profile, indent=4))
     return AlignmentResult(
         fragment_masses,
         symmetries,
-        sparse_prod,
+        product_graphs,
         lo_adj,
         hi_adj,
-        cut_adj,
+        pivot_adj,
     )

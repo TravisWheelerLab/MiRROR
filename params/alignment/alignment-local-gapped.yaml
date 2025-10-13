@@ -1,6 +1,7 @@
-cost_threshold: 4.
+cost_threshold: 20.
 cost_model:
   match: 0.
   sub: 1.
   vertical_gap: 2.
   horizontal_gap: 2.
+#  skip: 0.
