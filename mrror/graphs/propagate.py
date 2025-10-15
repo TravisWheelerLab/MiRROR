@@ -60,12 +60,12 @@ def _propagate_cost(
     nx.DiGraph,         # product topology on raveled nodes.
     dict[int,float],    # cost on raveled nodes
 ]:
-    print("\n_propagate")
+    # print("\n_propagate")
 
     pq = []
     for entry_state in initial_conditions:
         heappush(pq, entry_state)
-    print(f"initial conditions:\n{[unravel(x, right_order) for (_,_,x) in initial_conditions]}")
+    # print(f"initial conditions:\n{[unravel(x, right_order) for (_,_,x) in initial_conditions]}")
     # construct priority queue from initial conditions
     
     prod = nx.DiGraph()
@@ -74,10 +74,10 @@ def _propagate_cost(
 
     while len(pq) > 0:
         path_cost, prev_node, curr_node = heappop(pq)
-        if prev_node != curr_node:
-            print(f"{path_cost} {unravel(prev_node, right_order)} -> {unravel(curr_node, right_order)}")
-        else:
-            print(f"->{path_cost} {unravel(prev_node, right_order)}")
+        # if prev_node != curr_node:
+            # print(f"{path_cost} {unravel(prev_node, right_order)} -> {unravel(curr_node, right_order)}")
+        # else:
+            # print(f"->{path_cost} {unravel(prev_node, right_order)}")
 
         if path_cost <= threshold:
             if not(curr_node in prod):
@@ -93,13 +93,13 @@ def _propagate_cost(
                 cost[curr_node] = path_cost
                 # reached a new node; record its index, label, and cost.
 
-                neighbors = list(strong_product_neighbors(left_adj, right_adj, unravel(curr_node, right_order), 0., vgap, hgap))
-                print(len(neighbors))
+                neighbors = strong_product_neighbors(left_adj, right_adj, unravel(curr_node, right_order), 0., vgap, hgap)
+                # print(len(neighbors))
                 for (l, r, edge_cost) in neighbors:
                     next_node = ravel(l, r, right_order)
                     node_cost = match if next_node in matched_nodes else sub
                     new_cost = path_cost + edge_cost + node_cost
-                    print("\t", (l, r), edge_cost, node_cost)
+                    # print("\t", (l, r), edge_cost, node_cost)
                     heappush(pq, (new_cost, curr_node, next_node))
                     # record the next step into the graph with cost determined by edge type and predetermined node costs
 
@@ -108,8 +108,8 @@ def _propagate_cost(
                 # sparse_edge_src.append(node_index[curr_node])
                 # sparse_edge_tgt.append(node_index[prev_node])
         # finally, record the reversed edge curr_node -> prev_node in the sparse adjacency matrix
-        else:
-            print("terminated.")
+        # else:
+            # print("terminated.")
 
     return (
         prod,
@@ -126,10 +126,10 @@ def propagate_cost(
     cost_model: tuple[float,float,float,float],
 ) -> WeightedProductGraph:
     right_order = right.order()
-    print("right order", right_order)
-    print("right num nodes", )
+    # print("right order", right_order)
+    # print("right num nodes", )
     matched_nodes = set([ravel(u, w, right_order) for (u,w) in matched_nodes])
-    print("sources",[(u,v) for u in left_sources for v in right_sources])
+    # print("sources",[(u,v) for u in left_sources for v in right_sources])
     product_sources = [ravel(u, w, right_order) for u in left_sources for w in right_sources]
     match, sub, vgap, hgap = cost_model
     initial_conditions = [(

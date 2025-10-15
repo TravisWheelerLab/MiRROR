@@ -59,7 +59,7 @@ def list_mz(spec: oms.MSSpectrum):
     
         np.array([peak.getMZ() for peak in spec])
     
-    :spec: a pyopenms.MSSpectrum object."""
+    :x: a np array containing the mz of each peak."""
     return np.array([peak.getMZ() for peak in spec])
 
 def list_intensity(spec: oms.MSSpectrum):
@@ -67,8 +67,16 @@ def list_intensity(spec: oms.MSSpectrum):
     
         np.array([peak.getIntensity() for peak in spec])
     
-    :spec: a pyopenms.MSSpectrum object."""
+    :x: a np array containing the intensities of each peak."""
     return np.array([peak.getIntensity() for peak in spec])
+
+def list_ion_data(spec: oms.MSSpectrum):
+    """Creates a numpy array of the intensities of a pyopenms.MSSpectrum object.
+    
+        np.array([peak.getIntensity() for peak in spec])
+    
+    :x: a np array containing the ion data of each peak."""
+    return np.array([x.decode() for x in spec.getStringDataArrays()[0]])
 
 def simulate_simple_peaks(peptide: str):
     return list_mz(generate_fragment_spectrum(peptide, DEFAULT_PARAM))

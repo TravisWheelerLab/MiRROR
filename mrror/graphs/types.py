@@ -27,15 +27,15 @@ class SpectrumGraph:
         g = nx.DiGraph()
         g.add_weighted_edges_from(edges.T)
         boundary_source = max(edges.max(),boundaries.max()) + 1
-        print(f"SpectrumGraph.from_edges_and_boundaries\n\tedges={edges}\n\tboundaries={boundaries}\n\tboundary_source={boundary_source}\n")
+        # print(f"SpectrumGraph.from_edges_and_boundaries\n\tedges={edges}\n\tboundaries={boundaries}\n\tboundary_source={boundary_source}\n")
         if not(boundaries is None):
             boundary_edges = np.vstack([
                 np.full(boundaries.shape[1],boundary_source),
                 boundaries,
             ])
-            print(f"\tboundary_edges={boundary_edges}\n")
+            # print(f"\tboundary_edges={boundary_edges}\n")
             g.add_weighted_edges_from(boundary_edges.T)
-        print(f"\tall edges: {g.edges}\n")
+        # print(f"\tall edges: {g.edges}\n")
         return cls(
             g,
             boundaries,

@@ -3,9 +3,19 @@ from typing import Self, Iterable, Iterator
 
 from ..util import decharge_peaks
 
-from .simulation import generate_fragment_spectrum, list_mz, list_intensity, simulate_pivot, DEFAULT_PARAM, COMPLEX_PARAM
+from .simulation import generate_fragment_spectrum, list_mz, list_intensity, list_ion_data, simulate_pivot, DEFAULT_PARAM, COMPLEX_PARAM
 
 import numpy as np
+
+@dataclasses.dataclass(slots=True)
+class SpectraParams:
+    initial_b: bool
+
+    @classmethod
+    def from_dict(cls, cfg: dict):
+        return cls(
+            initial_b = cfg['initial_b']
+        )
 
 @dataclasses.dataclass(slots=True)
 class Peaks:
@@ -29,10 +39,10 @@ class Peaks:
 
 @dataclasses.dataclass(slots=True)
 class SimulatedPeaks(Peaks):
-    mz: np.ndarray
-    # [float; n]
-    intensity: np.ndarray
-    # [float; n]
+    mz: np.ndarray          # [float; n]
+    intensity: np.ndarray   # [float; n]
+    ion_data: np.ndarray    # [str; n]
+    pivot: float
     peptide: str
 
     # TODO 2: should probably use an enum for this
@@ -40,21 +50,23 @@ class SimulatedPeaks(Peaks):
     def from_peptide(cls,
         peptide: str,
         mode: str = 'simple',
+        initial_b: bool = False,
     ) -> Self:
-        if mode == 'simple':
-            spectrum = generate_fragment_spectrum(peptide, DEFAULT_PARAM)
-        elif mode == 'charged':
-            spectrum = generate_fragment_spectrum(peptide, DEFAULT_PARAM, max_charge=3)
-        elif mode == 'complex':
-            spectrum = generate_fragment_spectrum(peptide, COMPLEX_PARAM, max_charge=3)
+        param = COMPLEX_PARAM if mode == "complex" else DEFAULT_PARAM
+        if initial_b:
+            param.setValue("add_first_prefix_ion", "true")
+        spectrum = generate_fragment_spectrum(
+            peptide,
+            param,
+            max_charge= 1 if mode == "simple" else 3,
+        ) 
         return cls(
             mz = list_mz(spectrum),
             intensity = list_intensity(spectrum),
+            ion_data = list_ion_data(spectrum),
+            pivot = simulate_pivot(peptide),
             peptide = peptide,
         )
-
-    def get_pivot(self) -> float:
-        return simulate_pivot(self.peptide)
 
 @dataclasses.dataclass(slots=True)
 class PeaksDataset:
@@ -72,10 +84,11 @@ class PeaksDataset:
     
     @classmethod
     def from_peptide(cls,
-        input: str, 
+        input: str,
+        initial_b: bool = False,
     ) -> Self:
         return cls(
-            _data = [SimulatedPeaks.from_peptide(*input.split('::'))],
+            _data = [SimulatedPeaks.from_peptide(*input.split('::'), initial_b=initial_b)],
             _input = input,
         )
 

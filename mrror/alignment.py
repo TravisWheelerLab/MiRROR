@@ -20,6 +20,7 @@ class AlignmentResult:
     lo_adj: list[SpectrumGraph]
     hi_adj: list[SpectrumGraph]
     pivot_adj: list[PivotGraph]
+    _profile: dict[str, float]
 
 @dataclasses.dataclass(slots=True)
 class AlignmentParams:
@@ -60,15 +61,17 @@ def align(
             print(f"pivot[{i}]:\n\t{pivot.graph.edges(data=True)}")
 
     t = time()
+    print([[x for x in lo.graph if lo.graph.in_degree(x) == 0] for lo in lo_adj])
+    print([[x for x in hi.graph if hi.graph.in_degree(x) == 0] for hi in hi_adj])
     product_graphs = [propagate_cost(
         left = lo,
-        left_sources = [lo.boundary_source],
+        left_sources = [x for x in lo.graph if lo.graph.in_degree(x) == 0], # [lo.boundary_source,]
         right = hi,
-        right_sources = [hi.boundary_source],
+        right_sources = [x for x in hi.graph if hi.graph.in_degree(x) == 0], # [hi.boundary_source,]
         matched_nodes = sym,
         threshold = params.cost_threshold,
         cost_model = params.cost_model,
-    ) for (lo,hi,sym) in zip(lo_adj, hi_adj,symmetries)]
+    ) for (lo,hi,sym) in zip(lo_adj, hi_adj, symmetries)]
     profile["propagate"] = time() - t
     if verbose:
         print("propagate")
@@ -84,4 +87,5 @@ def align(
         lo_adj,
         hi_adj,
         pivot_adj,
+        profile,
     )

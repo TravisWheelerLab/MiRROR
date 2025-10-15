@@ -5,6 +5,7 @@ defaults:
 - annotation: annotation-mono
 - alignment: alignment-local-gapped
 - enumeration: enumeration
+- spectra: spectra
 - _self_
 
 # application parameters and info

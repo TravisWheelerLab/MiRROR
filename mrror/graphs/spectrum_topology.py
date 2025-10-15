@@ -190,7 +190,7 @@ def construct_spectrum_topology(
         pivots.cluster_points,
     )
     sym_nodes = [np.vstack([s, [np.array([l.boundary_source, r.boundary_source]),]]) for (s,l,r) in zip(sym_idx,left_adj,right_adj)]
-    print(sym_nodes)
+    # print(sym_nodes)
     return (
         fragment_masses,
         sym_nodes,

@@ -9,6 +9,7 @@ from .alignment import AlignmentResult
 @dataclasses.dataclass(slots=True)
 class EnumerationResult:
     candidates: list
+    _profile: dict[str,float]
 
 @dataclasses.dataclass(slots=True)
 class EnumerationParams:
@@ -34,12 +35,13 @@ def enumerate_candidates(
         topology = prod,
         sources = [x for x in prod.graph if prod.graph.in_degree(x) == 0],
         threshold = params.cost_threshold,
+        filter = None,
     ) for (prod, lo, hi) in zip(algn.sparse_prod, algn.lo_adj, algn.hi_adj)]
     profile["dfs"] = time() - t
     if verbose:
-        print(aligned_paths)
         for (graph, pathspace) in zip(algn.sparse_prod,aligned_paths):
-            pathspace = sorted(pathspace,key=lambda x: -x[0])
+            print(len(pathspace))
+            pathspace = sorted(pathspace,key=lambda x: -x[0])[-5:]
             for cost, path in pathspace:
                 unraveled_path = [graph.unravel(x) for x in path]
                 print(cost, [(int(u),int(w)) for (u,w) in unraveled_path])
@@ -49,4 +51,5 @@ def enumerate_candidates(
         print(profile)
     return EnumerationResult(
         candidates = [],
+        _profile = profile,
     )
