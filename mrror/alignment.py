@@ -61,8 +61,6 @@ def align(
             print(f"pivot[{i}]:\n\t{pivot.graph.edges(data=True)}")
 
     t = time()
-    print([[x for x in lo.graph if lo.graph.in_degree(x) == 0] for lo in lo_adj])
-    print([[x for x in hi.graph if hi.graph.in_degree(x) == 0] for hi in hi_adj])
     product_graphs = [propagate_cost(
         left = lo,
         left_sources = [x for x in lo.graph if lo.graph.in_degree(x) == 0], # [lo.boundary_source,]

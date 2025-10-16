@@ -58,11 +58,61 @@ class ResidueStateSpace:
         return self.modification_masses[self.applicable_modifications[amino_id]]
 
 @dataclasses.dataclass(slots=True)
+class MultiResidueStateSpace(ResidueStateSpace):
+    amino_masses: np.ndarray
+    # [float; k]
+    amino_symbols: list[np.ndarray]
+    # [[str; _]; k]
+    modification_masses: np.ndarray
+    # [float; k]
+    modification_symbols: np.ndarray
+    # [str; k]
+    applicable_modifications: list[np.ndarray] 
+    # [[int; _]; k]
+    # amino_idx -> {modification_idx applicable to amino}.
+    max_num_modifications: int
+    # restricts the number of modifications that can be applied to a residue.
+
+    @classmethod
+    def from_nonunique_pairs(
+        cls,
+        masses: np.ndarray,
+        words: np.ndarray,
+        #mod_masses: np.ndarray,
+        #mod_symbols: np.ndarray,
+        #applicable_mods: list[np.ndarray],
+        #max_num_mods: int,
+    ) -> Self:
+        unique_masses, reindexer = np.unique_inverse(masses)
+        clustered_words = [[] for _ in range(len(unique_masses))]
+        clustered_mods = [[] for _ in range(len(unique_masses))]
+        for (i, w) in enumerate(words):
+            clustered_words[reindexer[i]].append(w)
+        return cls(
+            unique_masses,
+            [np.array(x) for x in clustered_words],
+            np.array([0]),#mod_masses,
+            np.array(['']),#mod_symbols,
+            [np.array([0]) for _ in unique_masses],#applicable_mods,
+            0,#max_num_mods,
+        )
+
+    def n_aminos(self) -> int:
+        return len(self.amino_masses)
+
+    def n_modifications(self, amino_id: int) -> int:
+        return len(self.applicable_modifications[amino_id])
+
+    def get_modifications(self, amino_id: int) -> list[float]:
+        selected_mod = self.applicable_modifications[amino_id]
+        return self.modification_masses[self.applicable_modifications[amino_id]]
+
+@dataclasses.dataclass(slots=True)
 class TargetMassStateSpace:
     pair_masses: np.ndarray
     pair_indices: np.ndarray
-    boundary_masses: np.ndarray
-    boundary_indices: np.ndarray
+    boundary_masses: list[np.ndarray]
+    boundary_indices: list[np.ndarray]
     
     # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
     @staticmethod
@@ -101,20 +151,20 @@ class TargetMassStateSpace:
 
     @classmethod
     def from_state_spaces(cls,
-        residue_space: ResidueStateSpace,
+        residue_spaces: list[ResidueStateSpace],
         fragment_space: FragmentStateSpace,
         boundary_space: FragmentStateSpace,
     ):
         pair_masses, pair_indices = cls._augment_masses(
             fragment_space,
             fragment_space,
-            residue_space,
+            residue_spaces[0],
         )
-        boundary_masses, boundary_indices = cls._augment_masses(
+        boundary_masses, boundary_indices = zip(*[cls._augment_masses(
             FragmentStateSpace.trivial(),
             boundary_space,
             residue_space,
-        )
+        ) for residue_space in residue_spaces])
         return cls(
             pair_masses,
             pair_indices,

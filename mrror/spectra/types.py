@@ -1,4 +1,4 @@
-import dataclasses
+import dataclasses, re
 from typing import Self, Iterable, Iterator
 
 from ..util import decharge_peaks
@@ -41,9 +41,27 @@ class Peaks:
 class SimulatedPeaks(Peaks):
     mz: np.ndarray          # [float; n]
     intensity: np.ndarray   # [float; n]
-    ion_data: np.ndarray    # [str; n]
+    series: np.ndarray      # [str; n]
+    position: np.ndarray    # [int; n]
+    charge: np.ndarray      # [str; n]
     pivot: float
     peptide: str
+
+    def truncate(self, depth: int) -> Self:
+        n = len(self.peptide)
+        mask = np.logical_and(
+            depth < self.position, 
+            (n - depth) > self.position,
+        )
+        return type(self)(
+            self.mz[mask],
+            self.intensity[mask],
+            self.series[mask],
+            self.position[mask],
+            self.charge[mask],
+            self.pivot,
+            self.peptide,
+        )
 
     # TODO 2: should probably use an enum for this
     @classmethod
@@ -59,11 +77,15 @@ class SimulatedPeaks(Peaks):
             peptide,
             param,
             max_charge= 1 if mode == "simple" else 3,
-        ) 
+        )
+        ion_data = list_ion_data(spectrum)
+        ion_data_chunks = [(re.search(r'\d', x).start(), re.search(r'\W|_', x).start()) for x in ion_data]
         return cls(
             mz = list_mz(spectrum),
             intensity = list_intensity(spectrum),
-            ion_data = list_ion_data(spectrum),
+            series = np.array([x[:i] for ((i,_),x) in zip(ion_data_chunks,ion_data)]),
+            position = np.array([int(x[i:j]) for ((i,j),x) in zip(ion_data_chunks,ion_data)]),
+            charge = np.array([x[j:] for ((_,j),x) in zip(ion_data_chunks,ion_data)]),
             pivot = simulate_pivot(peptide),
             peptide = peptide,
         )

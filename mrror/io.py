@@ -1,10 +1,31 @@
-import pyopenms as oms
+from typing import Iterator
+
 import mzspeclib as mzlib
+import pyopenms as oms
 from mzspeclib.validate import ValidationWarning
-from Bio import Seq, SeqRecord, SeqIO
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
 
 import warnings
 warnings.filterwarnings(action="ignore", category = ValidationWarning)
+
+def write_str_to_fa(
+    txt: Iterator[str],
+    path_to_fa: str,
+):
+    return SeqIO.write(
+        [SeqRecord(Seq(x), id=f"{i}") for (i, x) in enumerate(txt)],
+        path_to_fa,
+        "fasta",
+    )
+
+def read_str_from_fa(
+    path_to_fa: str,
+) -> Iterator[str]:
+    with open(path_to_fa, 'r') as f:
+        for record in SeqIO.parse(f, "fasta"):
+            yield str(record.seq)
 
 def read_mzml(
     filepath: str,

@@ -5,10 +5,12 @@ from typing import Self, Any
 
 from .util import normalize_dict
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMassStateSpace, PairResult, PivotResult, BoundaryResult
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMassStateSpace, PairResult, PivotResult, BoundaryResult
 from .fragments.pairs import find_pairs
 from .fragments.pivots import find_pivots
 from .fragments.boundaries import find_boundaries 
+from .sequences.suffix_array import SuffixArray
+from .sequences.queries import PeptideMassQueryEngine, all_kmers
 # local
 
 import numpy as np
@@ -69,6 +71,10 @@ class AnnotationResult:
 class AnnotationParams:
     residue_space: ResidueStateSpace
     # residue masses augmented by modifications.
+    dimer_space: ResidueStateSpace
+    # double-residue masses augmented by modifications.
+    trimer_space: ResidueStateSpace
+    # triple-residue masses augmented by modifications.
     fragment_space: FragmentStateSpace
     # loss states.
     boundary_fragment_space: FragmentStateSpace
@@ -83,6 +89,7 @@ class AnnotationParams:
     @classmethod
     def from_config(cls,
         cfg: dict[str,Any],
+        suffix_array: SuffixArray = None,
     ) -> Self:
         res = cfg['residues']
         res_mass = np.array(res['masses'])
@@ -101,6 +108,35 @@ class AnnotationParams:
             mod_num,
         )
         # residue space
+
+        if not(suffix_array is None):
+            engine = PeptideMassQueryEngine(
+                residue_space,
+                suffix_array,
+                5,
+            )
+            dimer_masses, dimers = engine.query_kmers(2)
+            trimer_masses, trimers = engine.query_kmers(3)
+        else:
+            dimer_masses, dimers, _ = all_kmers(residue_space, 2)
+            trimer_masses, trimers, _ = all_kmers(residue_space, 3)
+        dimer_space = MultiResidueStateSpace.from_nonunique_pairs(
+            dimer_masses,
+            dimers,
+            #mod_mass,
+            #mod_sym,
+            #mod_appl,
+            #mod_num * 2,
+        )
+        trimer_space = MultiResidueStateSpace.from_nonunique_pairs(
+            trimer_masses,
+            trimers,
+            #=od_mass,
+            #=od_sym,
+            #=od_appl,
+            #=od_num * 3,
+        )
+        # dimer and trimer spaces. restricted by a suffix array, if passed.
         
         loss = cfg['losses']
         loss_mass = np.array(loss['masses'])
@@ -138,6 +174,8 @@ class AnnotationParams:
 
         return cls(
             residue_space,
+            dimer_space,
+            trimer_space,
             fragment_space,
             boundary_fragment_space,
             query_tolerance,
@@ -195,7 +233,7 @@ def annotate(
     left_boundaries = find_boundaries(
         peaks = decharged_peaks,
         tolerance = params.query_tolerance,
-        target_masses = targets.boundary_masses,
+        target_masses = targets.boundary_masses[0],
     )
     profile["left_boundaries"] = time() - t
     if verbose:
@@ -212,7 +250,7 @@ def annotate(
     right_boundaries = [find_boundaries(
             peaks = refl,
             tolerance = params.query_tolerance,
-            target_masses = targets.boundary_masses,
+            target_masses = targets.boundary_masses[0],
         ) for refl in reflected_peaks]
     ## each reflected spectrum has its own set of right boundaries
     profile["right_boundaries"] = time() - t
