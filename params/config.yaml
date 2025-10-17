@@ -1,5 +1,6 @@
 # top-level arguments
 input: TESTPEPTIDE::simple
+mode: evaluate
 
 defaults:
 - annotation: annotation-mono

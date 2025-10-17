@@ -17,6 +17,8 @@ from mrror.alignment import AlignmentParams, AlignmentResult, align
 from mrror.enumeration import EnumerationParams, EnumerationResult, enumerate_candidates
 # library
 
+import numpy as np
+
 def _sum_profiles(results, precision=4):
     return round(sum(t for res in results for t in res._profile.values()), precision)
 
@@ -58,6 +60,15 @@ class InputType(enum.Enum):
 
 @hydra.main(version_base=None, config_path="params", config_name="config")
 def main(cfg: DictConfig) -> None:
+    mode = cfg['mode']
+    if mode == 'evaluate':
+        return evaluate(cfg)
+    elif mode == 'test':
+        return test(cfg)
+    else:
+        print(f"Unrecognized mode {mode}")
+
+def evaluate(cfg: DictConfig) -> None:
     t = time()
     app_cfg = AppParams.from_dict(cfg['app'])
     print(app_cfg)
@@ -143,6 +154,21 @@ def main(cfg: DictConfig) -> None:
     sum_runtime = round(anno_runtime + algn_runtime + enmr_runtime, app_cfg.time_precision)
     total_runtime = round(time() - t, app_cfg.time_precision)
     print(f"| (sum: {sum_runtime})\n- total runtime: {total_runtime}s")
+
+def test(cfg: DictConfig):
+    print("MRROR test!")
+    x = SimulatedPeaks.from_peptide("PEPTIDE",initial_b=True)
+    print("peaks\n\t",x.zip())
+    print("\ntrunc 1\n\t",x.truncate(1).zip())
+    print("\ntrunc 2\n\t",x.truncate(2).zip())
+    print("\ntrunc 1 b\n\t",x.truncate(1,series='b').zip())
+    print("\ntrunc 2 y terminal\n\t",x.truncate(2,series='y',terminal=True).zip())
+    print("\noccl 3\n\t",x.occlude(3).zip())
+    print("\noccl 4 b\n\t",x.occlude(4,series='b').zip())
+    print("\noccl [3,4] y\n\t",x.occlude([3,4],series='y').zip())
+    print(f"\ncorrupt\n\t",x.corrupt().zip())
+    print(f"\ncorrupt snr=0.5\n\t",x.corrupt(snr=0.5).zip())
+    print(f"\ncorrupt num=3\n\t",x.corrupt(num=3).zip())
 
 if __name__ == "__main__":
     main()
