@@ -90,7 +90,7 @@ def _propagate_cost(
                 # sparse_labels.append(curr_node)
                 # n += 1
                 prod.add_node(curr_node)
-                cost[curr_node] = path_cost
+                cost[int(curr_node)] = path_cost
                 # reached a new node; record its index, label, and cost.
 
                 neighbors = strong_product_neighbors(left_adj, right_adj, unravel(curr_node, right_order), 0., vgap, hgap)

@@ -2,17 +2,18 @@ import dataclasses, json
 from time import time
 from typing import Self, Any
 
+from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .fragments.types import TargetMassStateSpace
 from .graphs.dfs import dfs
 from .alignment import AlignmentResult
 
 @dataclasses.dataclass(slots=True)
-class EnumerationResult:
+class EnumerationResult(SerializableDataclass):
     candidates: list
     _profile: dict[str,float]
 
 @dataclasses.dataclass(slots=True)
-class EnumerationParams:
+class EnumerationParams(SerializableDataclass):
     cost_threshold: float
     # suffix_array: SuffixArray
 

@@ -27,6 +27,12 @@ class Peaks:
     def __len__(self) -> int:
         return len(self.mz)
 
+    def to_peaks(self) -> Self:
+        return Peaks(
+            mz = self.mz,
+            intensity = self.intensity,
+        )
+
     @classmethod
     def from_data(cls,
         mz: Iterable,

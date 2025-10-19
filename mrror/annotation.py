@@ -1,9 +1,10 @@
-import dataclasses, json
+import dataclasses
 from time import time
 from typing import Self, Any
 # standard
 
 from .util import normalize_dict
+from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
 from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMassStateSpace, PairResult, PivotResult, BoundaryResult
 from .fragments.pairs import find_pairs
@@ -16,7 +17,7 @@ from .sequences.queries import PeptideMassQueryEngine, all_kmers
 import numpy as np
 
 @dataclasses.dataclass(slots=True)
-class AnnotationResult:
+class AnnotationResult(SerializableDataclass):
     peaks: Peaks
     pairs: PairResult
     pivots: PivotResult
@@ -36,7 +37,7 @@ class AnnotationResult:
     ) -> Self:
         assert len(pivots) == len(right_boundaries)
         return cls(
-            peaks = peaks,
+            peaks = peaks.to_peaks(),
             pairs = pairs,
             pivots = pivots,
             left_boundaries = left_boundaries,
@@ -44,31 +45,8 @@ class AnnotationResult:
             _profile = profile,
         )
 
-    @classmethod
-    def read(cls,
-        filepath: str,
-    ) -> Self:
-        with open(filepath, 'r') as f:
-            anno = json.load(f)
-            return cls(
-                peaks = Peaks.from_data(**anno['peaks']),
-                pairs = PairResult.from_dict(anno['pairs']),
-                pivots = PivotResult.from_dict(anno['pivots']),
-                left_boundaries = BoundaryResult.from_dict(anno['left_boundaries']),
-                right_boundaries = [BoundaryResult.from_dict(x)
-                    for x in anno['right_boundaries']],
-                _profile = anno['_profile'],
-            )
-
-    def write(self,
-        filepath: str,
-    ) -> None:
-        with open(filepath, 'w') as f:
-            anno = dataclasses.asdict(self)
-            json.dump(anno, f, indent = 4)
-
 @dataclasses.dataclass(slots=True)
-class AnnotationParams:
+class AnnotationParams(SerializableDataclass):
     residue_space: ResidueStateSpace
     # residue masses augmented by modifications.
     dimer_space: ResidueStateSpace
@@ -182,7 +160,6 @@ class AnnotationParams:
             symmetry_tolerance,
             pivot_score_factor,
         )
-
 
 def annotate(
     peaks: Peaks,

@@ -1,3 +1,4 @@
+import dataclasses, json, zlib
 from typing import Iterator, Iterable, Callable, Any
 import itertools as it
 

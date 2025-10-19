@@ -3,6 +3,7 @@ from time import time
 from typing import Self, Any
 # standard
 
+from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .fragments.types import TargetMassStateSpace
 from .graphs.types import SpectrumGraph, PivotGraph, WeightedProductGraph
 from .graphs.spectrum_topology import construct_spectrum_topology
@@ -13,7 +14,7 @@ from .annotation import AnnotationResult, AnnotationParams
 import numpy as np
 
 @dataclasses.dataclass(slots=True)
-class AlignmentResult:
+class AlignmentResult(SerializableDataclass):
     fragment_masses: np.ndarray
     symmetries: list[np.ndarray]
     sparse_prod: list[WeightedProductGraph]
@@ -23,7 +24,7 @@ class AlignmentResult:
     _profile: dict[str, float]
 
 @dataclasses.dataclass(slots=True)
-class AlignmentParams:
+class AlignmentParams(SerializableDataclass):
     cost_threshold: float
     cost_model: tuple[float,float,float,float]
 

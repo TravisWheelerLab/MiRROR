@@ -213,6 +213,7 @@ def find_pivots(
     for pivot_idx in range(p):
         cluster_id = pivot_cluster_ids[pivot_idx]
         clusters[cluster_id].append(pivot_idx)
+    clusters = [np.array(x) for x in clusters]
     # construct cluster membership lists from pivot cluster ids
 
     return PivotResult.from_data(
