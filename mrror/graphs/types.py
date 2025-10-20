@@ -1,5 +1,5 @@
-import dataclasses
-from typing import Self, Any
+import dataclasses, abc
+from typing import Self, Any, Union
 
 import numpy as np
 import networkx as nx
@@ -89,3 +89,18 @@ class WeightedProductGraph:
             product_node // self.right_operand_order,
             product_node % self.right_operand_order,
         )
+
+class AbstractPathFilter(abc.ABC):
+
+    @classmethod
+    @abc.abstractmethod
+    def from_graph(self, *args, **kwargs) -> Self:
+        """Construct an instance of the filter for a given graph."""
+
+    @abc.abstractmethod
+    def initial_state(self) -> tuple:
+        """The initial state of the filter, corresponding to the empty path ()."""
+
+    @abc.abstractmethod
+    def update(self, node: int, state: tuple) -> Union[tuple, None]:
+        """Given `node` and `state`, update state with node and return a new state, if such a path exists, or None otherwise."""
