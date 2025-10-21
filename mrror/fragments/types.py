@@ -1,5 +1,5 @@
 import dataclasses
-from typing import Self
+from typing import Self, Iterator
 import itertools as it
 # standard
 
@@ -109,10 +109,62 @@ class MultiResidueStateSpace(ResidueStateSpace):
 
 @dataclasses.dataclass(slots=True)
 class TargetMassStateSpace:
+    residue_spaces: list[ResidueStateSpace]
+    fragment_space: FragmentStateSpace
+    boundary_space: FragmentStateSpace
     pair_masses: np.ndarray
     pair_indices: np.ndarray
     boundary_masses: list[np.ndarray]
     boundary_indices: list[np.ndarray]
+
+    @staticmethod
+    def _query_index(
+        states: np.ndarray,     # [(int,int); n] < m
+        indices: np.ndarray,    # [[int; k]; m]
+        feature_axis: int,      # int < k
+        features: np.ndarray,   # [_; l]
+    ) -> Iterator[np.ndarray]:
+        """For each range in states yield an array of the queried feature."""
+        # for (l, r) in states:
+        for l, r in zip(*states):
+            yield features[indices[l:r,feature_axis]]
+
+    def get_pair_residues(
+        self,
+        states: np.ndarray,
+    ) -> list[np.ndarray]:
+        return list(self._query_index(
+            states,
+            self.pair_indices,
+            0,
+            self.residue_spaces[0].amino_symbols,
+        ))
+
+    def get_boundary_residues(
+        self,
+        states: np.ndarray,
+    ) -> list[np.ndarray]:
+        return list(self._query_index(
+            states,
+            self.boundary_indices[0],
+            0,
+            self.residue_spaces[0].amino_symbols,
+        ))
+
+    def get_boundary_kmers(
+        self,
+        states: np.ndarray,
+        k: int = 2,
+    ) -> list[np.ndarray]:
+        max_k = len(self.residue_spaces)
+        if k >= max_k:
+            raise ValueError(f"k too large! {k} >= {max_k}")
+        return list(self._query_index(
+            states,
+            self.boundary_indices[k - 1],
+            0,
+            self.residue_spaces[k - 1].amino_symbols,
+        ))
     
     # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
     @staticmethod
@@ -140,7 +192,7 @@ class TargetMassStateSpace:
             amino_aug_tensor = unc_aug_matrix + con_aug_vector
             amino_aug_masses = amino_aug_tensor.flatten()
             augmented_masses.extend(amino_aug_masses)
-            _, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(range(len(amino_aug_masses)), amino_aug_tensor.shape)
+            _, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(np.arange(len(amino_aug_masses)), amino_aug_tensor.shape)
             amino_aug_indices = zip(it.repeat(amino_id), left_loss_ind, right_loss_ind, modification_ind)
             augmented_indices.extend(amino_aug_indices)
         # argsort by augmented mass and reorder the indices accordingly to construct the index unaveler.
@@ -166,6 +218,9 @@ class TargetMassStateSpace:
             residue_space,
         ) for residue_space in residue_spaces])
         return cls(
+            residue_spaces,
+            fragment_space,
+            boundary_space,
             pair_masses,
             pair_indices,
             boundary_masses,

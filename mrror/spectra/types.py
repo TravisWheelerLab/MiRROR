@@ -53,6 +53,71 @@ class SimulatedPeaks(Peaks):
     pivot: float
     peptide: str
 
+    def _boundary(self, series, side):
+        mask = self.series == series
+        idx = np.arange(len(self))[mask]
+        pos = self.position[mask]
+        if side=='left':
+            opt = np.argmin(pos)
+        elif side=='right':
+            opt = np.argmax(pos)
+        return idx[opt]
+
+    def left_boundaries(self) -> tuple[int,int]:
+        return (
+            self._boundary('b','left'),
+            self._boundary('y','left'),
+        )
+
+    def right_boundaries(self) -> tuple[int,int]:
+        return (
+            self._boundary('b','right'),
+            self._boundary('y','right'),
+        )
+
+    def pairs(self) -> list[tuple[int,int]]:
+        return [(i, j) for i in range(len(self)) for j in range(i + 1, len(self)) if self.series[i] == self.series[j] and self.position[i] + 1 == self.position[j]]
+
+    def _paths(self, series) -> Iterator[list[int]]:
+        mask = self.series == series
+        idx = np.arange(len(self))[mask].tolist()
+        pos = self.position[mask]
+        mz = self.mz[mask]
+        path = [idx[0]]
+        prev_pos = pos[0]
+        prev_mz = mz[0]
+        for (i,curr_pos,curr_mz) in zip(idx[1:],pos[1:],mz[1:]):
+            if curr_pos != prev_pos + 1 or prev_mz < self.pivot < curr_mz:
+                yield path
+                path = [i]
+            else:
+                path.append(i)    
+            prev_pos = curr_pos
+            prev_mz = curr_mz
+        yield path
+
+    def paths(self):
+        return (
+            list(self._paths('b')),
+            list(self._paths('y')),
+        )
+
+    def _alignments(self):
+        # naive, doesn't work in most cases. 
+        # todo - rewrite for transformed spectra
+        b_paths, y_paths = self.paths()
+        for bp in b_paths:
+            for yp in y_paths:
+                yp = yp[::-1]
+                if all(self.position[bp] == len(self.peptide) - self.position[yp]):
+                    if all(self.position[bp] < self.position[yp]):
+                        yield list(zip(bp,yp))
+                    else:
+                        yield list(zip(yp,bp))
+
+    def alignments(self):
+        return list(self._alignments())
+
     def zip(self) -> list[tuple[float,float,str,int,str]]:
         return list(zip(
                 np.round(self.mz,3).tolist(),

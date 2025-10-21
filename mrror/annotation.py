@@ -1,4 +1,4 @@
-import dataclasses
+import dataclasses, json
 from time import time
 from typing import Self, Any
 # standard

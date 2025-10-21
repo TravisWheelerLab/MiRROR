@@ -1,14 +1,17 @@
 import dataclasses, json
 from time import time
 from typing import Self, Any
+import itertools as it
 
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .fragments.types import TargetMassStateSpace
 from .graphs.dfs import dfs
+from .annotation import AnnotationResult
 from .alignment import AlignmentResult
 
 @dataclasses.dataclass(slots=True)
 class EnumerationResult(SerializableDataclass):
+    aligned_paths: list
     candidates: list
     _profile: dict[str,float]
 
@@ -24,6 +27,7 @@ class EnumerationParams(SerializableDataclass):
         )
 
 def enumerate_candidates(
+    anno: AnnotationResult,
     algn: AlignmentResult,
     targets: TargetMassStateSpace,
     params: EnumerationParams,
@@ -40,7 +44,7 @@ def enumerate_candidates(
     ) for (prod, lo, hi) in zip(algn.sparse_prod, algn.lo_adj, algn.hi_adj)]
     profile["dfs"] = time() - t
     if verbose:
-        for (graph, pathspace) in zip(algn.sparse_prod,aligned_paths):
+        for (graph, pathspace, *operand_graphs) in zip(algn.sparse_prod,aligned_paths, algn.lo_adj, algn.hi_adj):
             print(len(pathspace))
             pathspace = sorted(pathspace,key=lambda x: -x[0])[-5:]
             for cost, path in pathspace:
@@ -51,6 +55,7 @@ def enumerate_candidates(
     if verbose:
         print(profile)
     return EnumerationResult(
+        aligned_paths = aligned_paths,
         candidates = [],
         _profile = profile,
     )
