@@ -19,6 +19,7 @@ from mrror.enumeration import EnumerationParams, EnumerationResult, enumerate_ca
 # library
 
 import numpy as np
+import editdistance as ed
 
 def _sum_profiles(results, precision=4):
     return round(sum(t for res in results for t in res._profile.values()), precision)
@@ -207,6 +208,50 @@ def test(cfg: DictConfig):
     enumerate_candidates(_anno, align(_anno, targets, algn_params, verbose=False), targets, enmr_params, verbose=False)
 
     peaks = SimulatedPeaks.from_peptide(cfg['input'],initial_b=spec_cfg.initial_b)
+    
+    true_pairs = peaks.pairs()
+    pair_positions = [peaks.position[[i,j]] for (i,j) in true_pairs]
+    pair_series = [peaks.series[i] for (i,_) in true_pairs]
+    pair_residues = [peaks.peptide[i:j] if s == 'b' else peaks.peptide[::-1][i:j] for (s,(i,j)) in zip(pair_series,pair_positions)]
+
+    print("residues")
+    residues = targets.residue_spaces[0].amino_symbols
+    res_masses = targets.residue_spaces[0].amino_masses
+    for i in range(len(residues)):
+        print(f"{i} {residues[i]} {res_masses[i]}")
+    print("target space")
+    tgt_order = targets.pair_indices[:,0]
+    ord_residues = residues[tgt_order]
+    ord_res_masses = res_masses[tgt_order]
+    for i in range(len(ord_residues)):
+        print(f"{i} {ord_residues[i]} {ord_res_masses[i]}")
+
+    print("true peptide")
+    print([pair_residues[i] for i in range(0,len(pair_residues),2)])
+    print([pair_residues[i] for i in range(1,len(pair_residues),2)])
+
+    from mrror.util import bisect_left, bisect_right
+    pair_difs = np.array([peaks.mz[j] - peaks.mz[i] for (i,j) in true_pairs])
+    pair_state_lo = bisect_left(targets.pair_masses, pair_difs - 0.03)
+    pair_state_hi = bisect_right(targets.pair_masses, pair_difs + 0.03)
+    pair_states = np.vstack([pair_state_lo,pair_state_hi])
+    pair_indices = [targets.pair_indices[:,0][lo:hi] for (lo,hi) in pair_states.T]
+    obs_pair_residues = [targets.residue_spaces[0].amino_symbols[i] for i in pair_indices]
+    print("\ndifs", [round(x,3) for x in pair_difs])
+    print("states",pair_states)
+    print("masses",targets.pair_masses[pair_states])
+    print("indices",[x.tolist() for x in pair_indices])
+    print("obs residues",[x.tolist() for x in obs_pair_residues])
+    print("true residues",pair_residues)
+
+    anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 1)
+
+    algn_res = align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
+
+    enmr_res = enumerate_candidates(anno_res, algn_res, targets, enmr_params, verbose=app_cfg.verbosity > 1)
+    enmr_paths = [[[g.unravel(v) for v in x[::-1][1:]] for (_,x) in pathspace] for (g,pathspace) in zip(algn_res.sparse_prod,enmr_res.aligned_paths)]
+    enmr_paths = [[[(int(x),int(y)) for (x,y) in path] for path in pathspace] for pathspace in enmr_paths]
+
     print("peaks:")
     print("peptide\n- ", peaks.peptide)
     print("peaks\n- ", peaks.mz)
@@ -218,12 +263,11 @@ def test(cfg: DictConfig):
     true_alignments = peaks.alignments()
     print("alignments\n- ", true_alignments)
 
-    anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 1)
+    print("annotation")
     observed_pivots = anno_res.pivots.cluster_points
     observed_pairs = anno_res.pairs.indices.T.tolist()
     observed_lb = anno_res.left_boundaries.index.tolist()
     observed_rb = [rb.index.tolist() for rb in anno_res.right_boundaries]
-    print("annotation")
     print(observed_pivots)
     print(observed_pairs)
     print(observed_lb)
@@ -231,33 +275,38 @@ def test(cfg: DictConfig):
 
     print("anno symmetries: ", [sym.tolist() for sym in anno_res.pivots.symmetries], '\n', [np.round(peaks.mz[sym], 4).tolist() for sym in anno_res.pivots.symmetries])
     
-    algn_res = align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
     print("algn symmetries: ", [sym[:-1].tolist() for sym in algn_res.symmetries], '\n', [np.round(algn_res.fragment_masses[sym[:-1,:]], 4).tolist() for sym in algn_res.symmetries])
-    enmr_res = enumerate_candidates(anno_res, algn_res, targets, enmr_params, verbose=app_cfg.verbosity > 1)
-    enmr_paths = [[[g.unravel(v) for v in x[::-1][1:]] for (_,x) in pathspace] for (g,pathspace) in zip(algn_res.sparse_prod,enmr_res.aligned_paths)]
-    enmr_paths = [[[(int(x),int(y)) for (x,y) in path] for path in pathspace] for pathspace in enmr_paths]
     print("enmr\n- ",len(enmr_paths[0]))
-    print("matches")
-    import editdistance as ed
-    fragment_masses = algn_res.fragment_masses
-    mz = peaks.mz
-    for pathspace in enmr_paths:
-        for alignment in pathspace:
-            alignment = [(mz.searchsorted(fragment_masses[i]).tolist(), mz.searchsorted(fragment_masses[j]).tolist()) for (i, j) in alignment]
-            rev_alignment = alignment[::-1]
-            min_aln = (9999,None)
-            min_rev = (9999,None)
-            for other_algn in true_alignments:
-                d_aln = ed.distance(alignment,other_algn)
-                if d_aln < min_aln[0]:
-                    min_aln = (d_aln, other_algn)
-                d_rev = ed.distance(rev_alignment, other_algn)
-                if d_rev < min_rev[0]:
-                    min_rev = (d_rev, other_algn)
-            if min_aln[0] < 2:
-                print('  '*min_aln[0],*min_aln, alignment)
-            if min_rev[0] < 2:
-                print('  '*min_rev[0],*min_rev, rev_alignment)
+
+    print("annotated pairs")
+    for (i, v) in enumerate(anno_res.pairs.zip()):
+        if all(v[1] == np.array([1,1])):
+            lpeak,rpeak = peaks.mz[v[0]].tolist()
+            print(i,(lpeak,rpeak),v,rpeak-lpeak)
+    masses = algn_res.fragment_masses
+    print(masses)
+    for (lg,rg,g,pathspace) in zip(algn_res.lo_adj,algn_res.hi_adj,algn_res.sparse_prod,enmr_res.aligned_paths):
+        for (cost, path) in sorted(pathspace):
+            input(f"\n[{cost}]")
+
+            left_path, right_path = zip(*[g.unravel(x) for x in path[::-1][1:]])
+            print(f"path\n{left_path}\n{right_path}")
+
+            left_pairs = [lg.graph[i][j]['weight'] for (i,j) in it.pairwise(left_path)]
+            right_pairs = [rg.graph[i][j]['weight'] for (i,j) in it.pairwise(right_path)]
+            print(f"pairs\n{left_pairs}\n{right_pairs}")
+
+            left_states = anno_res.pairs.states[:,left_pairs]
+            right_states = anno_res.pairs.states[:,right_pairs]
+            left_indices = anno_res.pairs.indices[:,left_pairs]
+            right_indices = anno_res.pairs.indices[:,right_pairs]
+            left_mass = anno_res.pairs.mass[left_pairs]
+            right_mass = anno_res.pairs.mass[right_pairs]
+            print(f"states\n{left_states}\n{right_states}\n{left_indices}\n{right_indices}\n{left_mass}\n{right_mass}")
+
+            left_aminos = targets.get_pair_residues(left_states)
+            right_aminos = targets.get_pair_residues(right_states)
+            print(f"aminos\n{left_aminos}\n{right_aminos}")
     
 if __name__ == "__main__":
     main()

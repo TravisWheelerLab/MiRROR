@@ -1,4 +1,5 @@
 import dataclasses
+from typing import Iterator
 # standard
 
 from ..spectra.types import AugmentedPeaks
@@ -6,6 +7,7 @@ from ..util import bisect_left, bisect_right
 # local
 
 import numpy as np
+import numba
 
 @dataclasses.dataclass(slots=True)
 class PairResult:
@@ -20,6 +22,43 @@ class PairResult:
 
     mass: np.ndarray
     # [float; m]
+
+    def zip(self) -> Iterator[tuple[tuple[int,int],tuple[int,int],tuple[int,int],float]]:
+        return zip(self.indices.T.tolist(),self.charges.T.tolist(),self.states.T.tolist(),self.mass.T.tolist())
+
+def _find_pairs_minimal(
+    peaks: np.ndarray, # [float; n]
+    tolerance: float,
+    target_masses: np.ndarray # [float; k]
+) -> tuple[np.ndarray,np.ndarray]:
+    min_target = target_masses[0] - tolerance
+    max_target = target_masses[-1] + tolerance
+    n = len(peaks)
+    results = list()
+    queries = list()
+    for i in range(n - 1):
+        query_peak = peaks[i]
+        subpeaks = peaks[i + 1:]
+        query_lo = bisect_left(peaks[i + 1:], query_peak + min_target)
+        query_hi = bisect_right(peaks[i + 1:], query_peak + max_target)
+        query_masses = subpeaks[query_lo:query_hi] - query_peak
+        tgt_lo = bisect_left(target_masses, query_masses - tolerance)
+        tgt_hi = bisect_right(target_masses, query_masses + tolerance)
+        result_mask = tgt_hi > tgt_lo
+        result_data = np.column_stack([
+            np.full_like(query_masses, i, dtype=np.int64),
+            i + 1 + np.arange(query_lo, query_hi),
+            tgt_lo,
+            tgt_hi,
+        ])
+        results.append(result_data[result_mask])
+        queries.append(query_masses[result_mask])
+    vresults = np.vstack(results).T
+    vqueries = np.hstack(queries)
+    return (
+        np.vstack(results).T,
+        np.hstack(queries),
+    )
 
 def _find_pairs(
     peaks: np.ndarray, # [float; n]
@@ -75,19 +114,27 @@ def _find_pairs(
 def find_pairs(
     peaks: AugmentedPeaks,
     tolerance: float,
-    target_masses: np.ndarray # [float; k]
+    target_masses: np.ndarray, # [float; k]
+    mode: str = 'minimal'
 ) -> PairResult:
-    results, queries = _find_pairs(
-        peaks.mz,
-        tolerance,
-        target_masses,
-    )
+    if mode == "minimal":
+        results, queries = _find_pairs_minimal(
+            peaks.mz,
+            tolerance,
+            target_masses,
+        )
+    else:
+        results, queries = _find_pairs(
+            peaks.mz,
+            tolerance,
+            target_masses,
+        )
     local_indices = results[:2,:]
     global_indices = peaks.get_original_indices(local_indices)
     loop_mask = global_indices[0,:] != global_indices[1,:]
     return PairResult(
         indices = global_indices[:,loop_mask],
         charges = peaks.get_augmenting_charges(local_indices[:,loop_mask]),
-        states = results[2:4,:],
-        mass = queries,
+        states = results[2:4,loop_mask],
+        mass = queries[loop_mask],
     )

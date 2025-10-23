@@ -126,8 +126,9 @@ class TargetMassStateSpace:
     ) -> Iterator[np.ndarray]:
         """For each range in states yield an array of the queried feature."""
         # for (l, r) in states:
-        for l, r in zip(*states):
-            yield features[indices[l:r,feature_axis]]
+        L, R = states
+        for l, r in zip(L, R):
+            yield np.unique(features[indices[:,feature_axis][l:r]])
 
     def get_pair_residues(
         self,

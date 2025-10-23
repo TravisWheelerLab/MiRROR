@@ -152,6 +152,7 @@ def decharge_peaks(
     n = len(peaks)
     k = len(charges)
     decharged_peaks = charges.reshape(k,1) * peaks.reshape(1,n)
+    decharged_peaks = np.array([(c * peaks) - (c - 1) for c in charges])
     merged_decharged_peaks, deindexer, charge_table = merge_in_order(decharged_peaks, transformation)
     # construct and re-sort the charge-augmented m/z
 

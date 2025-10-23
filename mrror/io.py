@@ -13,6 +13,17 @@ from Bio.SeqRecord import SeqRecord
 import warnings
 warnings.filterwarnings(action="ignore", category = ValidationWarning)
 
+def load_amino_table(
+    fpath: str,
+    row_dlm: str = '\n',
+    col_dlm: str = ' \t',
+) -> np.ndarray:
+    with open(fpath, 'r') as f:
+        txt = f.read()
+    rows = txt.split(row_dlm)[:-1]
+    data = [x.split(col_dlm) for x in rows]
+    return np.array(data)
+    
 def encode_graph(
     d: nx.DiGraph,
 ) -> str:
