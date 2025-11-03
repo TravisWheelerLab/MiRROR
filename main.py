@@ -12,6 +12,7 @@ from mrror.io import read_mzlib, read_mgf
 from mrror.util import in_alphabet
 from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import SpectraParams, PeaksDataset, Peaks, SimulatedPeaks
+from mrror.costmodels import EnumerationPathCostModel
 
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
 from mrror.alignment import AlignmentParams, AlignmentResult, align
@@ -149,8 +150,8 @@ def evaluate(cfg: DictConfig) -> None:
         for peaks in peaks_data
     ]
     anno_runtime = _sum_profiles(anno_results, precision=app_cfg.time_precision)
-    for res in anno_results:
-        output_path = output_dir / f"{app_cfg.session_name}.anno"
+    for (i,res) in enumerate(anno_results):
+        output_path = output_dir / f"{app_cfg.session_name}_{i}.anno"
         res.save(output_path)
     if app_cfg.verbosity > 0:
         print(f"| annotation\t{anno_runtime}s")
@@ -161,8 +162,8 @@ def evaluate(cfg: DictConfig) -> None:
        for anno_res in anno_results
     ]
     algn_runtime = _sum_profiles(algn_results, precision=app_cfg.time_precision)
-    for res in algn_results:
-        output_path = output_dir / f"{app_cfg.session_name}.algn"
+    for (i,res) in enumerate(algn_results):
+        output_path = output_dir / f"{app_cfg.session_name}_{i}.algn"
         res.save(output_path)
     if app_cfg.verbosity > 0:
         print(f"| alignment\t{algn_runtime}s")
@@ -173,8 +174,8 @@ def evaluate(cfg: DictConfig) -> None:
        for (anno_res, algn_res) in zip(anno_results, algn_results)
     ]
     enmr_runtime = _sum_profiles(enmr_results, precision=app_cfg.time_precision)
-    for res in enmr_results:
-        output_path = output_dir / f"{app_cfg.session_name}.algn"
+    for (i,res) in enumerate(enmr_results):
+        output_path = output_dir / f"{app_cfg.session_name}_{i}.algn"
         res.save(output_path)
     if app_cfg.verbosity > 0:
         print(f"| enumeration\t{enmr_runtime}s")
@@ -273,19 +274,34 @@ def test(cfg: DictConfig):
     print(observed_lb)
     print(observed_rb)
 
-    print("anno symmetries: ", [sym.tolist() for sym in anno_res.pivots.symmetries], '\n', [np.round(peaks.mz[sym], 4).tolist() for sym in anno_res.pivots.symmetries])
-    
-    print("algn symmetries: ", [sym[:-1].tolist() for sym in algn_res.symmetries], '\n', [np.round(algn_res.fragment_masses[sym[:-1,:]], 4).tolist() for sym in algn_res.symmetries])
-    print("enmr\n- ",len(enmr_paths[0]))
-
     print("annotated pairs")
     for (i, v) in enumerate(anno_res.pairs.zip()):
         if all(v[1] == np.array([1,1])):
             lpeak,rpeak = peaks.mz[v[0]].tolist()
             print(i,(lpeak,rpeak),v,rpeak-lpeak)
+
+    print("anno symmetries: ", [sym.tolist() for sym in anno_res.pivots.symmetries], '\n', [np.round(peaks.mz[sym], 4).tolist() for sym in anno_res.pivots.symmetries])
+    
+    print("algn symmetries: ", [sym[:-1].tolist() for sym in algn_res.symmetries], '\n', [np.round(algn_res.fragment_masses[sym[:-1,:]], 4).tolist() for sym in algn_res.symmetries])
+
+    print("cost model:")
+    models = [EnumerationPathCostModel(
+            prod,
+            lo,
+            hi,
+            targets,
+            anno_res.left_boundaries,
+            rb,
+            anno_res.pairs,
+        ) for (rb,prod,lo,hi) in zip(anno_res.right_boundaries,algn_res.sparse_prod,algn_res.lo_adj,algn_res.hi_adj)]
+    for m in models:
+        print(m.edge_annotation)
+    
     masses = algn_res.fragment_masses
-    print(masses)
-    for (lg,rg,g,pathspace) in zip(algn_res.lo_adj,algn_res.hi_adj,algn_res.sparse_prod,enmr_res.aligned_paths):
+    print("fragment masses: ", masses)
+
+    print("called affixes: ", len(enmr_paths[0]))
+    for (model,lg,rg,g,pathspace) in zip(models,algn_res.lo_adj,algn_res.hi_adj,algn_res.sparse_prod,enmr_res.aligned_paths):
         for (cost, path) in sorted(pathspace):
             input(f"\n[{cost}]")
 
@@ -302,11 +318,28 @@ def test(cfg: DictConfig):
             right_indices = anno_res.pairs.indices[:,right_pairs]
             left_mass = anno_res.pairs.mass[left_pairs]
             right_mass = anno_res.pairs.mass[right_pairs]
-            print(f"states\n{left_states}\n{right_states}\n{left_indices}\n{right_indices}\n{left_mass}\n{right_mass}")
+            print(f"anno\n{left_states}\n{right_states}\n{left_indices}\n{right_indices}\n{left_mass}\n{right_mass}")
 
-            left_aminos = targets.get_pair_residues(left_states)
-            right_aminos = targets.get_pair_residues(right_states)
-            print(f"aminos\n{left_aminos}\n{right_aminos}")
+            left_data = list(targets.expand_pair_states(left_states, left_mass))
+            right_data = list(targets.expand_pair_states(right_states, right_mass))
+            print(f"states")
+            for d in left_data:
+                for x in d:
+                    print(x)
+                print()
+
+            print(f"resolved states")
+            left_res = [model._retrieve_annotation('left', i, j) for (i,j) in it.pairwise(left_path)]
+            right_res = [model._retrieve_annotation('right', i, j) for (i,j) in it.pairwise(right_path)]
+            for d in left_res:
+                for x in d:
+                    print(x)
+                print()
+
+            print(f"comparison")
+            for edge in it.pairwise(path):
+                comp = model._retrieve_comparison(*edge)
+                print(edge, comp)
     
 if __name__ == "__main__":
     main()

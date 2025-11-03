@@ -6,6 +6,8 @@ import itertools as it
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .fragments.types import TargetMassStateSpace
 from .graphs.dfs import dfs
+from .sequences.suffix_array import SuffixArray
+from .costmodels import EnumerationPathCostModel, SuffixArrayPathCostModel
 from .annotation import AnnotationResult
 from .alignment import AlignmentResult
 
@@ -18,12 +20,15 @@ class EnumerationResult(SerializableDataclass):
 @dataclasses.dataclass(slots=True)
 class EnumerationParams(SerializableDataclass):
     cost_threshold: float
-    # suffix_array: SuffixArray
+    suffix_array: SuffixArray
 
     @classmethod
     def from_config(cls, cfg):
+        suf_path = cfg['suffix_array']
+        # suffix_array = SuffixArray. TODO
         return cls(
             cost_threshold = cfg['cost_threshold'],
+            suffix_array = None,
         )
 
 def enumerate_candidates(
@@ -37,19 +42,13 @@ def enumerate_candidates(
 
     t = time()
     aligned_paths = [dfs(
-        topology = prod,
-        sources = [x for x in prod.graph if prod.graph.in_degree(x) == 0],
-        threshold = params.cost_threshold,
-        filter = None,
+        prod,
+        [x for x in prod.graph if prod.graph.in_degree(x) == 0],
+        params.cost_threshold,
     ) for (prod, lo, hi) in zip(algn.sparse_prod, algn.lo_adj, algn.hi_adj)]
-    profile["dfs"] = time() - t
+    profile["trace"] = time() - t
     if verbose:
-        for (graph, pathspace, *operand_graphs) in zip(algn.sparse_prod,aligned_paths, algn.lo_adj, algn.hi_adj):
-            print(len(pathspace))
-            pathspace = sorted(pathspace,key=lambda x: -x[0])[-5:]
-            for cost, path in pathspace:
-                unraveled_path = [graph.unravel(x) for x in path]
-                print(cost, [(int(u),int(w)) for (u,w) in unraveled_path])
+        pass
     # generate alignments between low- and high-mz graphs.
 
     if verbose:

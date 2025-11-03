@@ -23,6 +23,7 @@ class AnnotationResult(SerializableDataclass):
     pivots: PivotResult
     left_boundaries: BoundaryResult
     right_boundaries: list[BoundaryResult]
+    tolerance: float
     
     _profile: dict[str,float] = None
 
@@ -33,6 +34,7 @@ class AnnotationResult(SerializableDataclass):
         pivots: PivotResult,
         left_boundaries: BoundaryResult,
         right_boundaries: list[BoundaryResult],
+        tolerance: float,
         profile: dict[str,float],
     ) -> Self:
         assert len(pivots) == len(right_boundaries)
@@ -42,6 +44,7 @@ class AnnotationResult(SerializableDataclass):
             pivots = pivots,
             left_boundaries = left_boundaries,
             right_boundaries = right_boundaries,
+            tolerance = tolerance,
             _profile = profile,
         )
 
@@ -243,5 +246,6 @@ def annotate(
         pivots,
         left_boundaries,
         right_boundaries,
+        params.query_tolerance,
         profile,
     )

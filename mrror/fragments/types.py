@@ -125,47 +125,107 @@ class TargetMassStateSpace:
         features: np.ndarray,   # [_; l]
     ) -> Iterator[np.ndarray]:
         """For each range in states yield an array of the queried feature."""
-        # for (l, r) in states:
-        L, R = states
-        for l, r in zip(L, R):
-            yield np.unique(features[indices[:,feature_axis][l:r]])
+        # print(f"_query_index\nstates {states}\nindices {indices}\nfeature ax {feature_axis}\nfeatures {features}")
+        left, right = states
+        for l, r in zip(left, right):
+            yield features[indices[:,feature_axis][l:r]]
 
-    def get_pair_residues(
+    def expand_pair_states(
         self,
-        states: np.ndarray,
-    ) -> list[np.ndarray]:
-        return list(self._query_index(
-            states,
+        state_range: np.ndarray,
+        query_mass: np.ndarray,
+    ) -> Iterator[tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+    ]]:
+        left_loss = list(self._query_index(
+            state_range,
+            self.pair_indices,
+            1,
+            self.fragment_space.loss_symbols,
+        ))
+        right_loss = list(self._query_index(
+            state_range,
+            self.pair_indices,
+            2,
+            self.fragment_space.loss_symbols,
+        ))
+        modifications = list(self._query_index(
+            state_range,
+            self.pair_indices,
+            3,
+            self.residue_spaces[0].modification_symbols,
+        ))
+        residues = list(self._query_index(
+            state_range,
             self.pair_indices,
             0,
             self.residue_spaces[0].amino_symbols,
         ))
+        # retrieve annotations
+        target_mass = [self.pair_masses[l:r] for (l,r) in state_range.T]
+        offsets = [np.abs(qm - tms) for (qm,tms) in zip(query_mass, target_mass)]
+        complexities = [(ll != '') + (rr != '') + (mod != '') for (ll,rr,mod) in zip(left_loss,right_loss,modifications)]
+        scaled_costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
+        # construct costs as offsets scaled by the number of nontrivial annotated losses and mods.
+        for cost, res, lloss, rloss, mod in zip(scaled_costs,residues,left_loss,right_loss,modifications):
+            cost_order = np.argsort(cost)
+            yield (
+                res[cost_order],
+                lloss[cost_order],
+                rloss[cost_order],
+                mod[cost_order],
+                cost[cost_order],
+            )
 
-    def get_boundary_residues(
+    def expand_boundary_states(
         self,
-        states: np.ndarray,
-    ) -> list[np.ndarray]:
-        return list(self._query_index(
-            states,
-            self.boundary_indices[0],
-            0,
-            self.residue_spaces[0].amino_symbols,
+        state_range: np.ndarray,
+        query_mass: np.ndarray,
+        k: int,
+    ) -> Iterator[tuple[
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+        np.ndarray,
+    ]]:
+        k = k - 1
+        right_loss = list(self._query_index(
+            state_range,
+            self.boundary_indices[k],
+            2,
+            self.boundary_space.loss_symbols,
         ))
-
-    def get_boundary_kmers(
-        self,
-        states: np.ndarray,
-        k: int = 2,
-    ) -> list[np.ndarray]:
-        max_k = len(self.residue_spaces)
-        if k >= max_k:
-            raise ValueError(f"k too large! {k} >= {max_k}")
-        return list(self._query_index(
-            states,
-            self.boundary_indices[k - 1],
-            0,
-            self.residue_spaces[k - 1].amino_symbols,
+        modifications = list(self._query_index(
+            state_range,
+            self.boundary_indices[k],
+            3,
+            self.residue_spaces[k].modification_symbols,
         ))
+        residues = list(self._query_index(
+            state_range,
+            self.boundary_indices[k],
+            0,
+            self.residue_spaces[k].amino_symbols,
+        ))
+        # retrieve annotations
+        target_mass = [self.boundary_masses[k][l:r] for (l,r) in state_range.T]
+        offsets = [np.abs(qm - tms) for (qm,tms) in zip(query_mass, target_mass)]
+        nullchar = ''
+        complexities = [(rr != nullchar) + (mod != nullchar) for (rr,mod) in zip(right_loss,modifications)]
+        scaled_costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
+        # construct costs as offsets scaled by the number of nontrivial annotated losses and mods.
+        for cost, res, rloss, mod in zip(scaled_costs,residues,right_loss,modifications):
+            cost_order = np.argsort(cost)
+            yield (
+                res[cost_order],
+                rloss[cost_order],
+                mod[cost_order],
+                cost[cost_order],
+            )
     
     # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
     @staticmethod

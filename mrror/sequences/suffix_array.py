@@ -1,5 +1,5 @@
-import pathlib
-from typing import Iterator, Iterable
+import pathlib, tempfile
+from typing import Iterator, Iterable, Union
 
 from pylibsufr import read_sequence_file, SufrBuilderArgs, SuffixArray as SufrSuffixArray, SufrMetadata, ListOptions, CountOptions, CountResult, BisectOptions, BisectResult
 
@@ -106,7 +106,7 @@ class SuffixArray:
     
     def bisect(self, 
         queries: Iterable[str], 
-        prefix_result: BisectResult = None,
+        prefix: Union[BisectResult,list[BisectResult]] = None,
     ) -> list[BisectResult]:
         """Given an iterable of character queries ( := single-element strings,) and an optional prefix result, count the occurrences of the query strings. If a prefix result is passed, search is restricted to the range of the prefix. Unlike count, this function returns its result type, BisectResult. The occurrence quantities can be accessed via the `count` field of the BisectResult object."""
         if not(all(len(x) == 1 for x in queries)):
@@ -114,8 +114,21 @@ class SuffixArray:
             print([x for x in queries])
             print([len(x) for x in queries])
             raise ValueError("The `queries` arg contained a non-char str type!")
-        return self._suffix_array.bisect(BisectOptions(
-            queries = queries,
-            max_query_len = self.max_query_len,
-            low_memory = self.query_low_memory,
-            prefix_result = prefix_result))
+        try:
+            pfx_iter = iter(prefix)
+            results = (
+                self._suffix_array.bisect(BisectOptions(
+                    queries = queries,
+                    max_query_len = self.max_query_len,
+                    low_memory = self.query_low_memory,
+                    prefix = x,
+                )) for x in pfx_iter
+            )
+            return sum(results,[])
+        except TypeError:
+            return self._suffix_array.bisect(BisectOptions(
+                queries = queries,
+                max_query_len = self.max_query_len,
+                low_memory = self.query_low_memory,
+                prefix = prefix,
+            ))

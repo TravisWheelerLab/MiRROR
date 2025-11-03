@@ -12,10 +12,8 @@ class SpectrumGraph:
 
     def order(self) -> int:
         """Returns the successor of the largest node.
-        This graph is sparse, so calling self.graph.order()
-        will return the number of nodes, but that value will
-        not `ravel` or `unravel` correctly, so we need the true
-        order to be one greater than the largest node label."""
+        
+        This graph is sparse, so calling self.graph.order() will return the number of nodes, but that value will not `ravel` or `unravel` correctly, so we need the true order to be one greater than the largest node label."""
         return max(self.graph.nodes) + 1
 
     @classmethod
@@ -23,19 +21,28 @@ class SpectrumGraph:
         cls,
         edges: np.ndarray,
         boundaries: np.ndarray,
+        multiresidue_boundaries: list[np.ndarray] = [],
     ) -> Self:
         g = nx.DiGraph()
         g.add_weighted_edges_from(edges.T)
+        # construct digraph with edges
         boundary_source = max(edges.max(),boundaries.max()) + 1
-        # print(f"SpectrumGraph.from_edges_and_boundaries\n\tedges={edges}\n\tboundaries={boundaries}\n\tboundary_source={boundary_source}\n")
+        # create an artificial source to point to boundaries
         if not(boundaries is None):
             boundary_edges = np.vstack([
                 np.full(boundaries.shape[1],boundary_source),
                 boundaries,
             ])
-            # print(f"\tboundary_edges={boundary_edges}\n")
-            g.add_weighted_edges_from(boundary_edges.T)
-        # print(f"\tall edges: {g.edges}\n")
+            g.add_weighted_edges_from((i,j,(x,1)) for (i,j,x) in boundary_edges.T)
+            # construct boundary edges weighted with k = 1 to denote single-residue ids
+        for (k, multi_boundaries) in enumerate(multiresidue_boundaries):
+            boundary_edges = np.vstack([
+                np.full(multi_boundaries.shape[1],boundary_source),
+                multi_boundaries,
+            ])
+            g.add_weighted_edges_from((i,j,(x,k + 1)) for (i,j,x) in boundary_edges.T)
+            # construct multi-residue boundary edges weighted with k > 1 to denote multi-residue ids.
+
         return cls(
             g,
             boundaries,
@@ -59,7 +66,7 @@ class PivotGraph:
 class WeightedProductGraph:
     graph: nx.DiGraph
     right_operand_order: int
-    weights: dict[int,float]
+    node_weights: dict[int,float]
 
     @classmethod
     def from_edges(
@@ -89,18 +96,3 @@ class WeightedProductGraph:
             product_node // self.right_operand_order,
             product_node % self.right_operand_order,
         )
-
-class AbstractPathFilter(abc.ABC):
-
-    @classmethod
-    @abc.abstractmethod
-    def from_graph(self, *args, **kwargs) -> Self:
-        """Construct an instance of the filter for a given graph."""
-
-    @abc.abstractmethod
-    def initial_state(self) -> tuple:
-        """The initial state of the filter, corresponding to the empty path ()."""
-
-    @abc.abstractmethod
-    def update(self, node: int, state: tuple) -> Union[tuple, None]:
-        """Given `node` and `state`, update state with node and return a new state, if such a path exists, or None otherwise."""

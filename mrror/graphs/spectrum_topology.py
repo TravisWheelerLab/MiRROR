@@ -109,6 +109,7 @@ def _construct_spectrum_graphs(
     left_boundaries: np.ndarray,        # [int; l]
     right_boundary_arrs: list[np.ndarray], # [[int; _]; p]
     pivots: list[np.ndarray],           # [(int,int,int,int); p]
+    tolerance: float,
 ) -> tuple[
         list[SpectrumGraph],
         list[SpectrumGraph],
@@ -137,10 +138,17 @@ def _construct_spectrum_graphs(
         )
         # left graph, nodes lower than pivot, ascending w.r.t. mz.
 
-        right_pair_mask = pair_mz[0,:] > pivot
+        expected_max_mass = 2 * (pivot + tolerance)
+        right_pair_mask = np.logical_and(
+            pair_mz[0,:] > pivot,
+            pair_mz[1,:] < expected_max_mass,
+        )
         right_edges = pairs[:,right_pair_mask]
         right_edges = right_edges[[1,0,2],:] # transpose edge sources and targets
-        right_boundaries_mask = rb_mz > pivot
+        right_boundaries_mask = np.logical_and(
+            rb_mz > pivot,
+            rb_mz < expected_max_mass,
+        )
         right_sources = right_boundaries[:,right_boundaries_mask]
         right_adj[i] = SpectrumGraph.from_edges_and_boundaries(
             edges = right_edges,
@@ -166,6 +174,7 @@ def construct_spectrum_topology(
     left_boundaries: BoundaryResult,
     pivots: PivotResult,
     right_boundaries: list[BoundaryResult],
+    tolerance: float,
 ) -> tuple[
     np.ndarray,
     list[np.ndarray],
@@ -188,6 +197,7 @@ def construct_spectrum_topology(
         left_boundary_idx,
         right_boundaries_idx,
         pivots.cluster_points,
+        tolerance,
     )
     sym_nodes = [np.vstack([s, [np.array([l.boundary_source, r.boundary_source]),]]) for (s,l,r) in zip(sym_idx,left_adj,right_adj)]
     return (

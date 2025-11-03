@@ -152,5 +152,5 @@ def propagate_cost(
     return WeightedProductGraph(
         graph = product_graph,
         right_operand_order = right_order,
-        weights = cost,
+        node_weights = cost,
     )

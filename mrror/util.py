@@ -5,6 +5,65 @@ import itertools as it
 import numba
 import numpy as np
 
+@numba.jit(nopython=True)
+def merge_compare_exact_unique(
+    left_arr: Iterable,
+    right_arr: Iterable,
+) -> Iterator[tuple[int,int]]:
+    """Given two unique, ordered Iterables, return the index pairs representing exact matches."""
+    n = len(left_arr)
+    m = len(right_arr)
+    l = 0
+    r = 0
+    while l < n and r < m:
+        x = left_arr[l]
+        z = right_arr[r]
+        if x == z:
+            yield (l,r)
+            l += 1
+            r += 1
+        elif x < z:
+            r += 1
+        else: # z < x
+            l += 1
+
+def dfs(
+    adj: list[np.ndarray],
+    cost: dict[int,float],
+    threshold: float,
+    initial_states: list[tuple[float,int,list[int]]],
+) -> Iterator[tuple[float,list[int]]]:
+    """Depth-first search restricted by path cost.
+
+    Mainly used for debugging. For the functions that enumerate candidate sequences from a weighted product graph, see mrror.graphs.trace.
+
+    arguments:
+    - adj: an indexable whose values are collections of nodes. intended to be the `adj` field of a networkx graph.
+    - cost: a dictionary from nodes to costs.
+    - threshold: max cost of a path may have.
+    - initial_states: list of (cost, node, path) states. e.g., to iterate a graph with one source at node zero, pass [(0., 0, [])].
+
+    return:
+    - iterator of (cost, [path nodes...]) tuples."""
+    q = deque(initial_states)
+    while len(q) > 0:
+        prev_cost, curr_node, prev_path = q.pop()
+        curr_cost = prev_cost + cost[curr_node]
+        curr_path = prev_path + [curr_node,]
+        if curr_cost <= threshold:
+            # terminate paths that exceed the threshold
+            degree = len(adj[curr_node])
+            if degree == 0:
+                yield (curr_cost, curr_path)
+                # yield paths that reach sinks
+            else:
+                for next_node in adj[curr_node]:
+                    q.append((
+                        curr_cost,
+                        next_node.item(),
+                        curr_path,
+                    ))
+
 def normalize_dict(
     data: dict[Any,float],
 ) -> dict[Any,float]:

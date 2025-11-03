@@ -50,6 +50,7 @@ def align(
         anno.left_boundaries,
         anno.pivots,
         anno.right_boundaries,
+        anno.tolerance,
     )
     profile["construct"] = time() - t
     if verbose:

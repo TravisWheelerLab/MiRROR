@@ -53,8 +53,6 @@ def _find_pairs_minimal(
         ])
         results.append(result_data[result_mask])
         queries.append(query_masses[result_mask])
-    vresults = np.vstack(results).T
-    vqueries = np.hstack(queries)
     return (
         np.vstack(results).T,
         np.hstack(queries),
@@ -115,7 +113,7 @@ def find_pairs(
     peaks: AugmentedPeaks,
     tolerance: float,
     target_masses: np.ndarray, # [float; k]
-    mode: str = 'minimal'
+    mode: str = None,
 ) -> PairResult:
     if mode == "minimal":
         results, queries = _find_pairs_minimal(
