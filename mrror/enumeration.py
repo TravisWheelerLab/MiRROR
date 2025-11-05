@@ -6,6 +6,7 @@ import itertools as it
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .fragments.types import TargetMassStateSpace
 from .graphs.dfs import dfs
+from .graphs.trace import trace
 from .sequences.suffix_array import SuffixArray
 from .costmodels import EnumerationPathCostModel, SuffixArrayPathCostModel
 from .annotation import AnnotationResult
@@ -41,11 +42,20 @@ def enumerate_candidates(
     profile = {}
 
     t = time()
-    aligned_paths = [dfs(
-        prod,
-        [x for x in prod.graph if prod.graph.in_degree(x) == 0],
-        params.cost_threshold,
-    ) for (prod, lo, hi) in zip(algn.sparse_prod, algn.lo_adj, algn.hi_adj)]
+    aligned_paths = [trace(
+            prod,
+            [x for x in prod.graph if prod.graph.in_degree(x) == 0],
+            EnumerationPathCostModel(
+                prod,
+                lo,
+                hi,
+                targets,
+                anno.left_boundaries,
+                anno.right_boundaries[i],
+                anno.pairs,
+            ),
+            params.cost_threshold,
+        ) for (i, (prod, lo, hi)) in enumerate(zip(algn.sparse_prod, algn.lo_adj, algn.hi_adj))]
     profile["trace"] = time() - t
     if verbose:
         pass

@@ -300,6 +300,8 @@ def test(cfg: DictConfig):
     masses = algn_res.fragment_masses
     print("fragment masses: ", masses)
 
+    print(anno_params.boundary_fragment_space)
+
     print("called affixes: ", len(enmr_paths[0]))
     for (model,lg,rg,g,pathspace) in zip(models,algn_res.lo_adj,algn_res.hi_adj,algn_res.sparse_prod,enmr_res.aligned_paths):
         for (cost, path) in sorted(pathspace):

@@ -130,10 +130,20 @@ class TargetMassStateSpace:
         for l, r in zip(left, right):
             yield features[indices[:,feature_axis][l:r]]
 
+    @staticmethod
+    def _quantify_nonnull(
+        null_symbols: list[str],
+        *sym_arrs,
+    ) -> np.ndarray:
+        return np.sum([
+            np.array([x not in null_symbols for x in arr]) for arr in sym_arrs
+        ], axis=0)
+
     def expand_pair_states(
         self,
         state_range: np.ndarray,
         query_mass: np.ndarray,
+        null_symbols: list[str] = [''],
     ) -> Iterator[tuple[
         np.ndarray,
         np.ndarray,
@@ -168,7 +178,10 @@ class TargetMassStateSpace:
         # retrieve annotations
         target_mass = [self.pair_masses[l:r] for (l,r) in state_range.T]
         offsets = [np.abs(qm - tms) for (qm,tms) in zip(query_mass, target_mass)]
-        complexities = [(ll != '') + (rr != '') + (mod != '') for (ll,rr,mod) in zip(left_loss,right_loss,modifications)]
+        complexities = [
+            self._quantify_nonnull(null_symbols, ll, rr, mod)
+            for (ll,rr,mod) in zip(left_loss,right_loss,modifications)
+        ]
         scaled_costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
         # construct costs as offsets scaled by the number of nontrivial annotated losses and mods.
         for cost, res, lloss, rloss, mod in zip(scaled_costs,residues,left_loss,right_loss,modifications):
@@ -186,6 +199,7 @@ class TargetMassStateSpace:
         state_range: np.ndarray,
         query_mass: np.ndarray,
         k: int,
+        null_symbols: list[str] = ['b ','y '],
     ) -> Iterator[tuple[
         np.ndarray,
         np.ndarray,
@@ -214,8 +228,10 @@ class TargetMassStateSpace:
         # retrieve annotations
         target_mass = [self.boundary_masses[k][l:r] for (l,r) in state_range.T]
         offsets = [np.abs(qm - tms) for (qm,tms) in zip(query_mass, target_mass)]
-        nullchar = ''
-        complexities = [(rr != nullchar) + (mod != nullchar) for (rr,mod) in zip(right_loss,modifications)]
+        complexities = [
+            self._quantify_nonnull(null_symbols, rr, mod)
+            for (rr,mod) in zip(right_loss,modifications)
+        ]
         scaled_costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
         # construct costs as offsets scaled by the number of nontrivial annotated losses and mods.
         for cost, res, rloss, mod in zip(scaled_costs,residues,right_loss,modifications):
