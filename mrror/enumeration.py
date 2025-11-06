@@ -4,7 +4,7 @@ from typing import Self, Any
 import itertools as it
 
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
-from .fragments.types import TargetMassStateSpace
+from .fragments import TargetMassStateSpace
 from .graphs.dfs import dfs
 from .graphs.trace import trace
 from .sequences.suffix_array import SuffixArray

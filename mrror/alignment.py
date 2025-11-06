@@ -4,7 +4,7 @@ from typing import Self, Any
 # standard
 
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
-from .fragments.types import TargetMassStateSpace
+from .fragments import TargetMassStateSpace
 from .graphs.types import SpectrumGraph, PivotGraph, WeightedProductGraph
 from .graphs.spectrum_topology import construct_spectrum_topology
 from .graphs.propagate import propagate_cost

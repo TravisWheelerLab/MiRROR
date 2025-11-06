@@ -75,6 +75,8 @@ modifications:
     - 'SEP'
     - 'MetOx'
     - 'MetOn'
+  nulls:
+    - 0
   application:
     - - 0 # G
     - - 0 # A
@@ -115,6 +117,8 @@ losses:
     - NH3
     - CH2N2
     - CH2NO
+  nulls:
+    - 0
   application:
     - - 0 # G
     - - 0 # A

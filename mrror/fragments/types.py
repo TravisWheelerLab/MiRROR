@@ -1,12 +1,6 @@
 import dataclasses
 from typing import Self, Iterator
 import itertools as it
-# standard
-
-from .pairs import PairResult
-from .pivots import PivotResult
-from .boundaries import BoundaryResult
-#local
 
 import numpy as np
 
@@ -16,7 +10,9 @@ class FragmentStateSpace:
     # [float; m]
     loss_symbols: np.ndarray
     # [str; m]
-    applicable_losses: np.ndarray
+    loss_null_indices: np.ndarray
+    # [int; m]
+    applicable_losses: list[np.ndarray]
     # [[int; _]; m] 
     # amino idx -> {applicable loss indices}.
     charges: np.ndarray
@@ -26,6 +22,7 @@ class FragmentStateSpace:
         return cls(
             loss_masses = np.array([0.]),
             loss_symbols = np.array(['']),
+            loss_null_indices = np.ndarray([0]),
             applicable_losses = [np.array([0]) for _ in range(20)],
             charges = np.array([1]))
 
@@ -42,6 +39,8 @@ class ResidueStateSpace:
     # [float; k]
     modification_symbols: np.ndarray
     # [str; k]
+    modification_null_indices: np.ndarray
+    # [int; k]
     applicable_modifications: list[np.ndarray] 
     # [[int; _]; k]
     # amino_idx -> {modification_idx applicable to amino}.
@@ -67,6 +66,8 @@ class MultiResidueStateSpace(ResidueStateSpace):
     # [float; k]
     modification_symbols: np.ndarray
     # [str; k]
+    modification_null_indices: np.ndarray
+    # [int; k]
     applicable_modifications: list[np.ndarray] 
     # [[int; _]; k]
     # amino_idx -> {modification_idx applicable to amino}.
@@ -91,8 +92,9 @@ class MultiResidueStateSpace(ResidueStateSpace):
         return cls(
             unique_masses,
             [np.array(x) for x in clustered_words],
-            np.array([0]),#mod_masses,
+            np.array([0.]),#mod_masses,
             np.array(['']),#mod_symbols,
+            np.array([0]),#mod_nulls,
             [np.array([0]) for _ in unique_masses],#applicable_mods,
             0,#max_num_mods,
         )
@@ -112,136 +114,73 @@ class TargetMassStateSpace:
     residue_spaces: list[ResidueStateSpace]
     fragment_space: FragmentStateSpace
     boundary_space: FragmentStateSpace
+    null_indices: list[list[np.ndarray]]
     pair_masses: np.ndarray
     pair_indices: np.ndarray
     boundary_masses: list[np.ndarray]
     boundary_indices: list[np.ndarray]
 
     @staticmethod
-    def _query_index(
-        states: np.ndarray,     # [(int,int); n] < m
-        indices: np.ndarray,    # [[int; k]; m]
-        feature_axis: int,      # int < k
-        features: np.ndarray,   # [_; l]
-    ) -> Iterator[np.ndarray]:
-        """For each range in states yield an array of the queried feature."""
-        # print(f"_query_index\nstates {states}\nindices {indices}\nfeature ax {feature_axis}\nfeatures {features}")
-        left, right = states
-        for l, r in zip(left, right):
-            yield features[indices[:,feature_axis][l:r]]
-
-    @staticmethod
-    def _quantify_nonnull(
-        null_symbols: list[str],
-        *sym_arrs,
+    def _count_nonnull(
+        features: np.ndarray,
+        null_indices: list[np.ndarray],
     ) -> np.ndarray:
-        return np.sum([
-            np.array([x not in null_symbols for x in arr]) for arr in sym_arrs
-        ], axis=0)
+        return np.sum(
+            [x != nidx for (x,nidx) in zip(features.T,null_indices)],
+            axis=0,
+        )
 
-    def expand_pair_states(
+    @classmethod
+    def _resolve_hits(
+        cls,
+        hit_ranges: np.ndarray,
+        query_masses: np.ndarray,
+        target_masses: np.ndarray,
+        target_features: np.ndarray,
+        null_indices: list[np.ndarray],
+    ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
+        features = [target_features[l:r,:] for (l,r) in hit_ranges.T]
+        offsets = [qm - target_masses[l:r] for (qm,(l,r)) in zip(query_masses,hit_ranges.T)]
+        complexities = [cls._count_nonnull(x[:,1:],null_indices) for x in features]
+        costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
+        segments = np.cumsum(hit_ranges[:,1] - hit_ranges[:,2] + 1)
+        return (
+            np.concat(features),
+            np.concat(costs),
+            np.concat([[0], segments]),
+        )
+    
+    def resolve_pairs(
         self,
-        state_range: np.ndarray,
-        query_mass: np.ndarray,
-        null_symbols: list[str] = [''],
-    ) -> Iterator[tuple[
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-    ]]:
-        left_loss = list(self._query_index(
-            state_range,
+        hit_ranges: np.ndarray,
+        query_masses: np.ndarray,
+    ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
+        return self._resolve_hits(
+            hit_ranges,
+            query_masses,
+            self.pair_masses,
             self.pair_indices,
-            1,
-            self.fragment_space.loss_symbols,
-        ))
-        right_loss = list(self._query_index(
-            state_range,
-            self.pair_indices,
-            2,
-            self.fragment_space.loss_symbols,
-        ))
-        modifications = list(self._query_index(
-            state_range,
-            self.pair_indices,
-            3,
-            self.residue_spaces[0].modification_symbols,
-        ))
-        residues = list(self._query_index(
-            state_range,
-            self.pair_indices,
-            0,
-            self.residue_spaces[0].amino_symbols,
-        ))
-        # retrieve annotations
-        target_mass = [self.pair_masses[l:r] for (l,r) in state_range.T]
-        offsets = [np.abs(qm - tms) for (qm,tms) in zip(query_mass, target_mass)]
-        complexities = [
-            self._quantify_nonnull(null_symbols, ll, rr, mod)
-            for (ll,rr,mod) in zip(left_loss,right_loss,modifications)
-        ]
-        scaled_costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
-        # construct costs as offsets scaled by the number of nontrivial annotated losses and mods.
-        for cost, res, lloss, rloss, mod in zip(scaled_costs,residues,left_loss,right_loss,modifications):
-            cost_order = np.argsort(cost)
-            yield (
-                res[cost_order],
-                lloss[cost_order],
-                rloss[cost_order],
-                mod[cost_order],
-                cost[cost_order],
-            )
+            self.null_indices[0],
+        )
 
-    def expand_boundary_states(
+    def resolve_boundaries(
         self,
-        state_range: np.ndarray,
-        query_mass: np.ndarray,
+        hit_ranges: np.ndarray,
+        query_masses: np.ndarray,
         k: int,
-        null_symbols: list[str] = ['b ','y '],
-    ) -> Iterator[tuple[
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-        np.ndarray,
-    ]]:
-        k = k - 1
-        right_loss = list(self._query_index(
-            state_range,
+    ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
+        features, costs, segments = self._resolve_hits(
+            hit_ranges,
+            query_masses,
+            self.boundary_masses[k],
             self.boundary_indices[k],
-            2,
-            self.boundary_space.loss_symbols,
-        ))
-        modifications = list(self._query_index(
-            state_range,
-            self.boundary_indices[k],
-            3,
-            self.residue_spaces[k].modification_symbols,
-        ))
-        residues = list(self._query_index(
-            state_range,
-            self.boundary_indices[k],
-            0,
-            self.residue_spaces[k].amino_symbols,
-        ))
-        # retrieve annotations
-        target_mass = [self.boundary_masses[k][l:r] for (l,r) in state_range.T]
-        offsets = [np.abs(qm - tms) for (qm,tms) in zip(query_mass, target_mass)]
-        complexities = [
-            self._quantify_nonnull(null_symbols, rr, mod)
-            for (rr,mod) in zip(right_loss,modifications)
-        ]
-        scaled_costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
-        # construct costs as offsets scaled by the number of nontrivial annotated losses and mods.
-        for cost, res, rloss, mod in zip(scaled_costs,residues,right_loss,modifications):
-            cost_order = np.argsort(cost)
-            yield (
-                res[cost_order],
-                rloss[cost_order],
-                mod[cost_order],
-                cost[cost_order],
-            )
+            self.null_indices[k],
+        )
+        return (
+            features[:,[0,2,3]],
+            costs,
+            segments,
+        )
     
     # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
     @staticmethod
@@ -294,12 +233,100 @@ class TargetMassStateSpace:
             boundary_space,
             residue_space,
         ) for residue_space in residue_spaces])
+        # construct masses and feature indices
+        null_losses = fragment_space.loss_null_indices
+        null_indices = [[null_losses, null_losses, x.modification_null_indices] for x in residue_spaces]
+        # retrieve null indices for feature states that should not be penalized
         return cls(
             residue_spaces,
             fragment_space,
             boundary_space,
+            null_indices,
             pair_masses,
             pair_indices,
             boundary_masses,
             boundary_indices,
         )
+
+@dataclasses.dataclass(slots=True)
+class PairResult:
+    indices: np.ndarray
+    # [(int,int); m]
+
+    charges: np.ndarray
+    # [(int,int); m]
+
+    features: np.ndarray
+    # [(int,int,int,int); n]
+
+    costs: np.ndarray
+    # [float; n]
+
+    segments: np.ndarray
+    # [int; m + 1]
+
+    mass: np.ndarray
+    # [float; m]
+
+@dataclasses.dataclass(slots=True)
+class BoundaryResult:
+    index: np.ndarray
+    # [int; l]
+
+    charge: np.ndarray
+    # [int; l]
+
+    features: np.ndarray
+    # [(int,int,int); n]
+
+    costs: np.ndarray
+    # [float; n]
+
+    segments: np.ndarray
+    # [int; l + 1]
+
+    mass: np.ndarray
+    # [float; l]
+
+@dataclasses.dataclass(slots=True)
+class PivotResult:
+    cluster_points: np.ndarray
+    # [float; k]
+    
+    clusters: list[np.ndarray]
+    # [[int; _]; k]
+    
+    scores: np.ndarray
+    # [float; k]
+    
+    symmetries: list[np.ndarray]
+    # [[(int,int); _]; k]
+    
+    pivot_points: np.ndarray
+    # [float; p]
+    
+    pivot_indices: np.ndarray
+    # [(int,int,int,int); p]
+    
+    @classmethod
+    def from_data(cls,
+        cluster_points: np.ndarray,
+        clusters: list[np.ndarray],
+        scores: np.ndarray,
+        symmetries: list[np.ndarray],
+        pivot_points: np.ndarray,
+        pivot_indices: np.ndarray,
+    ) -> Self:
+        assert len(cluster_points) == len(clusters) == len(scores) == len(symmetries)
+        assert len(pivot_points) == len(pivot_indices)
+        return cls(
+            cluster_points,
+            clusters,
+            scores,
+            symmetries,
+            pivot_points,
+            pivot_indices,
+        )
+
+    def __len__(self) -> int:
+        return len(self.cluster_points)
