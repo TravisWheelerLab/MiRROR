@@ -78,7 +78,6 @@ class AnnotationParams(SerializableDataclass):
         mod_appl = [np.array(x) for x in mod['application']]
         mod_max_num = mod['max_num']
         mod_nulls = np.array(mod['nulls'])
-        print("MOD NULLS", mod_nulls)
         residue_space = ResidueStateSpace(
             res_mass,
             res_sym,
@@ -124,7 +123,6 @@ class AnnotationParams(SerializableDataclass):
         n_loss = len(loss_mass)
         loss_sym = np.array(loss['symbols'])
         loss_nulls = np.array(loss['nulls'])
-        print("LOSS NULLS", loss_nulls)
         loss_appl = [np.array(x) for x in loss['application']]
         charges = np.array(cfg['charges'])
         fragment_space = FragmentStateSpace(
@@ -143,7 +141,6 @@ class AnnotationParams(SerializableDataclass):
         boundary_mass = (ser_mass.reshape(n_ser,1) + loss_mass.reshape(1, n_loss)).flatten()
         boundary_sym = (ser_sym.reshape(n_ser,1) + ' ' + loss_sym.reshape(1, n_loss)).flatten()
         boundary_nulls = [x + (i * n_loss) for x in loss_nulls for i in range(n_ser)]
-        print("BOUNDARY NULLS", boundary_nulls)
         # TODO TODO TODO TODO TODO TODO TODO TODO TODO
         boundary_appl = sum([loss_appl] * n_ser, start=[])
         boundary_fragment_space = FragmentStateSpace(

@@ -5,6 +5,22 @@ import itertools as it
 import numba
 import numpy as np
 
+def ravel(
+    i: int,
+    j: int,
+    n: int,
+) -> int:
+    return (i * n) + j
+
+def unravel(
+    k: int,
+    n: int,
+) -> tuple[int,int]:
+    return (
+        k // n,
+        k % n,
+    )
+
 @numba.jit(nopython=True)
 def merge_compare_exact_unique(
     left_arr: Iterable,

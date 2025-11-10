@@ -1,8 +1,8 @@
-cost_threshold: 5.
+cost_threshold: 0.
 cost_model:
-  match: 0.
-  sub: 1.
-  vertical_gap: 2.
-  horizontal_gap: 2.
-  # vertical_shift: 0.
-  # horizontal_shift: 0.
+  node_match: 0.
+  node_mismatch: 1.
+  edge_match: 0.
+  edge_mismatch: 1.
+  edge_gap: 2.
+weight_key: 'weight'

@@ -110,6 +110,7 @@ def _construct_spectrum_graphs(
     right_boundary_arrs: list[np.ndarray], # [[int; _]; p]
     pivots: list[np.ndarray],           # [(int,int,int,int); p]
     tolerance: float,
+    weight_key: str,
 ) -> tuple[
         list[SpectrumGraph],
         list[SpectrumGraph],
@@ -135,6 +136,7 @@ def _construct_spectrum_graphs(
         left_adj[i] = SpectrumGraph.from_edges_and_boundaries(
             edges = left_edges,
             boundaries = left_sources,
+            weight_key = weight_key,
         )
         # left graph, nodes lower than pivot, ascending w.r.t. mz.
 
@@ -153,6 +155,7 @@ def _construct_spectrum_graphs(
         right_adj[i] = SpectrumGraph.from_edges_and_boundaries(
             edges = right_edges,
             boundaries = right_sources,
+            weight_key = weight_key,
         )
         # right graph, nodes higher than pivot, descending.
 
@@ -175,6 +178,7 @@ def construct_spectrum_topology(
     pivots: PivotResult,
     right_boundaries: list[BoundaryResult],
     tolerance: float,
+    weight_key: str = float,
 ) -> tuple[
     np.ndarray,
     list[np.ndarray],
@@ -198,6 +202,7 @@ def construct_spectrum_topology(
         right_boundaries_idx,
         pivots.cluster_points,
         tolerance,
+        weight_key,
     )
     sym_nodes = [np.vstack([s, [np.array([l.boundary_source, r.boundary_source]),]]) for (s,l,r) in zip(sym_idx,left_adj,right_adj)]
     return (

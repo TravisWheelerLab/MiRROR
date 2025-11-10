@@ -47,15 +47,15 @@ def enumerate_candidates(
             [x for x in prod.graph if prod.graph.in_degree(x) == 0],
             EnumerationPathCostModel(
                 prod,
-                lo,
-                hi,
+                left,
+                right,
                 targets,
                 anno.left_boundaries,
                 anno.right_boundaries[i],
                 anno.pairs,
             ),
             params.cost_threshold,
-        ) for (i, (prod, lo, hi)) in enumerate(zip(algn.sparse_prod, algn.lo_adj, algn.hi_adj))]
+        ) for (i, (prod, left, right)) in enumerate(zip(algn.prod_topology, algn.left_topology, algn.right_topology))]
     profile["trace"] = time() - t
     if verbose:
         pass

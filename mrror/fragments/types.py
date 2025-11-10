@@ -1,4 +1,4 @@
-import dataclasses
+import dataclasses, abc
 from typing import Self, Iterator
 import itertools as it
 
@@ -143,7 +143,7 @@ class TargetMassStateSpace:
         offsets = [qm - target_masses[l:r] for (qm,(l,r)) in zip(query_masses,hit_ranges.T)]
         complexities = [cls._count_nonnull(x[:,1:],null_indices) for x in features]
         costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
-        segments = np.cumsum(hit_ranges[:,1] - hit_ranges[:,2] + 1)
+        segments = np.cumsum(hit_ranges[1,:] - hit_ranges[0,:]) + 1
         return (
             np.concat(features),
             np.concat(costs),
@@ -169,17 +169,12 @@ class TargetMassStateSpace:
         query_masses: np.ndarray,
         k: int,
     ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-        features, costs, segments = self._resolve_hits(
+        return self._resolve_hits(
             hit_ranges,
             query_masses,
             self.boundary_masses[k],
             self.boundary_indices[k],
             self.null_indices[k],
-        )
-        return (
-            features[:,[0,2,3]],
-            costs,
-            segments,
         )
     
     # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
@@ -189,17 +184,14 @@ class TargetMassStateSpace:
         right_fragment_space: FragmentStateSpace,
         residue_space: ResidueStateSpace,
     ) -> tuple[list[float],list[tuple[int,int,int,int]]]:
-        # generate the unconditional augments as the 3-tensor sum of orthogonal amino, left loss, and right loss vectors.
-        # it is shaped/typed as a 4-tensor because we'll need the extra dimension later when adding in the conditional
-        # modification augments.
         amino_masses = residue_space.amino_masses.reshape(residue_space.n_aminos(), 1, 1, 1)
         left_loss_masses = left_fragment_space.loss_masses.reshape(1, left_fragment_space.n_losses(), 1, 1)
         right_loss_masses = right_fragment_space.loss_masses.reshape(1, 1, right_fragment_space.n_losses(), 1)
+        # generate the unconditional augments as the 3-tensor sum of orthogonal amino, left loss, and right loss vectors. it is shaped/typed as a 4-tensor because we'll need the extra dimension later when adding in the conditional
+        unconditional_augment_tensor = amino_masses + left_loss_masses - right_loss_masses
         ## recall: the residue mass = right fragment mass - left fragment mass. that means:
         ## left loss decreases the left fragment mass, which increases the observed residue mass.
         ## right loss decreases the right fragment mass, which decreases the observed residue mass.
-        unconditional_augment_tensor = amino_masses + left_loss_masses - right_loss_masses
-        # iterate along the amino (first) axis, construct the conditional augment vectors and apply them to the unconditional augment matrix associated to each amino id.
         augmented_masses = []
         augmented_indices = []
         for amino_id in range(residue_space.n_aminos()):
@@ -211,10 +203,11 @@ class TargetMassStateSpace:
             _, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(np.arange(len(amino_aug_masses)), amino_aug_tensor.shape)
             amino_aug_indices = zip(it.repeat(amino_id), left_loss_ind, right_loss_ind, modification_ind)
             augmented_indices.extend(amino_aug_indices)
-        # argsort by augmented mass and reorder the indices accordingly to construct the index unaveler.
+        # iterate along the amino (first) axis, construct the conditional augment vectors and apply them to the unconditional augment matrix associated to each amino id.
         augmented_masses = np.array(augmented_masses)
         augmented_indices = np.array(augmented_indices)
         index_key = np.argsort(augmented_masses)
+        # argsort by augmented mass and reorder the indices accordingly to construct the index unaveler.
         return augmented_masses[index_key], augmented_indices[index_key]
 
     @classmethod
@@ -249,7 +242,26 @@ class TargetMassStateSpace:
         )
 
 @dataclasses.dataclass(slots=True)
-class PairResult:
+class AbstractAnnotationResult(abc.ABC):
+
+    def __post_init__(self):
+        print("AnnotationResult:")
+        print(self.features)
+        print(self.costs)
+        print(self.segments)
+        print(self.features.shape, self.costs.shape, self.segments.shape)
+
+    def get_annotation(self, i: int) -> tuple[float,np.ndarray]:
+        # print(self.features, self.costs, self.segments)
+        l, r = self.segments[i:i+2]
+        print("get_annotation", i, self.segments.shape, self.costs.shape, (l, r))
+        return (
+            self.costs[l:r],
+            self.features[l:r,:],
+        )
+
+@dataclasses.dataclass(slots=True)
+class PairResult(AbstractAnnotationResult):
     indices: np.ndarray
     # [(int,int); m]
 
@@ -269,7 +281,7 @@ class PairResult:
     # [float; m]
 
 @dataclasses.dataclass(slots=True)
-class BoundaryResult:
+class BoundaryResult(AbstractAnnotationResult):
     index: np.ndarray
     # [int; l]
 
@@ -277,7 +289,7 @@ class BoundaryResult:
     # [int; l]
 
     features: np.ndarray
-    # [(int,int,int); n]
+    # [(int,int,int,int); n]
 
     costs: np.ndarray
     # [float; n]

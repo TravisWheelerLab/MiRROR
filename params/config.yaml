@@ -1,5 +1,6 @@
 # top-level arguments
 input: TESTPEPTIDE::simple
+expected_masses: None
 
 defaults:
 - annotation: annotation-mono
