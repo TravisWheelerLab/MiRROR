@@ -60,7 +60,9 @@ def _propagate_cost(
         curr_cost, edge_weight, prev_node, curr_node = heappop(pq)
         if prev_node is not None:
             prod.add_edge(curr_node, prev_node)
-            comp[(curr_node,prev_node)] = edge_weight
+            if not(curr_node in comp):
+                comp[int(curr_node)] = dict()
+            comp[int(curr_node)][int(prev_node)] = edge_weight
             # record the reversed edge curr_node -> prev_node
         if curr_cost <= threshold:
             if not(curr_node in prod):

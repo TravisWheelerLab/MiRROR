@@ -122,7 +122,7 @@ class WeightedProductGraph:
     graph: nx.DiGraph
     right_operand_order: int
     node_weights: dict[int,float]
-    edge_weights: dict[tuple[int,int],tuple[float,ProductEdgeWeight]] # this is an inefficient way to store and retrieve edge weights, but the rest of the graph data are stored in dictionaries anyways, so until we move away from networkx, it's gonna be like this.
+    edge_weights: dict[int,dict[int,tuple[float,ProductEdgeWeight]]] # this is an inefficient way to store and retrieve edge weights, but the rest of the graph data are stored in dictionaries anyways, so until we move away from networkx, it's gonna be like this.
 
     def ravel(
         self,

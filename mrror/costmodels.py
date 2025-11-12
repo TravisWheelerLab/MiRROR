@@ -209,7 +209,7 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
         next_node: int,
     ) -> tuple[float,OrderedResiduePathState]:
         left_node, right_node = self._graph.unravel(next_node)
-        edge_annotation = self._graph.edge_weights[(curr_node,next_node)]
+        edge_annotation = self._graph.edge_weights[curr_node][next_node]
         anno_costs = edge_annotation.costs
         order = np.argsort(anno_costs)
         next_edge_state = (
