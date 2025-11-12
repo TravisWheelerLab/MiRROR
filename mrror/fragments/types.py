@@ -143,7 +143,7 @@ class TargetMassStateSpace:
         offsets = [qm - target_masses[l:r] for (qm,(l,r)) in zip(query_masses,hit_ranges.T)]
         complexities = [cls._count_nonnull(x[:,1:],null_indices) for x in features]
         costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
-        segments = np.cumsum(hit_ranges[1,:] - hit_ranges[0,:]) + 1
+        segments = np.cumsum(hit_ranges[1,:] - hit_ranges[0,:]) # + 1
         return (
             np.concat(features),
             np.concat(costs),
@@ -177,6 +177,42 @@ class TargetMassStateSpace:
             self.null_indices[k],
         )
     
+    @staticmethod
+    def _symbolize_features(
+        features: np.ndarray,
+        amino_symbols: np.ndarray,
+        left_loss_symbols: np.ndarray,
+        right_loss_symbols: np.ndarray,
+        modification_symbols: np.ndarray,
+    ) -> np.ndarray:
+        return np.vstack([
+            [amino_symbols[i],left_loss_symbols[l],right_loss_symbols[r],modification_symbols[j]] for (i,l,r,j) in features
+        ])
+
+    def symbolize_pairs(
+        self,
+        features: np.ndarray,
+    ) -> np.ndarray:
+        return self._symbolize_features(
+            features,
+            self.residue_spaces[0].amino_symbols,
+            self.fragment_space.loss_symbols,
+            self.fragment_space.loss_symbols,
+            self.residue_spaces[0].modification_symbols,
+        )
+
+    def symbolize_boundaries(
+        self,
+        features: np.ndarray,
+    ) -> np.ndarray:
+        return self._symbolize_features(
+            features,
+            self.residue_spaces[0].amino_symbols,
+            ['',],
+            self.boundary_space.loss_symbols,
+            self.residue_spaces[0].modification_symbols,
+        )
+
     # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
     @staticmethod
     def _augment_masses(
@@ -244,21 +280,13 @@ class TargetMassStateSpace:
 @dataclasses.dataclass(slots=True)
 class AbstractAnnotationResult(abc.ABC):
 
-    def __post_init__(self):
-        print("AnnotationResult:")
-        print(self.features)
-        print(self.costs)
-        print(self.segments)
-        print(self.features.shape, self.costs.shape, self.segments.shape)
-
     def get_annotation(self, i: int) -> tuple[float,np.ndarray]:
-        # print(self.features, self.costs, self.segments)
         l, r = self.segments[i:i+2]
-        print("get_annotation", i, self.segments.shape, self.costs.shape, (l, r))
-        return (
+        data = (
             self.costs[l:r],
             self.features[l:r,:],
         )
+        return data
 
 @dataclasses.dataclass(slots=True)
 class PairResult(AbstractAnnotationResult):

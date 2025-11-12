@@ -12,7 +12,7 @@ from mrror.io import read_mzlib, read_mgf
 from mrror.util import in_alphabet
 from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import SpectraParams, PeaksDataset, Peaks, SimulatedPeaks
-from mrror.costmodels import EnumerationPathCostModel
+from mrror.costmodels import OrderedResiduePathCostModel
 
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
 from mrror.alignment import AlignmentParams, AlignmentResult, align

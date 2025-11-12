@@ -37,7 +37,7 @@ def _trace(
     initial_states: list[tuple[float,list[int],Any,int]],
     threshold: float,
     cost_model: AbstractPathCostModel,
-) -> Iterator[tuple[float,list[int],Any]]:
+) -> Iterator[tuple[float,Any,list[int]]]:
     q = deque(initial_states)
     while len(q) > 0:
         curr_cost, curr_cost_state, curr_path, curr_node = q.pop()
@@ -47,7 +47,7 @@ def _trace(
             next_path = curr_path + [curr_node,]
             neighbors = list(adj[curr_node])
             if len(neighbors) == 0:
-                yield ((curr_cost, curr_cost_state), next_path)
+                yield (curr_cost, curr_cost_state, next_path)
             else:
                 for next_node in neighbors:
                     delta_cost, next_cost_state = cost_model.next_state(curr_cost_state, curr_node, next_node)
@@ -59,10 +59,22 @@ def trace(
     sources: Iterator[int],
     threshold: float,
     cost_model: AbstractPathCostModel,
-) -> list[tuple[float,list[int],Any]]:
-    return list(_trace(
+) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
+    traced_paths = _trace(
         prop_graph.graph.adj,
         [(*cost_model.initial_state(x), [], x) for x in sources],
         threshold,
         cost_model,
-    ))
+    )
+    costs = []
+    states = []
+    paths = []
+    for (cost, state, path) in sorted(traced_paths, key=lambda x: x[0]):
+        costs.append(cost)
+        states.append(tuple(state))
+        paths.append(tuple(path))
+    return (
+        costs,
+        states,
+        paths,
+    )

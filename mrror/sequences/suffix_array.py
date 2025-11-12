@@ -45,8 +45,6 @@ class SuffixArray:
         # read the fasta into libsufr's internal representation.
         sequence_file_data = read_sequence_file(path_to_fasta)   
         seq_str = ''.join(c for c in sequence_file_data.seq().decode())
-        #print(seq_str)
-        #print(f"SFD:\n\t{seq_str}")
         # construct the arguments
         sufr_builder_args = SufrBuilderArgs(
             seq_str.encode(),
@@ -110,9 +108,6 @@ class SuffixArray:
     ) -> list[BisectResult]:
         """Given an iterable of character queries ( := single-element strings,) and an optional prefix result, count the occurrences of the query strings. If a prefix result is passed, search is restricted to the range of the prefix. Unlike count, this function returns its result type, BisectResult. The occurrence quantities can be accessed via the `count` field of the BisectResult object."""
         if not(all(len(x) == 1 for x in queries)):
-            print(queries)
-            print([x for x in queries])
-            print([len(x) for x in queries])
             raise ValueError("The `queries` arg contained a non-char str type!")
         try:
             pfx_iter = iter(prefix)

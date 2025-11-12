@@ -8,7 +8,7 @@ from .fragments import TargetMassStateSpace
 from .graphs.dfs import dfs
 from .graphs.trace import trace
 from .sequences.suffix_array import SuffixArray
-from .costmodels import EnumerationPathCostModel, SuffixArrayPathCostModel
+from .costmodels import OrderedResiduePathCostModel, SuffixArrayPathCostModel
 from .annotation import AnnotationResult
 from .alignment import AlignmentResult
 
@@ -45,16 +45,13 @@ def enumerate_candidates(
     aligned_paths = [trace(
             prod,
             [x for x in prod.graph if prod.graph.in_degree(x) == 0],
-            EnumerationPathCostModel(
+            params.cost_threshold,
+            OrderedResiduePathCostModel(
                 prod,
                 left,
                 right,
                 targets,
-                anno.left_boundaries,
-                anno.right_boundaries[i],
-                anno.pairs,
             ),
-            params.cost_threshold,
         ) for (i, (prod, left, right)) in enumerate(zip(algn.prod_topology, algn.left_topology, algn.right_topology))]
     profile["trace"] = time() - t
     if verbose:

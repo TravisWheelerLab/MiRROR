@@ -186,9 +186,9 @@ def find_boundaries(
     results, queries = _find_boundaries(
         peaks.mz,
         tolerance,
-        targets.boundary_masses[k]
+        targets.boundary_masses[k - 1]
     )
-    features, feature_costs, feature_segments = targets.resolve_boundaries(results[1:,:], queries, k)
+    features, feature_costs, feature_segments = targets.resolve_boundaries(results[1:,:], queries, k - 1)
     return BoundaryResult(
         index = peaks.get_original_indices(results[0,:]),
         charge = peaks.get_augmenting_charges(results[0,:]),
@@ -207,13 +207,10 @@ def _find_virtual_pivots(
     num_bins = int((midpoints.max() - midpoints.min()) / bin_width)
     if num_bins == 0:
         return []
-    # print(num_bins)
     bin_counts, bin_edges = np.histogram(
         midpoints,
         bins = num_bins)
-    # print("bin edges", bin_edges)
     bin_values = (bin_edges[:-1] + bin_edges[1:]) / 2
-    # print("bin values", bin_values)
     frequencies = sorted(set(bin_counts))
     mask = bin_counts > frequencies[int(len(frequencies) * 0.75)]
     maximal_bin_values = bin_values[mask]

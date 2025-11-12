@@ -68,6 +68,7 @@ class PivotGraph:
 
 @dataclasses.dataclass(slots=True)
 class ProductEdgeWeight:
+    """Annotation data associated to an edge in a WeightedProductGraph. Note that comparisons between ProductEdgeWeight are computed from the order of their minimum cost. Two completely different annotations may be equal if they have the same minimum cost."""
     costs: np.ndarray
     left_annotation: np.ndarray
     right_annotation: np.ndarray
@@ -121,7 +122,7 @@ class WeightedProductGraph:
     graph: nx.DiGraph
     right_operand_order: int
     node_weights: dict[int,float]
-    edge_weights: dict[tuple[int,int],ProductEdgeWeight] # this is an inefficient way to store and retrieve edge weights, but the rest of the graph data are stored in dictionaries anyways, so until we move away from networkx, it's gonna be like this.
+    edge_weights: dict[tuple[int,int],tuple[float,ProductEdgeWeight]] # this is an inefficient way to store and retrieve edge weights, but the rest of the graph data are stored in dictionaries anyways, so until we move away from networkx, it's gonna be like this.
 
     def ravel(
         self,
