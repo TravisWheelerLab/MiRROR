@@ -41,9 +41,7 @@ def _trace(
     q = deque(initial_states)
     while len(q) > 0:
         curr_cost, curr_cost_state, curr_path, curr_node = q.pop()
-        if curr_cost > threshold:
-            continue
-        else:
+        if curr_cost < threshold:
             next_path = curr_path + [curr_node,]
             neighbors = list(adj[curr_node])
             if len(neighbors) == 0:
@@ -60,16 +58,16 @@ def trace(
     threshold: float,
     cost_model: AbstractPathCostModel,
 ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-    traced_paths = _trace(
-        prop_graph.graph.adj,
-        [(*cost_model.initial_state(x), [], x) for x in sources],
-        threshold,
-        cost_model,
-    )
+    path_traces = sorted(_trace(
+            prop_graph.graph.adj,
+            [(*cost_model.initial_state(x), [], x) for x in sources],
+            threshold,
+            cost_model,
+        ), key = lambda x: x[0])
     costs = []
     states = []
     paths = []
-    for (cost, state, path) in sorted(traced_paths, key=lambda x: x[0]):
+    for (cost, state, path) in path_traces:
         costs.append(cost)
         states.append(tuple(state))
         paths.append(tuple(path))

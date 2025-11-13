@@ -58,12 +58,6 @@ def _propagate_cost(
     # product topology, node costs, edge comparisons.
     while len(pq) > 0:
         curr_cost, edge_weight, prev_node, curr_node = heappop(pq)
-        if prev_node is not None:
-            prod.add_edge(curr_node, prev_node)
-            if not(curr_node in comp):
-                comp[int(curr_node)] = dict()
-            comp[int(curr_node)][int(prev_node)] = edge_weight
-            # record the reversed edge curr_node -> prev_node
         if curr_cost <= threshold:
             if not(curr_node in prod):
                 # terminate paths that either
@@ -72,19 +66,25 @@ def _propagate_cost(
                 prod.add_node(curr_node)
                 cost[int(curr_node)] = curr_cost
                 # reached a new node; record its index, label, and cost.
-                neighbors = strong_product_neighbors(left_adj, right_adj, *unravel(curr_node, right_order))
+                neighbors = list(strong_product_neighbors(left_adj, right_adj, *unravel(curr_node, right_order)))
                 for (l, r) in neighbors:
                     next_node = ravel(l, r, right_order)
                     node_cost = node_cost_model(next_node)
-                    edge_cost, edge_weight = edge_cost_model(curr_node, next_node)
+                    edge_cost, next_edge_weight = edge_cost_model(curr_node, next_node)
                     next_cost = curr_cost + edge_cost + node_cost
                     heappush(pq, (
                         next_cost,
-                        edge_weight,
+                        next_edge_weight,
                         curr_node,
                         next_node,
                     ))
                     # record the next step into the graph with cost given by node and edge cost models.
+            if prev_node is not None:
+                prod.add_edge(curr_node, prev_node)
+                if not(curr_node in comp):
+                    comp[int(curr_node)] = dict()
+                comp[int(curr_node)][int(prev_node)] = edge_weight
+                # record the reversed edge curr_node -> prev_node
     return (
         prod,
         cost,
@@ -100,7 +100,7 @@ def propagate_cost(
     node_cost_model: AbstractNodeCostModel,
     edge_cost_model: AbstractEdgeCostModel,
 ) -> WeightedProductGraph:
-    right_order = right.order()
+    right_order = int(right.order())
     product_sources = [ravel(u, w, right_order) for (u,w) in it.product(left_sources,right_sources)]
     initial_conditions = [(node_cost_model(v), None, None, v) for v in product_sources]
     sparse_product, propagated_costs, compared_edges = _propagate_cost(

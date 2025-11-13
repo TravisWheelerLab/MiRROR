@@ -88,7 +88,7 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
         match: float,
         mismatch: float,
         gap: float,
-        feature_weights: np.ndarray = FEATURE_WEIGHT_TENSOR, # TODO
+        feature_weights: np.ndarray = FEATURE_WEIGHT_TENSOR,
         n_features: int = N_FEATURES,
     ) -> ProductEdgeWeight:
         if left_anno is None:
@@ -166,15 +166,14 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
 
     def _symbolize_annotation(
         self,
-        left_node: int,
-        right_node: int,
+        node: int,
         anno: np.ndarray,
     ) -> np.ndarray:
         if anno is None:
             return np.array([''])
         elif np.all(anno == -1):
             return np.full_like(anno, '', dtype=str)
-        elif left_node == self._left_boundary or right_node == self._right_boundary:
+        elif node == self._left_boundary or node == self._right_boundary:
             return self._targets.symbolize_boundaries(anno)
         else:
             return self._targets.symbolize_pairs(anno)
@@ -211,21 +210,20 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
         left_node, right_node = self._graph.unravel(next_node)
         edge_annotation = self._graph.edge_weights[curr_node][next_node]
         anno_costs = edge_annotation.costs
+        left_symbols = self._symbolize_annotation(
+            left_node,
+            edge_annotation.left_annotation,
+        )
+        right_symbols = self._symbolize_annotation(
+            right_node,
+            edge_annotation.right_annotation,
+        )
+        combined_symbols = self._combine_symbols(left_symbols, right_symbols)
         order = np.argsort(anno_costs)
         next_edge_state = (
                 anno_costs[order],
                 # (n,) array of floats
-                self._combine_symbols(
-                    self._symbolize_annotation(
-                        left_node,
-                        right_node,
-                        edge_annotation.left_annotation,
-                    ), self._symbolize_annotation(
-                        left_node,
-                        right_node,
-                        edge_annotation.right_annotation,
-                    ),
-                )[order],
+                combined_symbols[order],
                 # (n,4) array of str
         )
         next_cost_state = cost_state + [next_edge_state,]

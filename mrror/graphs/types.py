@@ -100,8 +100,8 @@ class ProductEdgeWeight:
     ) -> Self:
         return cls(
             costs,
-            anno,
             np.full_like(anno, -1),
+            anno,
         )
     
     @classmethod
@@ -112,8 +112,8 @@ class ProductEdgeWeight:
     ) -> Self:
         return cls(
             costs,
-            np.full_like(anno, -1),
             anno,
+            np.full_like(anno, -1),
         )
     
 

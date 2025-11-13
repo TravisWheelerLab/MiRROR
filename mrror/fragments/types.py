@@ -114,11 +114,12 @@ class TargetMassStateSpace:
     residue_spaces: list[ResidueStateSpace]
     fragment_space: FragmentStateSpace
     boundary_space: FragmentStateSpace
-    null_indices: list[list[np.ndarray]]
     pair_masses: np.ndarray
     pair_indices: np.ndarray
+    pair_null_indices: list[np.ndarray]
     boundary_masses: list[np.ndarray]
     boundary_indices: list[np.ndarray]
+    boundary_null_indices: list[list[np.ndarray]]
 
     @staticmethod
     def _count_nonnull(
@@ -126,7 +127,7 @@ class TargetMassStateSpace:
         null_indices: list[np.ndarray],
     ) -> np.ndarray:
         return np.sum(
-            [x != nidx for (x,nidx) in zip(features.T,null_indices)],
+            [np.all([x != i for i in nidx],axis=0) for (x,nidx) in zip(features.T,null_indices)],
             axis=0,
         )
 
@@ -140,14 +141,16 @@ class TargetMassStateSpace:
         null_indices: list[np.ndarray],
     ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
         features = [target_features[l:r,:] for (l,r) in hit_ranges.T]
-        offsets = [qm - target_masses[l:r] for (qm,(l,r)) in zip(query_masses,hit_ranges.T)]
+        offsets = [np.abs(qm - target_masses[l:r]) for (qm,(l,r)) in zip(query_masses,hit_ranges.T)]
         complexities = [cls._count_nonnull(x[:,1:],null_indices) for x in features]
-        costs = [o * (1 + c) for (o,c) in zip(offsets,complexities)]
+        costs = [(o * (1 + c)) for (o,c) in zip(offsets,complexities)]
         segments = np.cumsum(hit_ranges[1,:] - hit_ranges[0,:]) # + 1
         return (
             np.concat(features),
             np.concat(costs),
             np.concat([[0], segments]),
+            np.concat(offsets),
+            np.concat([target_masses[l:r] for (l,r) in hit_ranges.T])
         )
     
     def resolve_pairs(
@@ -155,13 +158,14 @@ class TargetMassStateSpace:
         hit_ranges: np.ndarray,
         query_masses: np.ndarray,
     ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-        return self._resolve_hits(
+        features, costs, segments, *_ =  self._resolve_hits(
             hit_ranges,
             query_masses,
             self.pair_masses,
             self.pair_indices,
-            self.null_indices[0],
+            self.pair_null_indices,
         )
+        return (features, costs, segments)
 
     def resolve_boundaries(
         self,
@@ -169,13 +173,14 @@ class TargetMassStateSpace:
         query_masses: np.ndarray,
         k: int,
     ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-        return self._resolve_hits(
+        features, costs, segments, offsets, hit_masses = self._resolve_hits(
             hit_ranges,
             query_masses,
             self.boundary_masses[k],
             self.boundary_indices[k],
-            self.null_indices[k],
+            self.boundary_null_indices[k],
         )
+        return (features, costs, segments)
     
     @staticmethod
     def _symbolize_features(
@@ -213,7 +218,6 @@ class TargetMassStateSpace:
             self.residue_spaces[0].modification_symbols,
         )
 
-    # this method could be faster, but it only gets called once per AnnotationParams, so it's probably ok.
     @staticmethod
     def _augment_masses(
         left_fragment_space: FragmentStateSpace,
@@ -236,7 +240,7 @@ class TargetMassStateSpace:
             amino_aug_tensor = unc_aug_matrix + con_aug_vector
             amino_aug_masses = amino_aug_tensor.flatten()
             augmented_masses.extend(amino_aug_masses)
-            _, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(np.arange(len(amino_aug_masses)), amino_aug_tensor.shape)
+            x, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(np.arange(len(amino_aug_masses)), amino_aug_tensor.shape)
             amino_aug_indices = zip(it.repeat(amino_id), left_loss_ind, right_loss_ind, modification_ind)
             augmented_indices.extend(amino_aug_indices)
         # iterate along the amino (first) axis, construct the conditional augment vectors and apply them to the unconditional augment matrix associated to each amino id.
@@ -263,18 +267,21 @@ class TargetMassStateSpace:
             residue_space,
         ) for residue_space in residue_spaces])
         # construct masses and feature indices
-        null_losses = fragment_space.loss_null_indices
-        null_indices = [[null_losses, null_losses, x.modification_null_indices] for x in residue_spaces]
+        pair_null_losses = fragment_space.loss_null_indices
+        pair_null_indices = [pair_null_losses, pair_null_losses, residue_spaces[0].modification_null_indices]
+        boundary_null_losses = boundary_space.loss_null_indices
+        boundary_null_indices = [[np.array([0,]), boundary_null_losses, kmer_space.modification_null_indices] for kmer_space in residue_spaces]
         # retrieve null indices for feature states that should not be penalized
         return cls(
             residue_spaces,
             fragment_space,
             boundary_space,
-            null_indices,
             pair_masses,
             pair_indices,
+            pair_null_indices,
             boundary_masses,
             boundary_indices,
+            boundary_null_indices,
         )
 
 @dataclasses.dataclass(slots=True)
