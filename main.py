@@ -8,7 +8,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 # hydra
 
-from mrror.io import read_mzlib, read_mgf
+from mrror.io import read_mzlib, read_mgf, reverse_fasta
 from mrror.util import in_alphabet
 from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import SpectraParams, PeaksDataset, Peaks, SimulatedPeaks
@@ -33,6 +33,7 @@ class AppParams:
     verbosity: int
     time_precision: int
     mode: str
+    working_dir: str
     output_dir: str
     output_shape: str
     session_name: str
@@ -66,39 +67,66 @@ class InputType(enum.Enum):
 def main(cfg: DictConfig) -> None:
     mode = cfg['app']['mode']
     if mode == 'evaluate':
-        return evaluate(cfg)
+        return evaluate(*setup(cfg))
     elif mode == 'test':
-        return test(cfg)
+        return test(*setup(cfg))
     else:
         print(f"Unrecognized mode {mode}")
 
-def evaluate(cfg: DictConfig) -> None:
-    t = time()
-    app_cfg = AppParams.from_dict(cfg['app'])
-    print(app_cfg)
+def setup(cfg):
+    app_cfg = AppParams.from_dict(cfg.app)
     # configures the application.
 
-    spec_cfg = SpectraParams.from_dict(cfg['spectra'])
-    print('.', end='')
+    spec_cfg = SpectraParams.from_dict(cfg.spectra)
     # configures spectra simulation.
+
+    output_dir = pathlib.Path(app_cfg.output_dir)
+    if not(output_dir.exists()):
+        output_dir.mkdir(parents=True, exist_ok=True)
+    # construct the output dir
+
+    working_dir = pathlib.Path(app_cfg.working_dir)
+    if not(working_dir.exists()):
+        working_dir.mkdir(parents=True, exist_ok=True)
+    # construct the working dir
     
-    anno_params = AnnotationParams.from_config(cfg['annotation'])
+    suffix_array, reversed_suffix_array = (None, None)
+    transcriptome = pathlib.Path(cfg.transcriptome)
+    if transcriptome.suffix in ('.fa','.fasta'):
+        suffix_array = SuffixArray.create(
+            path_to_fasta = transcriptome,
+            path_to_suffix_array = working_dir / f"{transcriptome.stem}.sufr",
+        )
+        reversed_suffix_array = SuffixArray.create(
+            path_to_fasta = reverse_fasta(transcriptome),
+            path_to_suffix_array = working_dir / f"{transcriptome.stem}_reversed.sufr",
+        )
+    elif transcriptome.suffix == '.sufr':
+        suffix_array = SuffixArray.read(transcriptome)
+        reversed_transcriptome = transcriptome.parent / (transcriptome.stem + '_reversed' + transcriptome.suffix)
+        if reversed_transcriptome.exists():
+            reversed_suffix_array = SuffixArray.read(reversed_transcriptome)
+        else:
+            raise ValueError(f"A sufr file {transcriptome} was passed but there is no corresponding reversed suffix array, which was expected at {reversed_transcriptome}.")
+    else:
+        print(f"The transcriptome argument was {transcriptome}, which is neither a fasta file nor a sufr file. Could not read or create a suffix array.")
+    suffix_arrays = (suffix_array, reversed_suffix_array)
+    # the suffix array and its reversal, which restrict the space of peptides that can be called from spectra.
+    
+    anno_params = AnnotationParams.from_config(cfg.annotation)
     alphabet = anno_params.residue_space.amino_symbols
     if app_cfg.verbosity > 1:
         print(anno_params)
-    print('.', end='')
     # configures spectrum annotation, describes the state spaces of fragments and residues, as well as search and filtration parameters.
     
-    algn_params = AlignmentParams.from_config(cfg['alignment'])
+    algn_params = AlignmentParams.from_config(cfg.alignment)
     if app_cfg.verbosity > 1:
         print(algn_params)
-    print('.', end='')
     # configures graph alignment. describes a cost model, alignment mode, and cost threshold.
     
-    enmr_params = EnumerationParams.from_config(cfg['enumeration'])
+    enmr_params = EnumerationParams.from_config(cfg.enumeration)
     if app_cfg.verbosity > 1:
         print(enmr_params)
-    print('.', end='')
     # configures candidate enumeration.
     
     targets = TargetMassStateSpace.from_state_spaces(
@@ -106,22 +134,18 @@ def evaluate(cfg: DictConfig) -> None:
         anno_params.fragment_space,
         anno_params.boundary_fragment_space,
     )
-    print('.', end='')
-    # admissible target masse for pair deltas and boundaries.
+    # admissible target masses for pair deltas and boundaries.
 
-    _anno = annotate(SimulatedPeaks.from_peptide("PEPTIDE"), targets, anno_params, verbose=False)
-    enumerate_candidates(_anno, align(_anno, targets, algn_params, verbose=False), targets, enmr_params, verbose=False)
+    return (cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_params, algn_params, enmr_params, targets)
+
+def evaluate(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_params, algn_params, enmr_params, targets) -> None:
+    t = time()
+
+    _anno = annotate(SimulatedPeaks.from_peptide("PEPTIDE"), targets, anno_params, verbose=False); enumerate_candidates(_anno, align(_anno, targets, algn_params, verbose=False), targets, suffix_arrays, enmr_params, verbose=False)
     precompile_runtime = time() - t
-    print('.', end='')
     # precompile numba.jit functions
 
-    output_dir = pathlib.Path(app_cfg.output_dir)
-    if not(output_dir.exists()):
-        output_dir.mkdir(parents=True, exist_ok=True)
-    print('.')
-    # construct the output path
-
-    input_str = cfg['input']
+    input_str = cfg.input
     input_type = (
         InputType.MZLIB if input_str.endswith(".mzlib.txt") else 
         InputType.MGF if input_str.endswith(".mgf") else 
@@ -170,12 +194,12 @@ def evaluate(cfg: DictConfig) -> None:
     # runs and records graph alignment. constructs spectrum graphs and their (sparse) product via cost propagation.
     
     enmr_results = [
-       enumerate_candidates(anno_res, algn_res, targets, enmr_params, verbose=app_cfg.verbosity > 1)
+       enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 1)
        for (anno_res, algn_res) in zip(anno_results, algn_results)
     ]
     enmr_runtime = _sum_profiles(enmr_results, precision=app_cfg.time_precision)
     for (i,res) in enumerate(enmr_results):
-        output_path = output_dir / f"{app_cfg.session_name}_{i}.algn"
+        output_path = output_dir / f"{app_cfg.session_name}_{i}.enmr"
         res.save(output_path)
     if app_cfg.verbosity > 0:
         print(f"| enumeration\t{enmr_runtime}s")
@@ -186,7 +210,7 @@ def evaluate(cfg: DictConfig) -> None:
     if app_cfg.verbosity > 0:
         print(f"\nevaluate: {eval_total_runtime}s, runtime: {total_runtime}s")
 
-def test(cfg: DictConfig):
+def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_params, algn_params, enmr_params, targets):
     print("MRROR test!")
     app_cfg = AppParams.from_dict(cfg['app'])
 
@@ -211,7 +235,7 @@ def test(cfg: DictConfig):
 
     algn_res = align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
 
-    enmr_res = enumerate_candidates(anno_res, algn_res, targets, enmr_params, verbose=app_cfg.verbosity > 1)
+    enmr_res = enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 1)
 
     if app_cfg.verbosity > 0:
         print("peaks:")
@@ -254,12 +278,12 @@ def test(cfg: DictConfig):
         right = algn_res.right_topology[i]
         prod = algn_res.prod_topology[i]
         print(i, anno_res.pivots.cluster_points[i])
-        print(left)
-        print(right)
-        print(prod)
+        # print(left)
+        # print(right)
+        # print(prod)
         costs, states, paths = batch
         for (cost, state, path) in zip(costs, states, paths):
-            print(cost, state, path, [prod.unravel(int(x)) for x in path])
+            print("lazy call:\t", ''.join([x[1][0,0] for x in state]),'\t', np.round(cost, 6), '\t', [int(x) for x in path], '\t', [prod.unravel(int(x)) for x in path])
         
 if __name__ == "__main__":
     main()

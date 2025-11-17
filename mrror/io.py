@@ -170,6 +170,20 @@ def read_str_from_fa(
         for record in SeqIO.parse(f, "fasta"):
             yield str(record.seq)
 
+def reverse_fasta(
+    path_to_fa: str,
+) -> str:
+    filename, ext = path_to_fa.split('.')
+    try:
+        new_path = f"{filename}_REVERSED.{ext}"
+        write_str_to_fa(
+            (x[::-1] for x in read_str_from_fa(path_to_fa)),
+            new_path,
+        )
+        return new_path
+    except:
+        return None
+
 def read_mzml(
     filepath: str,
     **kwargs,

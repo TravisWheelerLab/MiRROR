@@ -1,5 +1,6 @@
 # top-level arguments
 input: TESTPEPTIDE::simple
+transcriptome: None
 expected_masses: None
 
 defaults:
@@ -20,6 +21,7 @@ app:
   verbosity: 0 #, 1, 2, 3, -1
   time_precision: 4
   mode: evaluate #, test
+  working_dir: ./data/working/
   output_dir: ./data/output/
   output_shape: default #, granular
   session_name: test

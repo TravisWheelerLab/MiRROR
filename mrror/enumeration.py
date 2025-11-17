@@ -21,21 +21,18 @@ class EnumerationResult(SerializableDataclass):
 @dataclasses.dataclass(slots=True)
 class EnumerationParams(SerializableDataclass):
     cost_threshold: float
-    suffix_array: SuffixArray
 
     @classmethod
     def from_config(cls, cfg):
-        suf_path = cfg['suffix_array']
-        # suffix_array = SuffixArray. TODO
         return cls(
             cost_threshold = cfg['cost_threshold'],
-            suffix_array = None,
         )
 
 def enumerate_candidates(
     anno: AnnotationResult,
     algn: AlignmentResult,
     targets: TargetMassStateSpace,
+    suffix_arrays: tuple[SuffixArray,SuffixArray],
     params: EnumerationParams,
     verbose: bool = False,
 ) -> EnumerationResult:
@@ -55,7 +52,7 @@ def enumerate_candidates(
         ) for (i, (prod, left, right)) in enumerate(zip(algn.prod_topology, algn.left_topology, algn.right_topology))]
     profile["trace"] = time() - t
     if verbose:
-        pass
+        print(aligned_paths)
     # generate alignments between low- and high-mz graphs.
 
     if verbose:

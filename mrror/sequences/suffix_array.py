@@ -14,23 +14,39 @@ class SuffixArray:
         self.query_low_memory = False
         self.max_query_len = None
 
-    def __repr__(self):
+    def _list(self, 
+        ranks = [],
+        show_rank = False,
+        show_suffix = False,
+        show_lcp = False,
+        len = None,
+        number = None,
+    ) -> str:
         tmp = tempfile.NamedTemporaryFile() # create a temp file
+        opts = ListOptions(
+            ranks = ranks,
+            show_rank = show_rank,
+            show_suffix = show_suffix,
+            show_lcp = show_lcp,
+            len = len,
+            number = number,
+            output = tmp.name,
+        )
         result = "If you're seeing this, something broke."
         try:
-            self._suffix_array.list(ListOptions(
-                ranks = [],
-                show_rank = True,
-                show_suffix = True,
-                show_lcp = True,
-                len = None,
-                number = None,
-                output = tmp.name))        # output the list to the temp
+            self._suffix_array.list(opts)   # output the list to the temp
             with open(tmp.name, 'r') as f:
                 result = f.read()
         finally:
             tmp.close()                     # delete the temp
         return result
+
+    def __repr__(self):
+        return self._list(
+            show_rank = True,
+            show_suffix = True,
+            show_lcp = True,
+        )
 
     @staticmethod
     def _builder_args(
@@ -89,6 +105,28 @@ class SuffixArray:
         return cls(
             SufrSuffixArray(sufr_builder_args),
             path_to_suffix_array)
+
+    def list_suffixes(self,
+        ranks: Iterable[int],
+        lengths: Iterable[int],
+    ) -> list[str]:
+        """Given iterables of suffix ranks and lengths, return the corresponding sequences in the suffix array.
+        Note: the libsufr interface takes a single length argument, which is set to the max of the lengths iterable. Every suffix is returned with this max length and only afterwards trimmed to its expected length. If your desired set of suffixes contains a diversity of very short and very long sequences, it may be more performant to segment the query into two queries based on length and make two calls to list_suffixes."""
+        res = self._list(
+            ranks = ranks,
+            len = max(lengths),
+        )
+        res_lines = res.split('\n')
+        return [x[:l] for (x,l) in zip(res_lines,lengths)]
+
+    def list_bisect(self,
+        results: Iterable[BisectResult],
+    ) -> list[str]:
+        """Given a list of BisectResult objects, parametize a call to list_suffixes to generate every sequence included in the results."""
+        return self.list_suffixes(
+            ranks = [x.first_position for x in results],
+            lengths = [x.lcp for x in results],
+        )
     
     def count(self, 
         queries: Iterable[str],
@@ -108,7 +146,7 @@ class SuffixArray:
     ) -> list[BisectResult]:
         """Given an iterable of character queries ( := single-element strings,) and an optional prefix result, count the occurrences of the query strings. If a prefix result is passed, search is restricted to the range of the prefix. Unlike count, this function returns its result type, BisectResult. The occurrence quantities can be accessed via the `count` field of the BisectResult object."""
         if not(all(len(x) == 1 for x in queries)):
-            raise ValueError("The `queries` arg contained a non-char str type!")
+            raise ValueError("The `queries` arg contained a non-char str type! Every item in queries")
         try:
             pfx_iter = iter(prefix)
             results = (
@@ -116,7 +154,7 @@ class SuffixArray:
                     queries = queries,
                     max_query_len = self.max_query_len,
                     low_memory = self.query_low_memory,
-                    prefix = x,
+                    prefix_result = x,
                 )) for x in pfx_iter
             )
             return sum(results,[])
@@ -125,5 +163,5 @@ class SuffixArray:
                 queries = queries,
                 max_query_len = self.max_query_len,
                 low_memory = self.query_low_memory,
-                prefix = prefix,
+                prefix_result = prefix,
             ))

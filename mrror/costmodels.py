@@ -10,6 +10,11 @@ from .graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
 from .graphs.propagate import AbstractNodeCostModel, AbstractEdgeCostModel
 from .graphs.trace import AbstractPathCostModel
 
+N_FEATURES = 4
+FEATURE_WEIGHT_TENSOR = np.ones(N_FEATURES).reshape(1,1,N_FEATURES)
+
+MISMATCH_SEPARATOR = '/'
+
 class MatchedNodeCostModel(AbstractNodeCostModel):
     """Assigns costs to nodes as match or mismatch according to membership  in a set of matched nodes."""
 
@@ -29,8 +34,6 @@ class MatchedNodeCostModel(AbstractNodeCostModel):
         else:
             return self._mismatch
 
-N_FEATURES = 4
-FEATURE_WEIGHT_TENSOR = np.ones(N_FEATURES).reshape(1,1,N_FEATURES)
 class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
     """Assigns costs to edges in an implicit product graph by comparing annotated features of component edges in the component graphs."""
 
@@ -116,10 +119,10 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
             comparison_costs = anno_complexity_cost + anno_mismatch_cost + anno_match_cost
             comparison_costs = comparison_costs.flatten()
             # construct the comparison tensors and calculate costs
-            compared_right_anno = np.concat([right_anno] * n_left)
-            compared_left_anno = np.empty((n_left * n_right,n_features),dtype=left_anno.dtype)
-            for i in range(n_right):
-                compared_left_anno[i::n_right] = left_anno
+            compared_left_anno = np.concat([left_anno] * n_right)
+            compared_right_anno = np.empty((n_right * n_left,n_features),dtype=right_anno.dtype)
+            for i in range(n_left):
+                compared_right_anno[i::n_left] = right_anno
             # duplicate annotations. this is a terrible way to compute and store this data.
             return ProductEdgeWeight(
                 comparison_costs,
@@ -140,6 +143,7 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
         )
 
 OrderedResiduePathState = list[tuple[np.ndarray,np.ndarray]]
+
 class OrderedResiduePathCostModel(AbstractPathCostModel):
     """Associates paths in a WeightedProductGraph to an implicitly-constructed set of annotated sequences. Path cost delta is the edge cost. Path state is the sequence of lists of residues - ordered according to their granular cost - generated from edge annotations."""
 
@@ -149,11 +153,13 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
         left_graph: SpectrumGraph,
         right_graph: SpectrumGraph,
         target_space: TargetMassStateSpace,
+        mismatch_separator: str = MISMATCH_SEPARATOR,
     ):
         self._graph = product_graph
         self._targets = target_space 
         self._left_boundary = left_graph.boundary_source
         self._right_boundary = right_graph.boundary_source
+        self._sep = mismatch_separator
 
     def initial_state(
         self,
@@ -166,14 +172,15 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
 
     def _symbolize_annotation(
         self,
-        node: int,
         anno: np.ndarray,
+        node: int,
+        boundary: int,
     ) -> np.ndarray:
         if anno is None:
             return np.array([''])
         elif np.all(anno == -1):
             return np.full_like(anno, '', dtype=str)
-        elif node == self._left_boundary or node == self._right_boundary:
+        elif node == boundary:
             return self._targets.symbolize_boundaries(anno)
         else:
             return self._targets.symbolize_pairs(anno)
@@ -182,12 +189,11 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
         self,
         x: str,
         y: str,
-        sep: str = '/',
     ):
         if x == y:
             return x
         else:
-            return x + sep + y
+            return x + self._sep + y
 
     def _combine_symbols(
         self,
@@ -203,21 +209,16 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
 
     def next_state(
         self,
-        cost_state: OrderedResiduePathState,
+        curr_state: OrderedResiduePathState,
         curr_node: int,
         next_node: int,
     ) -> tuple[float,OrderedResiduePathState]:
+        """Append to cost_state the symbolic data associated to the edge from curr_node to next_node. Returns the minimum cost of the edge and the cost state with the edge data appended."""
         left_node, right_node = self._graph.unravel(next_node)
         edge_annotation = self._graph.edge_weights[curr_node][next_node]
         anno_costs = edge_annotation.costs
-        left_symbols = self._symbolize_annotation(
-            left_node,
-            edge_annotation.left_annotation,
-        )
-        right_symbols = self._symbolize_annotation(
-            right_node,
-            edge_annotation.right_annotation,
-        )
+        left_symbols = self._symbolize_annotation(edge_annotation.left_annotation, left_node, self._left_boundary)
+        right_symbols = self._symbolize_annotation(edge_annotation.right_annotation, right_node, self._right_boundary)
         combined_symbols = self._combine_symbols(left_symbols, right_symbols)
         order = np.argsort(anno_costs)
         next_edge_state = (
@@ -226,11 +227,67 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
                 combined_symbols[order],
                 # (n,4) array of str
         )
-        next_cost_state = cost_state + [next_edge_state,]
+        next_state = curr_state + [next_edge_state,]
         return (
             anno_costs.min(),
-            next_cost_state,
+            next_state,
         )
+
+SuffixArrayPathState = tuple[
+    list[BisectResult],
+    list[tuple[np.ndarray,np.ndarray]],
+]
 
 class SuffixArrayPathCostModel(OrderedResiduePathCostModel):
     """Filters out paths whose sequence class does not occur in the suffix array. The state is a collection of bisect results, which can be used to look up full sequences. Otherwise indistinguishable from EnumerationPathCostModel."""
+
+    def __init__(
+        self,
+        suffix_array: SuffixArray,
+        *args,
+        **kwargs,
+    ):
+        self._suf_arr = suffix_array
+        super(SuffixArrayPathCostModel, self).__init__(*args, **kwargs)
+
+    def initial_state(
+        self,
+        node: int,
+    ) -> tuple[float,OrderedResiduePathState]:
+        return super(SuffixArrayPathCostModel, self).initial_state(node)
+
+    def next_state(
+        self,
+        curr_state: SuffixArrayPathState,
+        curr_node: int,
+        next_node: int,
+    ) -> tuple[float,SuffixArrayPathState]:
+        costs, annotation_symbols = super(SuffixArrayPathCostModel, self).next_state([], curr_node, next_node)[1]
+        annotation_residues = annotation_symbols[:,0]
+        # retrieve symbolic annotation for the edge
+        curr_prefixes = curr_state[0]
+        flat_residues, reindexer = np.unique_inverse(sum(
+            (x.split(self._sep) for x in annotation_residues),
+            [],
+        ))
+        bisect_results = self._suf_arr.bisect(
+            flat_residues,
+            prefix=curr_prefixes,
+        )
+        counts = np.array([x.count for x in bisect_results])
+        occurring = counts > 0
+        next_prefixes = bisect_results[occurring]
+        # query the suffix array and mask non-occurring sequences.
+        curr_annotation_sequence = curr_state[1]
+        annotation_mask = occurring[reindexer]
+        next_costs = costs[annotation_mask]
+        next_annotation = annotation_symbols[annotation_mask]
+        next_annotation_sequence = curr_annotation_sequence + [(next_costs,next_annotation),]
+        # apply occurrence mask to symbolic annotation
+        return (
+            next_costs.min(),
+            (
+                next_prefixes,
+                next_annotation_sequence,
+            ),
+        )
