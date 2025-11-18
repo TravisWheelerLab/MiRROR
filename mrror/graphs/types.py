@@ -1,5 +1,5 @@
 import dataclasses, abc
-from typing import Self, Any, Union
+from typing import Self, Any, Union, Iterator
 
 import numpy as np
 import networkx as nx
@@ -11,7 +11,7 @@ class SpectrumGraph:
     boundary_source: int
 
     def order(self) -> int:
-        """Returns the successor of the largest node.
+        """Returns the largest node label plus one.
         
         This graph is sparse, so calling self.graph.order() will return the number of nodes, but that value will not `ravel` or `unravel` correctly, so we need the true order to be one greater than the largest node label."""
         return max(self.graph.nodes) + 1
@@ -119,6 +119,7 @@ class ProductEdgeWeight:
 
 @dataclasses.dataclass(slots=True)
 class WeightedProductGraph:
+    """A sparse product of two graphs as returned by propagate_cost. Stores node and edge weights in dictionaries. Implements ravel and unravel, which map between nodes in the product and pairs of nodes in the operand graphs."""
     graph: nx.DiGraph
     right_operand_order: int
     node_weights: dict[int,float]
@@ -138,4 +139,36 @@ class WeightedProductGraph:
         return (
             product_node // self.right_operand_order,
             product_node % self.right_operand_order,
+        )
+
+@dataclasses.dataclass(slots=True)
+class PathSpace:
+    """A collection of paths through a WeightedProductGraph, associated to cost and state. Implements __len__, __getitem__, __iter__. Paths are stored in a single array of integers, segmented by offsets. The i^th path is given by path[offset[i]:offset[i+1]]."""
+    path: np.ndarray
+    offset: np.ndarray
+    cost: np.ndarray
+    state: np.ndarray
+
+    def __len__(self) -> int:
+        return len(self.offset) - 1
+
+    def __getitem__(self, i: int) -> tuple[float,Any,list]:
+        l = self.offset[i]
+        r = self.offset[i + 1]
+        return (
+            self.cost[i],
+            self.state[i],
+            self.path[l:r],
+        )
+
+    def __iter__(self) -> Iterator:
+        return (self.__getitem__(i) for i in range(len(self)))
+
+    @classmethod
+    def empty(cls):
+        return cls(
+            path = np.array([]),
+            offset = np.array([0,]),
+            cost = np.array([]),
+            state = np.array([]),
         )

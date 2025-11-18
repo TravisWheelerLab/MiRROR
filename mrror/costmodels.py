@@ -142,7 +142,7 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
             edge_weight,
         )
 
-OrderedResiduePathState = list[tuple[np.ndarray,np.ndarray]]
+OrderedResiduePathState = list[tuple[np.ndarray,np.ndarray]] # each tuple weights an edge in the path with cost and residue annotation data.
 
 class OrderedResiduePathCostModel(AbstractPathCostModel):
     """Associates paths in a WeightedProductGraph to an implicitly-constructed set of annotated sequences. Path cost delta is the edge cost. Path state is the sequence of lists of residues - ordered according to their granular cost - generated from edge annotations."""
@@ -160,15 +160,6 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
         self._left_boundary = left_graph.boundary_source
         self._right_boundary = right_graph.boundary_source
         self._sep = mismatch_separator
-
-    def initial_state(
-        self,
-        node: int,
-    ) -> tuple[float,OrderedResiduePathState]:
-        return (
-            0.,
-            [],
-        )
 
     def _symbolize_annotation(
         self,
@@ -207,6 +198,15 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
                 right_symbols.flatten(),
             )]).reshape(*left_symbols.shape)
 
+    def initial_state(
+        self,
+        node: int,
+    ) -> tuple[float,OrderedResiduePathState]:
+        return (
+            0.,
+            [],
+        )
+
     def next_state(
         self,
         curr_state: OrderedResiduePathState,
@@ -233,9 +233,12 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
             next_state,
         )
 
+    def state_type(self) -> type:
+        return list
+
 SuffixArrayPathState = tuple[
-    list[BisectResult],
-    list[tuple[np.ndarray,np.ndarray]],
+    list[BisectResult],         # one bisect result: one sequence.
+    OrderedResiduePathState,    # per-position annotations. see above.
 ]
 
 class SuffixArrayPathCostModel(OrderedResiduePathCostModel):
@@ -254,7 +257,10 @@ class SuffixArrayPathCostModel(OrderedResiduePathCostModel):
         self,
         node: int,
     ) -> tuple[float,OrderedResiduePathState]:
-        return super(SuffixArrayPathCostModel, self).initial_state(node)
+        return (
+            [],
+            super(SuffixArrayPathCostModel, self).initial_state(node)[1],
+        )
 
     def next_state(
         self,
@@ -291,3 +297,7 @@ class SuffixArrayPathCostModel(OrderedResiduePathCostModel):
                 next_annotation_sequence,
             ),
         )
+
+    @classmethod
+    def state_type(self) -> type:
+        return tuple

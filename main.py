@@ -12,8 +12,8 @@ from mrror.io import read_mzlib, read_mgf, reverse_fasta
 from mrror.util import in_alphabet
 from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import SpectraParams, PeaksDataset, Peaks, SimulatedPeaks
+from mrror.sequences.suffix_array import SuffixArray
 from mrror.costmodels import OrderedResiduePathCostModel
-
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
 from mrror.alignment import AlignmentParams, AlignmentResult, align
 from mrror.enumeration import EnumerationParams, EnumerationResult, enumerate_candidates
@@ -63,16 +63,6 @@ class InputType(enum.Enum):
     PEPTIDE = "Peptide"
     UNKNOWN = "???"
 
-@hydra.main(version_base=None, config_path="params", config_name="config")
-def main(cfg: DictConfig) -> None:
-    mode = cfg['app']['mode']
-    if mode == 'evaluate':
-        return evaluate(*setup(cfg))
-    elif mode == 'test':
-        return test(*setup(cfg))
-    else:
-        print(f"Unrecognized mode {mode}")
-
 def setup(cfg):
     app_cfg = AppParams.from_dict(cfg.app)
     # configures the application.
@@ -83,23 +73,23 @@ def setup(cfg):
     output_dir = pathlib.Path(app_cfg.output_dir)
     if not(output_dir.exists()):
         output_dir.mkdir(parents=True, exist_ok=True)
-    # construct the output dir
+    # constructs the output dir
 
     working_dir = pathlib.Path(app_cfg.working_dir)
     if not(working_dir.exists()):
         working_dir.mkdir(parents=True, exist_ok=True)
-    # construct the working dir
+    # constructs the working dir
     
     suffix_array, reversed_suffix_array = (None, None)
     transcriptome = pathlib.Path(cfg.transcriptome)
     if transcriptome.suffix in ('.fa','.fasta'):
         suffix_array = SuffixArray.create(
-            path_to_fasta = transcriptome,
-            path_to_suffix_array = working_dir / f"{transcriptome.stem}.sufr",
+            path_to_fasta = str(transcriptome),
+            path_to_suffix_array = str(working_dir / f"{transcriptome.stem}.sufr"),
         )
         reversed_suffix_array = SuffixArray.create(
-            path_to_fasta = reverse_fasta(transcriptome),
-            path_to_suffix_array = working_dir / f"{transcriptome.stem}_reversed.sufr",
+            path_to_fasta = reverse_fasta(str(transcriptome)),
+            path_to_suffix_array = str(working_dir / f"{transcriptome.stem}_reversed.sufr"),
         )
     elif transcriptome.suffix == '.sufr':
         suffix_array = SuffixArray.read(transcriptome)
@@ -111,23 +101,22 @@ def setup(cfg):
     else:
         print(f"The transcriptome argument was {transcriptome}, which is neither a fasta file nor a sufr file. Could not read or create a suffix array.")
     suffix_arrays = (suffix_array, reversed_suffix_array)
-    # the suffix array and its reversal, which restrict the space of peptides that can be called from spectra.
+    # constructs the suffix array and its reversal, which restrict the space of peptides that can be called from spectra.
     
     anno_params = AnnotationParams.from_config(cfg.annotation)
-    alphabet = anno_params.residue_space.amino_symbols
     if app_cfg.verbosity > 1:
         print(anno_params)
-    # configures spectrum annotation, describes the state spaces of fragments and residues, as well as search and filtration parameters.
+    # parametizes spectrum annotation, describes the state spaces of fragments and residues, as well as search and filtration parameters.
     
     algn_params = AlignmentParams.from_config(cfg.alignment)
     if app_cfg.verbosity > 1:
         print(algn_params)
-    # configures graph alignment. describes a cost model, alignment mode, and cost threshold.
+    # parametizes graph alignment. describes a cost model, alignment mode, and cost threshold.
     
     enmr_params = EnumerationParams.from_config(cfg.enumeration)
     if app_cfg.verbosity > 1:
         print(enmr_params)
-    # configures candidate enumeration.
+    # parametizes candidate enumeration.
     
     targets = TargetMassStateSpace.from_state_spaces(
         [anno_params.residue_space, anno_params.dimer_space, anno_params.trimer_space],
@@ -146,6 +135,7 @@ def evaluate(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, ann
     # precompile numba.jit functions
 
     input_str = cfg.input
+    alphabet = anno_params.residue_space.amino_symbols
     input_type = (
         InputType.MZLIB if input_str.endswith(".mzlib.txt") else 
         InputType.MGF if input_str.endswith(".mgf") else 
@@ -210,7 +200,7 @@ def evaluate(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, ann
     if app_cfg.verbosity > 0:
         print(f"\nevaluate: {eval_total_runtime}s, runtime: {total_runtime}s")
 
-def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_params, algn_params, enmr_params, targets):
+def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_params, algn_params, enmr_params, targets, *args, **kwargs):
     print("MRROR test!")
     app_cfg = AppParams.from_dict(cfg['app'])
 
@@ -272,18 +262,24 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
     masses = algn_res.fragment_masses
     print("fragment masses: ", masses)
 
-    print("called affixes: ", sum([len(x[0]) for x in enmr_res.aligned_paths]))
-    for (i, batch) in enumerate(enmr_res.aligned_paths):
+    print("called affixes: ", sum([len(x[0]) for x in enmr_res.affixes]))
+    for (i, pathspace) in enumerate(enmr_res.affixes):
         left = algn_res.left_topology[i]
         right = algn_res.right_topology[i]
         prod = algn_res.prod_topology[i]
         print(i, anno_res.pivots.cluster_points[i])
-        # print(left)
-        # print(right)
-        # print(prod)
-        costs, states, paths = batch
-        for (cost, state, path) in zip(costs, states, paths):
+        for (cost, state, path) in pathspace:
             print("lazy call:\t", ''.join([x[1][0,0] for x in state]),'\t', np.round(cost, 6), '\t', [int(x) for x in path], '\t', [prod.unravel(int(x)) for x in path])
+
+@hydra.main(version_base=None, config_path="params", config_name="config")
+def main(cfg: DictConfig) -> None:
+    mode = cfg.app.mode
+    if mode == 'evaluate':
+        return evaluate(*setup(cfg))
+    elif mode == 'test':
+        return test(*setup(cfg))
+    else:
+        print(f"Unrecognized mode {mode}")
         
 if __name__ == "__main__":
     main()

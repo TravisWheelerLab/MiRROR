@@ -25,6 +25,9 @@ class AlignmentResult(SerializableDataclass):
     pivot_topology: list[PivotGraph]
     _profile: dict[str, float]
 
+    def __len__(self) -> int:
+        return len(self.prod_topology)
+
 @dataclasses.dataclass(slots=True)
 class AlignmentParams(SerializableDataclass):
     weight_key: str

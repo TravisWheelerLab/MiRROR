@@ -24,6 +24,9 @@ class AnnotationResult(SerializableDataclass):
     
     _profile: dict[str,float] = None
 
+    def __len__(self) -> int:
+        return len(self.pivots)
+
     @classmethod
     def from_data(cls,
         peaks: Peaks,
