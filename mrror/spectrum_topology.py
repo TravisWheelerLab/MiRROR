@@ -1,9 +1,9 @@
 import itertools as it
 # standard
 
-from ..spectra.types import Peaks
-from ..fragments.types import PairResult, PivotResult, BoundaryResult
-from .types import SpectrumGraph, PivotGraph
+from .spectra.types import Peaks
+from .fragments.types import PairResult, PivotResult, BoundaryResult
+from .graph.types import SpectrumGraph, PivotGraph
 # local
 
 import numpy as np

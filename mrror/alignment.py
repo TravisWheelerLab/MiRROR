@@ -7,7 +7,7 @@ from .util import ravel
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .fragments import TargetMassStateSpace
 from .graphs.types import SpectrumGraph, PivotGraph, WeightedProductGraph
-from .graphs.spectrum_topology import construct_spectrum_topology
+from .spectrum_topology import construct_spectrum_topology
 from .graphs.propagate import propagate_cost
 from .costmodels import MatchedNodeCostModel, AnnotatedProductEdgeCostModel
 from .annotation import AnnotationResult, AnnotationParams

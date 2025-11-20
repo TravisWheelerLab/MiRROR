@@ -86,4 +86,5 @@ def trace(
         offset = np.cumsum([0,] + [len(x) for x in paths]),
         cost = costs,
         state = states,
+        state_type = cost_model.state_type(),
     )

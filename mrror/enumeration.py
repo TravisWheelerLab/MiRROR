@@ -10,16 +10,16 @@ from .graphs.dfs import dfs
 from .graphs.trace import trace
 from .sequences.suffix_array import SuffixArray
 from .costmodels import OrderedResiduePathCostModel, SuffixArrayPathCostModel
+from .affix_pairing import orient_affixes, pair_affixes
 from .annotation import AnnotationResult
 from .alignment import AlignmentResult
 
 @dataclasses.dataclass(slots=True)
 class EnumerationResult(SerializableDataclass):
-    affixes: list[PathSpace]   # everything
-    prefixes: list[PathSpace]   # aligned peptide prefixes
-    suffixes: list[PathSpace]   # aligned peptide suffixes
-    infixes: list[PathSpace]    # alignments that could not be categorized as prefix or suffix
-    candidates: list            # 
+    affixes: list[PathSpace]
+    affix_pairs: list[np.ndarray]
+    fragments: list[FragmentPathSpace]
+    candidates: list
     _profile: dict[str,float]
 
     def __len__(self) -> int:
@@ -60,9 +60,7 @@ def enumerate_candidates(
                 ),
             ) for (i, (prod, left, right)) in enumerate(zip(algn.prod_topology, algn.left_topology, algn.right_topology))]
         # construct the constrained path space of each aligned product topology.
-        prefixes = [PathSpace.empty() for _ in range(len(algn))]
-        suffixes = [PathSpace.empty() for _ in range(len(algn))]
-        infixes = [PathSpace.empty() for _ in range(len(algn))]
+        prefixes, suffixes, infixes = orient_affixes(affixes)
         # categorize as prefixes, suffixes, or infixes.
     else:
         prefixes = [trace(
@@ -92,20 +90,20 @@ def enumerate_candidates(
             ) for (i, (prod, left, right)) in enumerate(zip(algn.prod_topology, algn.left_topology, algn.right_topology))]
         # construct path space of peptide prefixes from the reversed suffix array.
         infixes = [PathSpace.empty() for _ in range(len(algn))]
-        # no infixes are produced with this method.
-        
+        # infixes are not immediately categorized when using a suffix array
     profile["trace"] = time() - t
     if verbose:
-        print(prefixes,suffixes,infixes)
+        print(affixes)
     # generate alignments between low- and high-mz graphs.
-
+    # TODO
+    # categorize and pair affixes.
+    # TODO
+    # sort and enumerate candidates.
     if verbose:
         print(profile)
     return EnumerationResult(
         affixes = affixes,
-        prefixes = prefixes,
-        suffixes = suffixes,
-        infixes = infixes,
+        affix_pairs = affix_pairs,
         candidates = [],
         _profile = profile,
     )

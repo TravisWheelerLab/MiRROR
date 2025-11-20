@@ -191,12 +191,16 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
         left_symbols: np.ndarray,
         right_symbols: np.ndarray,
     ):
+        """Applies _disjoint_sum_str elementwise to two arrays with the same shape, e.g. with / as separator:
+        
+            _combine_symbols([[a, b, c], [x, y, z]], [[a, b, d], [u, w, z]]) = [[a, b, c/d], [x/u, y/w, z]]"""
         assert left_symbols.shape == right_symbols.shape
         return np.array([
             self._disjoint_sum_str(x,y) for (x,y) in zip(
                 left_symbols.flatten(),
                 right_symbols.flatten(),
             )]).reshape(*left_symbols.shape)
+        # there's probably a more numpythonic way to do this?
 
     def initial_state(
         self,
