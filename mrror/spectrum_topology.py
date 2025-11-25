@@ -3,7 +3,7 @@ import itertools as it
 
 from .spectra.types import Peaks
 from .fragments.types import PairResult, PivotResult, BoundaryResult
-from .graph.types import SpectrumGraph, PivotGraph
+from .graphs.types import SpectrumGraph, PivotGraph
 # local
 
 import numpy as np

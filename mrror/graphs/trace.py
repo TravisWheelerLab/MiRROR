@@ -1,8 +1,8 @@
 import abc
-from typing import Iterator, Any
+from typing import Iterator, Any, Self
 from collections import deque
 
-from .types import WeightedProductGraph, PathSpace
+from .types import WeightedProductGraph
 
 import numpy as np
 
@@ -34,8 +34,40 @@ class AbstractPathCostModel(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def state_type(self) -> type:
-        """Returns the primitive type of the state, as expected by numpy's dtype argument as in `np.empty((n,),dtype=cost_model.state_type())`. Typically something like `list` or `tuple`, but in more complex implementations the state type could be custom class."""
+    def path_space_type(self) -> type:
+        """Returns the path space class which implements the classmethod constructor from_traced_paths."""
+
+class AbstractPathSpace(abc.ABC):
+
+    @abc.abstractmethod
+    def __len__(self) -> int:
+        """The number of paths in the path space."""
+
+    @abc.abstractmethod
+    def __getitem__(self, i: int) -> tuple[float,Any,list]:
+        """Get the i^th path."""
+
+    @abc.abstractmethod
+    def __iter__(self) -> Iterator:
+        """Iterate the path space. Typically equivalent to
+        
+            (pathspace[i] for i in range(len(pathspace)))."""
+
+    @abc.abstractmethod
+    def __add__(self, other: Self) -> Self:
+        """Concatenate one path space onto another in order of the sum, i.e., if `a` and `b` are path spaces,
+        
+            list(a + b) == list(a) + list(b)."""
+
+    @classmethod
+    @abc.abstractmethod
+    def empty(cls) -> Self:
+        """Return an empty path space."""
+
+    @classmethod
+    @abc.abstractmethod
+    def from_traced_paths(cls, trace_result: Iterator[tuple[float,Any,list[int]]]) -> Self:
+        """Constructs a path space object from the output of _trace."""
 
 def _trace(
     adj,
@@ -62,29 +94,11 @@ def trace(
     sources: Iterator[int],
     threshold: float,
     cost_model: AbstractPathCostModel,
-) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-    trace_results = list(_trace(
+) -> AbstractPathSpace:
+    path_space_cls = cost_model.path_space_type()
+    return path_space_cls.from_traced_paths(_trace(
             prop_graph.graph.adj,
             [(*cost_model.initial_state(x), [], x) for x in sources],
             threshold,
             cost_model,
     ))
-    n_paths = len(trace_results)
-    costs = np.empty((n_paths,), dtype=float)
-    states = np.empty((n_paths,), dtype=cost_model.state_type())
-    paths = np.empty((n_paths,), dtype=list)
-    for (i,res) in enumerate(trace_results):
-        costs[i] = res[0]
-        states[i] = res[1]
-        paths[i] = res[2]
-    order = np.argsort(costs)
-    costs = costs[order]
-    states = states[order]
-    paths = paths[order]
-    return PathSpace(
-        path = np.concat(paths),
-        offset = np.cumsum([0,] + [len(x) for x in paths]),
-        cost = costs,
-        state = states,
-        state_type = cost_model.state_type(),
-    )

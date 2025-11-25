@@ -140,35 +140,3 @@ class WeightedProductGraph:
             product_node // self.right_operand_order,
             product_node % self.right_operand_order,
         )
-
-@dataclasses.dataclass(slots=True)
-class PathSpace:
-    """A collection of paths through a WeightedProductGraph, associated to cost and state. Implements __len__, __getitem__, __iter__. Paths are stored in a single array of integers, segmented by offsets. The i^th path is given by path[offset[i]:offset[i+1]]."""
-    path: np.ndarray
-    offset: np.ndarray
-    cost: np.ndarray
-    state: np.ndarray
-
-    def __len__(self) -> int:
-        return len(self.offset) - 1
-
-    def __getitem__(self, i: int) -> tuple[float,Any,list]:
-        l = self.offset[i]
-        r = self.offset[i + 1]
-        return (
-            self.cost[i],
-            self.state[i],
-            self.path[l:r],
-        )
-
-    def __iter__(self) -> Iterator:
-        return (self.__getitem__(i) for i in range(len(self)))
-
-    @classmethod
-    def empty(cls):
-        return cls(
-            path = np.array([]),
-            offset = np.array([0,]),
-            cost = np.array([]),
-            state = np.array([]),
-        )

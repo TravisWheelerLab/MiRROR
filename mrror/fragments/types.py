@@ -218,6 +218,10 @@ class TargetMassStateSpace:
             self.residue_spaces[0].modification_symbols,
         )
 
+    def get_series_loss_symbols(self, series=['b','y']) -> tuple[list[str],list[str]]:
+        series_loss_symbols = self.boundary_space.loss_symbols
+        return ([x for x in series_loss_symbols if x.startswith(series_sym)] for series_sym in series)
+
     @staticmethod
     def _augment_masses(
         left_fragment_space: FragmentStateSpace,

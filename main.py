@@ -13,7 +13,7 @@ from mrror.util import in_alphabet
 from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import SpectraParams, PeaksDataset, Peaks, SimulatedPeaks
 from mrror.sequences.suffix_array import SuffixArray
-from mrror.costmodels import OrderedResiduePathCostModel
+from mrror.costmodels import AnnotatedResiduePathCostModel
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
 from mrror.alignment import AlignmentParams, AlignmentResult, align
 from mrror.enumeration import EnumerationParams, EnumerationResult, enumerate_candidates
@@ -92,10 +92,10 @@ def setup(cfg):
             path_to_suffix_array = str(working_dir / f"{transcriptome.stem}_reversed.sufr"),
         )
     elif transcriptome.suffix == '.sufr':
-        suffix_array = SuffixArray.read(transcriptome)
+        suffix_array = SuffixArray.read(str(transcriptome))
         reversed_transcriptome = transcriptome.parent / (transcriptome.stem + '_reversed' + transcriptome.suffix)
         if reversed_transcriptome.exists():
-            reversed_suffix_array = SuffixArray.read(reversed_transcriptome)
+            reversed_suffix_array = SuffixArray.read(str(reversed_transcriptome))
         else:
             raise ValueError(f"A sufr file {transcriptome} was passed but there is no corresponding reversed suffix array, which was expected at {reversed_transcriptome}.")
     else:
@@ -262,14 +262,15 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
     masses = algn_res.fragment_masses
     print("fragment masses: ", masses)
 
-    print("called affixes: ", sum([len(x[0]) for x in enmr_res.affixes]))
-    for (i, pathspace) in enumerate(enmr_res.affixes):
-        left = algn_res.left_topology[i]
-        right = algn_res.right_topology[i]
-        prod = algn_res.prod_topology[i]
-        print(i, anno_res.pivots.cluster_points[i])
-        for (cost, state, path) in pathspace:
-            print("lazy call:\t", ''.join([x[1][0,0] for x in state]),'\t', np.round(cost, 6), '\t', [int(x) for x in path], '\t', [prod.unravel(int(x)) for x in path])
+    print("called affixes: ", sum([len(x[0]) for x in enmr_res.aligned_affixes]))
+    for (a,p,s,i) in zip(enmr_res.aligned_affixes,enmr_res.prefixes,enmr_res.suffixes,enmr_res.infixes):
+        for (tag,afx) in (("prefix",p),("suffix",s),("infix",i)):
+            for (x,y) in afx:
+                cost, __, anno = a[x][:3]
+                anno_res = [u[:,0] for u in anno]
+                anno_loss = [u[:,2] for u in anno]
+                term = anno_loss[-1][y]
+                print(f"{tag} {x} {y} {cost} {[v[0] for v in anno_res]} {term}")
 
 @hydra.main(version_base=None, config_path="params", config_name="config")
 def main(cfg: DictConfig) -> None:

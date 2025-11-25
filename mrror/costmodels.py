@@ -1,5 +1,6 @@
 import abc
-from typing import Union, Any, Iterator
+from typing import Union, Any, Iterator, Self
+import dataclasses
 
 import numpy as np
 
@@ -9,6 +10,8 @@ from .fragments import TargetMassStateSpace, BoundaryResult, PairResult
 from .graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
 from .graphs.propagate import AbstractNodeCostModel, AbstractEdgeCostModel
 from .graphs.trace import AbstractPathCostModel
+
+from .pathspaces import AnnotatedResiduePathState, AnnotatedResiduePathSpace, SuffixArrayPathState, SuffixArrayPathSpace
 
 N_FEATURES = 4
 FEATURE_WEIGHT_TENSOR = np.ones(N_FEATURES).reshape(1,1,N_FEATURES)
@@ -142,10 +145,10 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
             edge_weight,
         )
 
-OrderedResiduePathState = list[tuple[np.ndarray,np.ndarray]] # each tuple weights an edge in the path with cost and residue annotation data.
-
-class OrderedResiduePathCostModel(AbstractPathCostModel):
+class AnnotatedResiduePathCostModel(AbstractPathCostModel):
     """Associates paths in a WeightedProductGraph to an implicitly-constructed set of annotated sequences. Path cost delta is the edge cost. Path state is the sequence of lists of residues - ordered according to their granular cost - generated from edge annotations."""
+
+    _PATH_SPACE = AnnotatedResiduePathSpace
 
     def __init__(
         self,
@@ -205,7 +208,7 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
     def initial_state(
         self,
         node: int,
-    ) -> tuple[float,OrderedResiduePathState]:
+    ) -> tuple[float,AnnotatedResiduePathState]:
         return (
             0.,
             [],
@@ -213,10 +216,10 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
 
     def next_state(
         self,
-        curr_state: OrderedResiduePathState,
+        curr_state: AnnotatedResiduePathState,
         curr_node: int,
         next_node: int,
-    ) -> tuple[float,OrderedResiduePathState]:
+    ) -> tuple[float,AnnotatedResiduePathState]:
         """Append to cost_state the symbolic data associated to the edge from curr_node to next_node. Returns the minimum cost of the edge and the cost state with the edge data appended."""
         left_node, right_node = self._graph.unravel(next_node)
         edge_annotation = self._graph.edge_weights[curr_node][next_node]
@@ -237,16 +240,13 @@ class OrderedResiduePathCostModel(AbstractPathCostModel):
             next_state,
         )
 
-    def state_type(self) -> type:
-        return list
+    def path_space_type(self) -> type:
+        return self._PATH_SPACE
 
-SuffixArrayPathState = tuple[
-    list[BisectResult],         # one bisect result: one sequence.
-    OrderedResiduePathState,    # per-position annotations. see above.
-]
-
-class SuffixArrayPathCostModel(OrderedResiduePathCostModel):
+class SuffixArrayPathCostModel(AnnotatedResiduePathCostModel):
     """Filters out paths whose sequence class does not occur in the suffix array. The state is a collection of bisect results, which can be used to look up full sequences. Otherwise indistinguishable from EnumerationPathCostModel."""
+
+    _PATH_SPACE = SuffixArrayPathSpace
 
     def __init__(
         self,
@@ -260,10 +260,14 @@ class SuffixArrayPathCostModel(OrderedResiduePathCostModel):
     def initial_state(
         self,
         node: int,
-    ) -> tuple[float,OrderedResiduePathState]:
+    ) -> tuple[float,AnnotatedResiduePathState]:
+        init_cost, init_state = super(SuffixArrayPathCostModel, self).initial_state(node)
         return (
-            [],
-            super(SuffixArrayPathCostModel, self).initial_state(node)[1],
+            init_cost,
+            (
+                [],
+                init_state,
+            ),
         )
 
     def next_state(
@@ -272,33 +276,47 @@ class SuffixArrayPathCostModel(OrderedResiduePathCostModel):
         curr_node: int,
         next_node: int,
     ) -> tuple[float,SuffixArrayPathState]:
-        costs, annotation_symbols = super(SuffixArrayPathCostModel, self).next_state([], curr_node, next_node)[1]
+        costs, annotation_symbols = super(SuffixArrayPathCostModel, self).next_state([], curr_node, next_node)[1][0]
         annotation_residues = annotation_symbols[:,0]
         # retrieve symbolic annotation for the edge
+
         curr_prefixes = curr_state[0]
-        flat_residues, reindexer = np.unique_inverse(sum(
-            (x.split(self._sep) for x in annotation_residues),
-            [],
-        ))
-        bisect_results = self._suf_arr.bisect(
-            flat_residues,
-            prefix=curr_prefixes,
+        if len(curr_prefixes) == 0:
+            curr_prefixes = [None,]
+        split_residues = []
+        split_indices = []
+        for (i,x) in enumerate(annotation_residues):
+            anno_res = x.split(self._sep)
+            split_residues.extend(anno_res)
+            split_indices.extend([i,] * len(anno_res))
+        split_indices = np.array(split_indices)
+        split_costs = costs[split_indices]
+        split_annotation_symbols = annotation_symbols[split_indices]
+        # unpack residues and reshape annotations to accomodate the extra entries corresponding to each mismatch residue; an A/A needs only one entry, which matches the costs and annotation_symbols shape, but an A/T for ex. needs two entries, which requires that row of the costs and annotation_symbols.
+
+        flat_residues, reindexer = np.unique_inverse(split_residues)
+        bisect_results = np.array(
+            self._suf_arr.bisect(
+                flat_residues,
+                prefix=curr_prefixes,
+            ),
+            dtype = BisectResult,
         )
         counts = np.array([x.count for x in bisect_results])
         occurring = counts > 0
         next_prefixes = bisect_results[occurring]
         # query the suffix array and mask non-occurring sequences.
-        curr_annotation_sequence = curr_state[1]
+
         annotation_mask = occurring[reindexer]
-        next_costs = costs[annotation_mask]
-        next_annotation = annotation_symbols[annotation_mask]
-        next_annotation_sequence = curr_annotation_sequence + [(next_costs,next_annotation),]
+        next_costs = split_costs[annotation_mask]
+        next_annotation = split_annotation_symbols[annotation_mask]
         # apply occurrence mask to symbolic annotation
+
         return (
-            next_costs.min(),
+            next_costs.min() if len(next_costs) > 0 else np.inf,
             (
                 next_prefixes,
-                next_annotation_sequence,
+                curr_state[1] + [(next_costs,next_annotation),],
             ),
         )
 
