@@ -59,6 +59,14 @@ class AbstractPathSpace(abc.ABC):
         
             list(a + b) == list(a) + list(b)."""
 
+    @abc.abstractmethod
+    def get_path(self, i: int) -> np.ndarray:
+        """Return the node sequence of the i^th path."""
+
+    @abc.abstractmethod
+    def get_cost(self, i: int) -> float:
+        """Return the cost of the i^th path."""
+
     @classmethod
     @abc.abstractmethod
     def empty(cls) -> Self:

@@ -44,6 +44,15 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
             annotation_cost = np.concat([self.annotation_cost, other.annotation_cost]),
         )
 
+    def get_path(self, i: int) -> float:
+        l = self.offset[i]
+        r = self.offset[i + 1]
+        print(i,l,r)
+        return self.path[l:r]
+
+    def get_cost(self, i: int) -> float:
+        return self.cost[i]
+    
     @classmethod
     def empty(cls):
         return cls(
@@ -104,9 +113,6 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
     path_bisect_result: np.ndarray
     bisect_offset: np.ndarray
 
-    def __len__(self) -> int:
-        return len(self.offset) - 1
-
     def __getitem__(self, i: int) -> tuple:
         l = self.offset[i]
         r = self.offset[i + 1]
@@ -119,9 +125,6 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
             self.annotation_cost[i],
             self.path_bisect_result[l2:r2],
         )
-
-    def __iter__(self) -> Iterator:
-        return (self.__getitem__(i) for i in range(len(self)))
 
     def __add__(self, other: Self) -> Self:
         concat_offset = np.concat([self.offset[:-1], other.offset + self.offset[-1]])
@@ -136,6 +139,11 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
             path_bisect_result = np.concat([self.path_bisect_result, other.path_bisect_result]),
             bisect_offset = concat_bisect_offset,
         )
+
+    def get_bisect_result(self, i: int) -> np.ndarray:
+        l = self.bisect_offset[i]
+        r = self.bisect_offset[i + 1]
+        return self.path_bisect_result[l:r]
 
     @classmethod
     def empty(cls):

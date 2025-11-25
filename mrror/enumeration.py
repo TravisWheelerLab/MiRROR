@@ -108,8 +108,7 @@ def enumerate_candidates(
                     term = anno_loss[-1][y]
                     print(f"{tag} {x} {y} {cost} {[v[0] for v in anno_res]} {term}")
 
-    affix_pairs = [np.array([],dtype=int).reshape((0,2)) for _ in aligned_affixes]
-    # TODO
+    affix_pairs = [pair_affixes(pfx, sfx, aln_afx, prod, pvt) for (pfx, sfx, aln_afx, prod, pvt) in zip(prefixes,suffixes,aligned_affixes,algn.prod_topology,algn.pivot_topology)]
     # pair affixes.
 
     # TODO

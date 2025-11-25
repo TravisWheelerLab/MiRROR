@@ -9,6 +9,7 @@ class SpectrumGraph:
     graph: nx.DiGraph
     boundaries: np.ndarray
     boundary_source: int
+    weight_key: str
 
     def order(self) -> int:
         """Returns the largest node label plus one.
@@ -18,6 +19,9 @@ class SpectrumGraph:
 
     def sources(self) -> list[int]:
         return [x for x in self.graph if self.graph.in_degree(x) == 0]
+
+    def get_weight(self, i: int, j: int) -> int:
+        return self.graph[i][j][self.weight_key]
 
     @classmethod
     def from_edges_and_boundaries(
@@ -51,24 +55,32 @@ class SpectrumGraph:
             g,
             boundaries,
             boundary_source,
+            weight_key,
         )
 
 @dataclasses.dataclass(slots=True)
 class PivotGraph:
-    graph: nx.DiGraph
+    graph: nx.Graph
+    weight_key: str
+
+    def get_weight(self, i: int, j: int) -> int:
+        return self.graph[i][j][self.weight_key]
 
     @classmethod
     def from_edges(
         cls,
         edges: np.ndarray,
+        weight_key: str = 'weight',
     ) -> Self:
-        g = nx.DiGraph()
-        g.add_weighted_edges_from(edges.T)
-        return cls(g)
+        g = nx.Graph()
+        g.add_weighted_edges_from(edges.T, weight=weight_key)
+        return cls(g, weight_key)
 
 @dataclasses.dataclass(slots=True)
 class ProductEdgeWeight:
-    """Annotation data associated to an edge in a WeightedProductGraph. Note that comparisons between ProductEdgeWeight are computed from the order of their minimum cost. Two completely different annotations may be equal if they have the same minimum cost."""
+    """Annotation data associated to an edge in a WeightedProductGraph.
+    
+    Note that comparisons between ProductEdgeWeight are computed from the order of their minimum cost. Two completely different annotations may be equal if they have the same minimum cost."""
     costs: np.ndarray
     left_annotation: np.ndarray
     right_annotation: np.ndarray

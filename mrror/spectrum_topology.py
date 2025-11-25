@@ -160,9 +160,8 @@ def _construct_spectrum_graphs(
         # right graph, nodes higher than pivot, descending.
 
         pivot_pairs = pairs[:,np.logical_not(left_pair_mask + right_pair_mask)]
-        pivot_edges = np.hstack([pivot_pairs,pivot_pairs[::-1,:]])
         pivot_adj[i] = PivotGraph.from_edges(
-            edges = pivot_edges,
+            edges = pivot_pairs,
         )
         # cut graph, undirected edges intersected by pivot, relate sinks between left and right.
     return (
