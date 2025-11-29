@@ -291,6 +291,9 @@ class TargetMassStateSpace:
 @dataclasses.dataclass(slots=True)
 class AbstractAnnotationResult(abc.ABC):
 
+    def len(self):
+        return len(self.segments) - 1
+
     def get_annotation(self, i: int) -> tuple[float,np.ndarray]:
         l, r = self.segments[i:i+2]
         data = (

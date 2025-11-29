@@ -12,17 +12,17 @@ AnnotatedResiduePathState = list[tuple[np.ndarray,np.ndarray]] # each tuple weig
 class AnnotatedResiduePathSpace(AbstractPathSpace):
     """A collection of paths traced through a WeightedProductGraph using the AnnotatedResiduePathCostModel. Each path is associated to a cost and an AnnotatedResiduePathState in the form of an annotation matrix and a cost vector."""
     path: np.ndarray
-    offset: np.ndarray
+    segment: np.ndarray
     cost: np.ndarray
     annotation: np.ndarray
     annotation_cost: np.ndarray
 
     def __len__(self) -> int:
-        return len(self.offset) - 1
+        return len(self.segment) - 1
 
     def __getitem__(self, i: int) -> tuple:
-        l = self.offset[i]
-        r = self.offset[i + 1]
+        l = self.segment[i]
+        r = self.segment[i + 1]
         return (
             self.cost[i],
             self.path[l:r],
@@ -34,20 +34,19 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
         return (self.__getitem__(i) for i in range(len(self)))
 
     def __add__(self, other: Self) -> Self:
-        concat_offset = np.concat([self.offset[:-1], other.offset + self.offset[-1]])
+        concat_segment = np.concat([self.segment[:-1], other.segment + self.segment[-1]])
         # [0, 3, 5, 10] + [0, 2, 4, 7] = [0, 3, 5, 10, 12, 14, 17]
         return type(self)(
             path = np.concat([self.path, other.path]),
-            offset = concat_offset,
+            segment = concat_segment,
             cost = np.concat([self.cost, other.cost]),
             annotation = np.concat([self.annotation, other.annotation]),
             annotation_cost = np.concat([self.annotation_cost, other.annotation_cost]),
         )
 
     def get_path(self, i: int) -> float:
-        l = self.offset[i]
-        r = self.offset[i + 1]
-        print(i,l,r)
+        l = self.segment[i]
+        r = self.segment[i + 1]
         return self.path[l:r]
 
     def get_cost(self, i: int) -> float:
@@ -57,7 +56,7 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
     def empty(cls):
         return cls(
             path = np.array([]),
-            offset = np.array([0,]),
+            segment = np.array([0,]),
             cost = np.array([]),
             state = np.array([]),
         )
@@ -91,7 +90,7 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
         path_anno_costs = path_anno_costs[order]
         return cls(
             path = np.concat(paths),
-            offset = np.cumsum([0,] + [len(x) for x in paths]),
+            segment = np.cumsum([0,] + [len(x) for x in paths]),
             cost = costs,
             annotation = path_annotations,
             annotation_cost = path_anno_costs,
@@ -106,18 +105,18 @@ SuffixArrayPathState = tuple[
 class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
     """A collection of paths traced through a WeightedProductGraph using the SuffixArrayPathCostModel. Each path is associated to a cost and an SuffixArrayPathState in the form of a list of bisect results, an annotation matrix, and an annotation cost vector. Annotation data is identical to that of the parent class AnnotatedResiduePathSpace."""
     path: np.ndarray
-    offset: np.ndarray
+    segment: np.ndarray
     cost: np.ndarray
     annotation: np.ndarray
     annotation_cost: np.ndarray
     path_bisect_result: np.ndarray
-    bisect_offset: np.ndarray
+    bisect_segment: np.ndarray
 
     def __getitem__(self, i: int) -> tuple:
-        l = self.offset[i]
-        r = self.offset[i + 1]
-        l2 = self.bisect_offset[i]
-        r2 = self.bisect_offset[i + 1]
+        l = self.segment[i]
+        r = self.segment[i + 1]
+        l2 = self.bisect_segment[i]
+        r2 = self.bisect_segment[i + 1]
         return (
             self.cost[i],
             self.path[l:r],
@@ -127,29 +126,29 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
         )
 
     def __add__(self, other: Self) -> Self:
-        concat_offset = np.concat([self.offset[:-1], other.offset + self.offset[-1]])
-        concat_bisect_offset = np.concat([self.bisect_offset[:-1], other.bisect_offset + self.bisect_offset[-1]])
+        concat_segment = np.concat([self.segment[:-1], other.segment + self.segment[-1]])
+        concat_bisect_segment = np.concat([self.bisect_segment[:-1], other.bisect_segment + self.bisect_segment[-1]])
         # [0, 3, 5, 10] + [0, 2, 4, 7] = [0, 3, 5, 10, 12, 14, 17]
         return type(self)(
             path = np.concat([self.path, other.path]),
-            offset = concat_offset,
+            segment = concat_segment,
             cost = np.concat([self.cost, other.cost]),
             annotation = np.concat([self.annotation, other.annotation]),
             annotation_cost = np.concat([self.annotation_cost, other.annotation_cost]),
             path_bisect_result = np.concat([self.path_bisect_result, other.path_bisect_result]),
-            bisect_offset = concat_bisect_offset,
+            bisect_segment = concat_bisect_segment,
         )
 
     def get_bisect_result(self, i: int) -> np.ndarray:
-        l = self.bisect_offset[i]
-        r = self.bisect_offset[i + 1]
+        l = self.bisect_segment[i]
+        r = self.bisect_segment[i + 1]
         return self.path_bisect_result[l:r]
 
     @classmethod
     def empty(cls):
         return cls(
             path = np.array([]),
-            offset = np.array([0,]),
+            segment = np.array([0,]),
             cost = np.array([]),
             state = np.array([]),
         )
@@ -186,10 +185,10 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
         path_anno_costs = path_anno_costs[order]
         return cls(
             path = np.concat(paths),
-            offset = np.cumsum([0,] + [len(x) for x in paths]),
+            segment = np.cumsum([0,] + [len(x) for x in paths]),
             cost = costs,
             annotation = path_annotations,
             annotation_cost = path_anno_costs,
             path_bisect_result = np.concat(path_bisect_results),
-            bisect_offset = np.cumsum([0,] + [len(x) for x in path_bisect_results]),
+            bisect_segment = np.cumsum([0,] + [len(x) for x in path_bisect_results]),
         )

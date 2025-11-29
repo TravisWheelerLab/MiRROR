@@ -4,7 +4,7 @@ import dataclasses
 
 import numpy as np
 
-from .util import merge_compare_exact_unique, ravel, unravel
+from .util import merge_compare_exact_unique, ravel, unravel, combine_symbols
 from .sequences.suffix_array import SuffixArray, BisectResult
 from .fragments import TargetMassStateSpace, BoundaryResult, PairResult
 from .graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
@@ -179,32 +179,6 @@ class AnnotatedResiduePathCostModel(AbstractPathCostModel):
         else:
             return self._targets.symbolize_pairs(anno)
 
-    def _disjoint_sum_str(
-        self,
-        x: str,
-        y: str,
-    ):
-        if x == y:
-            return x
-        else:
-            return x + self._sep + y
-
-    def _combine_symbols(
-        self,
-        left_symbols: np.ndarray,
-        right_symbols: np.ndarray,
-    ):
-        """Applies _disjoint_sum_str elementwise to two arrays with the same shape, e.g. with / as separator:
-        
-            _combine_symbols([[a, b, c], [x, y, z]], [[a, b, d], [u, w, z]]) = [[a, b, c/d], [x/u, y/w, z]]"""
-        assert left_symbols.shape == right_symbols.shape
-        return np.array([
-            self._disjoint_sum_str(x,y) for (x,y) in zip(
-                left_symbols.flatten(),
-                right_symbols.flatten(),
-            )]).reshape(*left_symbols.shape)
-        # there's probably a more numpythonic way to do this?
-
     def initial_state(
         self,
         node: int,
@@ -226,7 +200,7 @@ class AnnotatedResiduePathCostModel(AbstractPathCostModel):
         anno_costs = edge_annotation.costs
         left_symbols = self._symbolize_annotation(edge_annotation.left_annotation, left_node, self._left_boundary)
         right_symbols = self._symbolize_annotation(edge_annotation.right_annotation, right_node, self._right_boundary)
-        combined_symbols = self._combine_symbols(left_symbols, right_symbols)
+        combined_symbols = combine_symbols(left_symbols, right_symbols, self._sep)
         order = np.argsort(anno_costs)
         next_edge_state = (
                 anno_costs[order],

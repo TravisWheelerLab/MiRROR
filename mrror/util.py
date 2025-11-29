@@ -5,6 +5,21 @@ import itertools as it
 import numba
 import numpy as np
 
+def combine_symbols(
+    left_symbols: np.ndarray,
+    right_symbols: np.ndarray,
+    sep: str,
+) -> np.ndarray:
+    """Combines symbols elementwise to two arrays with the same shape, e.g. with / as separator:
+    
+        _combine_symbols([[a, b, c], [x, y, z]], [[a, b, d], [u, w, z]]) = [[a, b, c/d], [x/u, y/w, z]]"""
+    return np.array([
+        x if x == y else x + sep + x
+        for (x,y) in zip(
+            left_symbols.flatten(),
+            right_symbols.flatten(),
+        )]).reshape(*left_symbols.shape)
+
 def ravel(
     i: int,
     j: int,
