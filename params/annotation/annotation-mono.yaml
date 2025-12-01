@@ -1,4 +1,4 @@
-query_tolerance: 0.01
+query_tolerance: 0.015
 symmetry_tolerance: 0.015
 pivot_score_factor: 0.75
 

@@ -63,6 +63,10 @@ class PivotGraph:
     graph: nx.Graph
     weight_key: str
 
+    # def __post_init__(self):
+    #     for (k,v) in sorted(self.graph.adj.items()):
+    #         print(k,'\t',[int(x) for (x,_) in v.items()])
+
     def get_weight(self, i: int, j: int) -> int:
         return self.graph[i][j][self.weight_key]
 

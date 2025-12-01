@@ -99,7 +99,7 @@ def setup(cfg):
         else:
             raise ValueError(f"A sufr file {transcriptome} was passed but there is no corresponding reversed suffix array, which was expected at {reversed_transcriptome}.")
     else:
-        print(f"The transcriptome argument was {transcriptome}, which is neither a fasta file nor a sufr file. Could not read or create a suffix array.")
+        print(f"The transcriptome argument was \"{transcriptome}\" which cannot be parsed as either a .fasta or .sufr file. Evaluation will proceed without a suffix array.")
     suffix_arrays = (suffix_array, reversed_suffix_array)
     # constructs the suffix array and its reversal, which restrict the space of peptides that can be called from spectra.
     
@@ -260,9 +260,9 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
         print("algn symmetries: ", [sym[:-1].tolist() for sym in algn_res.symmetries], '\n', [np.round(algn_res.fragment_masses[sym[:-1,:]], 4).tolist() for sym in algn_res.symmetries])
     
     masses = algn_res.fragment_masses
-    print("fragment masses: ", masses)
+    print("fragment masses:", masses)
 
-    print("called affixes: ", sum([len(x[0]) for x in enmr_res.aligned_affixes]))
+    print("called affixes:", sum([len(x[0]) for x in enmr_res.aligned_affixes]))
     for (a,p,s,i) in zip(enmr_res.aligned_affixes,enmr_res.prefixes,enmr_res.suffixes,enmr_res.infixes):
         for (tag,afx) in (("prefix",p),("suffix",s),("infix",i)):
             for (x,y) in afx:
@@ -271,6 +271,14 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
                 anno_loss = [u[:,2] for u in anno]
                 term = anno_loss[-1][y]
                 print(f"{tag} {x} {y} {cost} {[v[0] for v in anno_res]} {term}")
+
+    print("called candidates:", sum([len(x) for x in enmr_res.candidates]))
+    c = 0
+    for (i, cand_res) in enumerate(enmr_res.candidates):
+        for (j, cand) in enumerate(cand_res):
+            c += 1
+            cost, seq, anno, _ = cand
+            print(c, (i, j), float(cost), seq.replace(' ', ''))
 
 @hydra.main(version_base=None, config_path="params", config_name="config")
 def main(cfg: DictConfig) -> None:

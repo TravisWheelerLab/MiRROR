@@ -164,8 +164,8 @@ def enumerate_candidates(
     # end step 2, print results and timing data.
     if verbose:
         for i in range(n):
-            print(affix_pairs[i])
-            print(candidates[i])
+            for j in range(len(candidates[i])):
+                print(i, j, candidates[i][j][:2])
         print(profile)
     return EnumerationResult(
         aligned_affixes = aligned_affixes,
