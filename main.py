@@ -13,7 +13,7 @@ from mrror.util import in_alphabet
 from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import SpectraParams, PeaksDataset, Peaks, SimulatedPeaks
 from mrror.sequences.suffix_array import SuffixArray
-from mrror.costmodels import AnnotatedResiduePathCostModel
+from mrror.evaluation.costmodels import AnnotatedResiduePathCostModel
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
 from mrror.alignment import AlignmentParams, AlignmentResult, align
 from mrror.enumeration import EnumerationParams, EnumerationResult, enumerate_candidates
@@ -221,12 +221,7 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
 
     peaks = SimulatedPeaks.from_peptide(cfg['input'],initial_b=spec_cfg.initial_b)
 
-    anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 1)
-
-    algn_res = align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
-
-    enmr_res = enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 1)
-
+    true_alignments = peaks.alignments()
     if app_cfg.verbosity > 0:
         print("peaks:")
         print("peptide\n- ", peaks.peptide)
@@ -236,17 +231,20 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
         print("right boundaries\n- ", peaks.right_boundaries())
         print("pairs\n- ", peaks.pairs())
         print("paths\n- ", peaks.paths())
-    true_alignments = peaks.alignments()
-    if app_cfg.verbosity > 0:
         print("alignments\n- ", true_alignments)
 
-    if app_cfg.verbosity > 0:
-        print("annotation")
+    anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 1)
+
+    algn_res = align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
+
+    enmr_res = enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 1)
+
     observed_pivots = anno_res.pivots.cluster_points
     observed_pairs = anno_res.pairs.indices.T.tolist()
     observed_lb = anno_res.left_boundaries.index.tolist()
     observed_rb = [rb.index.tolist() for rb in anno_res.right_boundaries]
     if app_cfg.verbosity > 0:
+        print("annotation")
         print(observed_pivots)
         print(observed_pairs)
         print(observed_lb)
@@ -262,7 +260,8 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
     masses = algn_res.fragment_masses
     print("fragment masses:", masses)
 
-    print("called affixes:", sum([len(x[0]) for x in enmr_res.aligned_affixes]))
+    print("aligned affixes:", sum([len(x) for x in enmr_res.aligned_affixes]))
+    print("prefixes + suffixes:", sum([len(x) for x in enmr_res.prefixes] + [len(x) for x in enmr_res.suffixes]))
     for (a,p,s,i) in zip(enmr_res.aligned_affixes,enmr_res.prefixes,enmr_res.suffixes,enmr_res.infixes):
         for (tag,afx) in (("prefix",p),("suffix",s),("infix",i)):
             for (x,y) in afx:
@@ -276,9 +275,12 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
     c = 0
     for (i, cand_res) in enumerate(enmr_res.candidates):
         for (j, cand) in enumerate(cand_res):
-            c += 1
-            cost, seq, anno, _ = cand
-            print(c, (i, j), float(cost), seq.replace(' ', ''))
+            if c < cfg.num_out:
+                c += 1
+                cost, seq, anno, _ = cand
+                print(c, (i, j), float(cost), seq.replace(' ', ''))
+            else:
+                break
 
 @hydra.main(version_base=None, config_path="params", config_name="config")
 def main(cfg: DictConfig) -> None:

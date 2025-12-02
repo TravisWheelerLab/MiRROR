@@ -4,12 +4,12 @@ import dataclasses
 
 import numpy as np
 
-from .util import merge_compare_exact_unique, ravel, unravel, combine_symbols
-from .sequences.suffix_array import SuffixArray, BisectResult
-from .fragments import TargetMassStateSpace, BoundaryResult, PairResult
-from .graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
-from .graphs.propagate import AbstractNodeCostModel, AbstractEdgeCostModel
-from .graphs.trace import AbstractPathCostModel
+from ..util import merge_compare_exact_unique, ravel, unravel, combine_symbols
+from ..sequences.suffix_array import SuffixArray, BisectResult
+from ..fragments import TargetMassStateSpace, BoundaryResult, PairResult
+from ..graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
+from ..graphs.propagate import AbstractNodeCostModel, AbstractEdgeCostModel
+from ..graphs.trace import AbstractPathCostModel
 
 from .pathspaces import AnnotatedResiduePathState, AnnotatedResiduePathSpace, SuffixArrayPathState, SuffixArrayPathSpace
 

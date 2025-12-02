@@ -3,9 +3,9 @@ from typing import Iterator, Self
 
 import numpy as np
 
-from .util import combine_symbols
-from .fragments.types import TargetMassStateSpace, PairResult
-from .graphs.trace import AbstractPathSpace
+from ..util import combine_symbols
+from ..fragments.types import TargetMassStateSpace, PairResult
+from ..graphs.trace import AbstractPathSpace
 
 from .pathspaces import AnnotatedResiduePathSpace, SuffixArrayPathSpace
 from .costmodels import AnnotatedResiduePathCostModel, SuffixArrayPathCostModel, MISMATCH_SEPARATOR

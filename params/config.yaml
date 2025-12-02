@@ -1,5 +1,6 @@
 # top-level arguments
 input: TESTPEPTIDE::simple
+num_out: 5
 transcriptome: None
 expected_masses: None
 

@@ -1,8 +1,8 @@
 import dataclasses
 from typing import Self, Iterator
 
-from .graphs.trace import AbstractPathSpace
-from .sequences.suffix_array import BisectResult
+from ..graphs.trace import AbstractPathSpace
+from ..sequences.suffix_array import BisectResult
 
 import numpy as np
 

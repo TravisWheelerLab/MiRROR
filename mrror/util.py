@@ -5,6 +5,12 @@ import itertools as it
 import numba
 import numpy as np
 
+def pairwise_disjoint(
+    a: list,
+    b: list,
+) -> bool:
+    return set(it.pairwise(a)).isdisjoint(it.pairwise(b))
+
 def combine_symbols(
     left_symbols: np.ndarray,
     right_symbols: np.ndarray,
@@ -54,9 +60,33 @@ def merge_compare_exact_unique(
             l += 1
             r += 1
         elif x < z:
-            r += 1
-        else: # z < x
             l += 1
+        else: # z < x
+            r += 1
+
+@numba.jit(nopython=True)
+def merge_compare_fuzzy_unique(
+    left_arr: Iterable,
+    right_arr: Iterable,
+    tolerance: float,
+) -> Iterator[tuple[int,int]]:
+    """Given two unique, ordered Iterables, return the index pairs representing matches within a given tolerance."""
+    n = len(left_arr)
+    m = len(right_arr)
+    l = 0
+    r = 0
+    while l < n and r < m:
+        x = left_arr[l]
+        z = right_arr[r]
+        d = abs(x - z)
+        if d < tolerance:
+            yield (l,r)
+            l += 1
+            r += 1
+        elif x < z:
+            l += 1
+        else: # z < x
+            r += 1
 
 def dfs(
     adj: list[np.ndarray],

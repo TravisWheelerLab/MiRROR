@@ -10,9 +10,9 @@ from .graphs.dfs import dfs
 from .graphs.trace import AbstractPathSpace, trace
 from .sequences.suffix_array import SuffixArray
 
-from .costmodels import AnnotatedResiduePathCostModel, SuffixArrayPathCostModel
-from .affix_pairing import orient_affixes, refine_affixes, pair_affixes
-from .candidates import CandidateResult, generate_candidates
+from .evaluation.costmodels import AnnotatedResiduePathCostModel, SuffixArrayPathCostModel
+from .evaluation.affix_pairing import orient_affixes, refine_affixes, pair_affixes
+from .evaluation.candidates import CandidateResult, generate_candidates
 
 from .annotation import AnnotationResult
 from .alignment import AlignmentResult
