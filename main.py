@@ -14,6 +14,7 @@ from mrror.fragments.types import TargetMassStateSpace
 from mrror.spectra.types import SpectraParams, PeaksDataset, Peaks, SimulatedPeaks
 from mrror.sequences.suffix_array import SuffixArray
 from mrror.evaluation.costmodels import AnnotatedResiduePathCostModel
+from mrror.evaluation.annotated_peaks import AnnotatedPeaks
 from mrror.annotation import AnnotationParams, AnnotationResult, annotate
 from mrror.alignment import AlignmentParams, AlignmentResult, align
 from mrror.enumeration import EnumerationParams, EnumerationResult, enumerate_candidates
@@ -223,7 +224,6 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
 
     true_alignments = peaks.alignments()
     if app_cfg.verbosity > 0:
-        print("peaks:")
         print("peptide\n- ", peaks.peptide)
         print("peaks\n- ", peaks.mz)
         print("pivot\n- ", peaks.pivot)
@@ -233,52 +233,86 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
         print("paths\n- ", peaks.paths())
         print("alignments\n- ", true_alignments)
 
-    anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 1)
+    anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 3)
+    anno_res.save(output_dir / f"{app_cfg.session_name}.anno")
 
-    algn_res = align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
+    print("annotated pivots\n", anno_res.pivots.cluster_points)
+    print("annotated pairs\n", anno_res.pairs.symbolize(targets))
+    print("annotated boundaries\n- left\n", anno_res.left_boundaries.symbolize(targets))
+    print("- right")
+    for rb in anno_res.right_boundaries:
+        print(rb.symbolize(targets))
+    print("anno symmetries: ", [sym.tolist() for sym in anno_res.pivots.symmetries], '\n', [np.round(peaks.mz[sym], 4).tolist() for sym in anno_res.pivots.symmetries])
 
-    enmr_res = enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 1)
+    algn_res = align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 3)
 
-    observed_pivots = anno_res.pivots.cluster_points
-    observed_pairs = anno_res.pairs.indices.T.tolist()
-    observed_lb = anno_res.left_boundaries.index.tolist()
-    observed_rb = [rb.index.tolist() for rb in anno_res.right_boundaries]
-    if app_cfg.verbosity > 0:
-        print("annotation")
-        print(observed_pivots)
-        print(observed_pairs)
-        print(observed_lb)
-        print(observed_rb)
+    print("algn symmetries: ", [sym[:-2].tolist() for sym in algn_res.symmetries], '\n', [np.round(algn_res.fragment_masses[sym[:-2,:]], 4).tolist() for sym in algn_res.symmetries])
 
-    if app_cfg.verbosity > 0:
-        print("annotated pairs", anno_res.pairs)
-        print("annotated boundaries", anno_res.left_boundaries)
-        print(anno_res.right_boundaries)
-        print("anno symmetries: ", [sym.tolist() for sym in anno_res.pivots.symmetries], '\n', [np.round(peaks.mz[sym], 4).tolist() for sym in anno_res.pivots.symmetries])
-        print("algn symmetries: ", [sym[:-1].tolist() for sym in algn_res.symmetries], '\n', [np.round(algn_res.fragment_masses[sym[:-1,:]], 4).tolist() for sym in algn_res.symmetries])
+    sym_lookup = [
+        {
+            tuple(y.tolist()): tuple(x.tolist())
+            for (x,y) in zip(
+                anno_res.pivots.symmetries[i],
+                algn_res.symmetries[i],
+            )
+        } 
+        for i in range(len(anno_res))
+    ]
+
+    print("sym lookup:",sym_lookup)
     
     masses = algn_res.fragment_masses
     print("fragment masses:", masses)
 
+    if app_cfg.verbosity > 0:
+        print("left topologies", '\n'.join([x.display() for x in algn_res.left_topology]))
+        print("right topologies", '\n'.join([x.display() for x in algn_res.right_topology]))
+
+    enmr_res = enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 3)
+
     print("aligned affixes:", sum([len(x) for x in enmr_res.aligned_affixes]))
     print("prefixes + suffixes:", sum([len(x) for x in enmr_res.prefixes] + [len(x) for x in enmr_res.suffixes]))
-    for (a,p,s,i) in zip(enmr_res.aligned_affixes,enmr_res.prefixes,enmr_res.suffixes,enmr_res.infixes):
-        for (tag,afx) in (("prefix",p),("suffix",s),("infix",i)):
-            for (x,y) in afx:
-                cost, __, anno = a[x][:3]
-                anno_res = [u[:,0] for u in anno]
+    n = len(enmr_res)
+    for i in range(n):
+        for (tag,affix_category) in (("prefix",enmr_res.prefixes[i]),("suffix",enmr_res.suffixes[i]),("infix",enmr_res.infixes[i])):
+            for (afx_idx,bnd_idx) in affix_category:
+                cost, path, anno = enmr_res.aligned_affixes[i][afx_idx][:3]
+                anno_residues = [u[:,0] for u in anno]
                 anno_loss = [u[:,2] for u in anno]
-                term = anno_loss[-1][y]
-                print(f"{tag} {x} {y} {cost} {[v[0] for v in anno_res]} {term}")
+                term = anno_loss[-1][bnd_idx]
+                unraveled_path = [[int(y) for y in algn_res.prod_topology[i].unravel(x)] for x in path]
+                translated_path = []
+                for x in unraveled_path[:-1]:
+                    z = (-1,-1)
+                    try:
+                        z = sym_lookup[i][tuple(x)]
+                    except KeyError:
+                        z = ('?','?')
+                    translated_path.append(z)
+                l_path, r_path = zip(*translated_path)
+                print(f"{tag} {afx_idx} {bnd_idx} {cost} {[str(v[0]) for v in anno_residues]} l={l_path} r={r_path} {term}")
 
     print("called candidates:", sum([len(x) for x in enmr_res.candidates]))
     c = 0
+    print("peaks:", peaks, len(peaks))
     for (i, cand_res) in enumerate(enmr_res.candidates):
+        abs_offset = np.abs(cand_res.offset)
+        min_offset = abs_offset.min()
+        max_offset = abs_offset.max()
         for (j, cand) in enumerate(cand_res):
             if c < cfg.num_out:
                 c += 1
-                cost, seq, anno, _ = cand
-                print(c, (i, j), float(cost), seq.replace(' ', ''))
+                cost, seq, path, anno, offset = cand
+                normalized_offset = (np.abs(offset) - min_offset) / (max_offset - min_offset)
+                print(c, (i, j), float(cost.round(4)), seq.replace(' ',''), float(offset.round(4)))
+                annotated_peaks = AnnotatedPeaks.from_evaluation(
+                    peaks = peaks,
+                    annotation = (anno_res, anno_params),
+                    cluster = i,
+                    alignment = (algn_res, algn_params),
+                    enumeration = (enmr_res, enmr_params),
+                    candidate = j,
+                )
             else:
                 break
 

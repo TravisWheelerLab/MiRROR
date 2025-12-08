@@ -9,7 +9,12 @@ class SpectrumGraph:
     graph: nx.DiGraph
     boundaries: np.ndarray
     boundary_source: int
+    pivots: np.ndarray
+    pivot_sink: int
     weight_key: str
+
+    def display(self) -> str:
+        return f"SpectrumGraph\nboundaries {self.boundaries}\nboundary_source {self.boundary_source}\npivots {self.pivots}\npivot_sink {self.pivot_sink}\nedges " + ' '.join([f"({str(i)} -> {str(j)})" for (i,j) in self.graph.edges()])
 
     def order(self) -> int:
         """Returns the largest node label plus one.
@@ -20,6 +25,9 @@ class SpectrumGraph:
     def sources(self) -> list[int]:
         return [x for x in self.graph if self.graph.in_degree(x) == 0]
 
+    def sinks(self) -> list[int]:
+        return [x for x in self.graph if self.graph.out_degree(x) == 0]
+
     def get_weight(self, i: int, j: int) -> int:
         return self.graph[i][j][self.weight_key]
 
@@ -28,6 +36,7 @@ class SpectrumGraph:
         cls,
         edges: np.ndarray,
         boundaries: np.ndarray,
+        pivots: np.ndarray,
         multiresidue_boundaries: list[np.ndarray] = [],
         weight_key: str = 'weight',
     ) -> Self:
@@ -35,14 +44,12 @@ class SpectrumGraph:
         g.add_weighted_edges_from(edges.T, weight=weight_key)
         # construct digraph with edges
         boundary_source = max(edges.max(),boundaries.max()) + 1
-        # create an artificial source to point to boundaries
-        if not(boundaries is None):
-            boundary_edges = np.vstack([
-                np.full(boundaries.shape[1],boundary_source),
-                boundaries,
-            ])
-            g.add_weighted_edges_from(((i,j,(x,1)) for (i,j,x) in boundary_edges.T), weight=weight_key)
-            # construct boundary edges weighted with k = 1 to denote single-residue ids
+        pivot_sink = boundary_source + 1
+        # create an artificial source to point to boundaries and likewise a sink to pivots.
+        g.add_weighted_edges_from(((boundary_source,x,(w,1)) for (x,w) in boundaries.T), weight=weight_key)
+        # construct boundary edges weighted with k = 1 to denote single-residue ids
+        g.add_weighted_edges_from(((x,pivot_sink,-1) for x in pivots), weight=weight_key)
+        # construct pivot edges weighted with -1 to denote null annotation.
         for (k, multi_boundaries) in enumerate(multiresidue_boundaries):
             boundary_edges = np.vstack([
                 np.full(multi_boundaries.shape[1],boundary_source),
@@ -55,6 +62,8 @@ class SpectrumGraph:
             g,
             boundaries,
             boundary_source,
+            pivots,
+            pivot_sink,
             weight_key,
         )
 

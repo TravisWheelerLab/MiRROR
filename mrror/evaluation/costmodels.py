@@ -4,7 +4,7 @@ import dataclasses
 
 import numpy as np
 
-from ..util import merge_compare_exact_unique, ravel, unravel, combine_symbols
+from ..util import merge_compare_exact_unique, ravel, unravel, combine_symbols, combine_masses
 from ..sequences.suffix_array import SuffixArray, BisectResult
 from ..fragments import TargetMassStateSpace, BoundaryResult, PairResult
 from ..graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
@@ -152,32 +152,47 @@ class AnnotatedResiduePathCostModel(AbstractPathCostModel):
 
     def __init__(
         self,
+        pivot: float,
         product_graph: WeightedProductGraph,
         left_graph: SpectrumGraph,
         right_graph: SpectrumGraph,
         target_space: TargetMassStateSpace,
         mismatch_separator: str = MISMATCH_SEPARATOR,
+        mass_offset_threshold: float = 0.01, # 1% is very permissive. could be much smaller if the input data is high resolution.
     ):
+        self._mass_threshold = (2 + mass_offset_threshold) * pivot
         self._graph = product_graph
         self._targets = target_space 
         self._left_boundary = left_graph.boundary_source
         self._right_boundary = right_graph.boundary_source
         self._sep = mismatch_separator
 
-    def _symbolize_annotation(
+    def _symbolize_and_weigh_annotation(
         self,
         anno: np.ndarray,
         node: int,
         boundary: int,
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray,np.ndarray]:
         if anno is None:
-            return np.array([''])
+            return (
+                np.array([['',],], dtype=str),
+                np.array([[0.,],], dtype=float),
+            )
         elif np.all(anno == -1):
-            return np.full_like(anno, '', dtype=str)
+            return (
+                np.full_like(anno, '', dtype=str),
+                np.full_like(anno, 0., dtype=float),
+            )
         elif node == boundary:
-            return self._targets.symbolize_boundaries(anno)
+            return (
+                self._targets.symbolize_boundaries(anno),
+                self._targets.weigh_boundaries(anno),
+            )
         else:
-            return self._targets.symbolize_pairs(anno)
+            return (
+                self._targets.symbolize_pairs(anno),
+                self._targets.weigh_pairs(anno),
+            )
 
     def initial_state(
         self,
@@ -194,19 +209,22 @@ class AnnotatedResiduePathCostModel(AbstractPathCostModel):
         curr_node: int,
         next_node: int,
     ) -> tuple[float,AnnotatedResiduePathState]:
-        """Append to cost_state the symbolic data associated to the edge from curr_node to next_node. Returns the minimum cost of the edge and the cost state with the edge data appended."""
+        """Append to cost_state the symbolic and mass data associated to the edge from curr_node to next_node. Returns the minimum cost of the edge and the cost state with the edge data appended."""
         left_node, right_node = self._graph.unravel(next_node)
         edge_annotation = self._graph.edge_weights[curr_node][next_node]
         anno_costs = edge_annotation.costs
-        left_symbols = self._symbolize_annotation(edge_annotation.left_annotation, left_node, self._left_boundary)
-        right_symbols = self._symbolize_annotation(edge_annotation.right_annotation, right_node, self._right_boundary)
+        left_symbols, left_masses = self._symbolize_and_weigh_annotation(edge_annotation.left_annotation, left_node, self._left_boundary)
+        right_symbols, right_masses = self._symbolize_and_weigh_annotation(edge_annotation.right_annotation, right_node, self._right_boundary)
         combined_symbols = combine_symbols(left_symbols, right_symbols, self._sep)
+        combined_mass = combine_masses(left_masses, right_masses)
         order = np.argsort(anno_costs)
         next_edge_state = (
                 anno_costs[order],
                 # (n,) array of floats
                 combined_symbols[order],
                 # (n,4) array of str
+                combined_mass[order],
+                # (n,2) array of left and right masses.
         )
         next_state = curr_state + [next_edge_state,]
         return (
@@ -250,7 +268,7 @@ class SuffixArrayPathCostModel(AnnotatedResiduePathCostModel):
         curr_node: int,
         next_node: int,
     ) -> tuple[float,SuffixArrayPathState]:
-        costs, annotation_symbols = super(SuffixArrayPathCostModel, self).next_state([], curr_node, next_node)[1][0]
+        costs, annotation_symbols, annotation_masses = super(SuffixArrayPathCostModel, self).next_state([], curr_node, next_node)[1][0]
         annotation_residues = annotation_symbols[:,0]
         # retrieve symbolic annotation for the edge
 
@@ -266,6 +284,7 @@ class SuffixArrayPathCostModel(AnnotatedResiduePathCostModel):
         split_indices = np.array(split_indices)
         split_costs = costs[split_indices]
         split_annotation_symbols = annotation_symbols[split_indices]
+        split_annotation_masses = annotation_masses[split_indices]
         # unpack residues and reshape annotations to accomodate the extra entries corresponding to each mismatch residue; an A/A needs only one entry, which matches the costs and annotation_symbols shape, but an A/T for ex. needs two entries, which requires that row of the costs and annotation_symbols.
 
         flat_residues, reindexer = np.unique_inverse(split_residues)
@@ -283,14 +302,15 @@ class SuffixArrayPathCostModel(AnnotatedResiduePathCostModel):
 
         annotation_mask = occurring[reindexer]
         next_costs = split_costs[annotation_mask]
-        next_annotation = split_annotation_symbols[annotation_mask]
+        next_annotation_symbols = split_annotation_symbols[annotation_mask]
+        next_annotation_masses = split_annotation_masses[annotation_mask]
         # apply occurrence mask to symbolic annotation
 
         return (
             next_costs.min() if len(next_costs) > 0 else np.inf,
             (
                 next_prefixes,
-                curr_state[1] + [(next_costs,next_annotation),],
+                curr_state[1] + [(next_costs,next_annotation_symbols,next_annotation_masses),],
             ),
         )
 

@@ -72,6 +72,7 @@ def enumerate_candidates(
                 algn.prod_topology[i].sources(),
                 params.cost_threshold,
                 AnnotatedResiduePathCostModel(
+                    anno.pivots.cluster_points[i],
                     algn.prod_topology[i],
                     algn.left_topology[i],
                     algn.right_topology[i],
@@ -92,6 +93,7 @@ def enumerate_candidates(
                 algn.prod_topology[i].sources(),
                 params.cost_threshold,
                 SuffixArrayPathCostModel(
+                    anno.pivots.cluster_points[i],
                     reversed_suffix_array,
                     algn.prod_topology[i],
                     algn.left_topology[i],
@@ -150,6 +152,7 @@ def enumerate_candidates(
         # connect prefix and suffix paths across edges in the pivot topology.
 
         candidates[i] = generate_candidates(
+            anno.pivots.pivot_points[anno.pivots.clusters[i]],
             aligned_affixes[i],
             prefixes[i],
             suffixes[i],

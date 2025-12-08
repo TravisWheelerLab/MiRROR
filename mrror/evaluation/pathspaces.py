@@ -6,7 +6,7 @@ from ..sequences.suffix_array import BisectResult
 
 import numpy as np
 
-AnnotatedResiduePathState = list[tuple[np.ndarray,np.ndarray]] # each tuple weights an edge in the path with cost and residue annotation data.
+AnnotatedResiduePathState = list[tuple[np.ndarray,np.ndarray,np.ndarray]] # each tuple weights an edge in the path with cost, residue annotation data, and masses.
 
 @dataclasses.dataclass(slots=True)
 class AnnotatedResiduePathSpace(AbstractPathSpace):
@@ -15,6 +15,7 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
     segment: np.ndarray
     cost: np.ndarray
     annotation: np.ndarray
+    mass: np.ndarray
     annotation_cost: np.ndarray
 
     def __len__(self) -> int:
@@ -27,6 +28,7 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
             self.cost[i],
             self.path[l:r],
             self.annotation[i],
+            self.mass[i],
             self.annotation_cost[i],
         )
 
@@ -58,7 +60,9 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
             path = np.array([]),
             segment = np.array([0,]),
             cost = np.array([]),
-            state = np.array([]),
+            annotation = np.array([]),
+            mass = np.array([]),
+            annotation_cost = np.array([]),
         )
 
     @classmethod
@@ -75,24 +79,28 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
         costs = np.empty((n_paths,), dtype=float)
         paths = np.empty((n_paths,), dtype=list)
         path_annotations = np.empty((n_paths,), dtype=list)
+        path_masses = np.empty((n_paths,), dtype=list)
         path_anno_costs = np.empty((n_paths,), dtype=list)
         for (i,res) in enumerate(trace_results):
             states = res[1]
-            anno_costs, annotations = zip(*states)
+            anno_costs, annotations, masses = zip(*states)
             costs[i] = res[0]
-            paths[i] = res[2]
+            paths[i] = res[2][1:]
             path_annotations[i] = list(annotations)
+            path_masses[i] = list(masses)
             path_anno_costs[i] = list(anno_costs)
         order = np.argsort(costs)
         costs = costs[order]
         paths = paths[order]
         path_annotations = path_annotations[order]
+        path_masses = path_masses[order]
         path_anno_costs = path_anno_costs[order]
         return cls(
             path = np.concat(paths),
             segment = np.cumsum([0,] + [len(x) for x in paths]),
             cost = costs,
             annotation = path_annotations,
+            mass = path_masses,
             annotation_cost = path_anno_costs,
         )
 
@@ -108,6 +116,7 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
     segment: np.ndarray
     cost: np.ndarray
     annotation: np.ndarray
+    mass: np.ndarray
     annotation_cost: np.ndarray
     path_bisect_result: np.ndarray
     bisect_segment: np.ndarray
@@ -121,6 +130,7 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
             self.cost[i],
             self.path[l:r],
             self.annotation[i],
+            self.mass[i],
             self.annotation_cost[i],
             self.path_bisect_result[l2:r2],
         )
@@ -168,26 +178,30 @@ class SuffixArrayPathSpace(AnnotatedResiduePathSpace):
         paths = np.empty((n_paths,), dtype=list)
         path_bisect_results = np.empty((n_paths,), dtype=list)
         path_annotations = np.empty((n_paths,), dtype=list)
+        path_masses = np.empty((n_paths,), dtype=list)
         path_anno_costs = np.empty((n_paths,), dtype=list)
         for (i,res) in enumerate(trace_results):
             bisect_results, states = res[1]
-            anno_costs, annotations = zip(*states)
+            anno_costs, annotations, masses = zip(*states)
             costs[i] = res[0]
-            paths[i] = res[2]
+            paths[i] = res[2][1:]
             path_bisect_results[i] = bisect_results
             path_annotations[i] = annotations
+            path_masses[i] = list(masses)
             path_anno_costs[i] = anno_costs
         order = np.argsort(costs)
         costs = costs[order]
         paths = paths[order]
         path_bisect_results = path_bisect_results[order]
         path_annotations = path_annotations[order]
+        path_masses = path_masses[order]
         path_anno_costs = path_anno_costs[order]
         return cls(
             path = np.concat(paths),
             segment = np.cumsum([0,] + [len(x) for x in paths]),
             cost = costs,
             annotation = path_annotations,
+            mass = path_masses,
             annotation_cost = path_anno_costs,
             path_bisect_result = np.concat(path_bisect_results),
             bisect_segment = np.cumsum([0,] + [len(x) for x in path_bisect_results]),

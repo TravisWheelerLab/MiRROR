@@ -181,6 +181,50 @@ class TargetMassStateSpace:
             self.boundary_null_indices[k],
         )
         return (features, costs, segments)
+
+    @staticmethod
+    def _weigh_features(
+        features: np.ndarray,
+        amino_masses: np.ndarray,
+        left_loss_masses: np.ndarray,
+        right_loss_masses: np.ndarray,
+        modification_masses: np.ndarray,
+    ) -> np.ndarray:
+        if (features == -1).all():
+            return np.zeros(features.shape[0], dtype=float)
+        else:
+            return np.array([
+                [
+                    amino_masses[i],
+                    left_loss_masses[l],
+                    -1 * right_loss_masses[r],
+                    modification_masses[j],
+                ]  for (i,l,r,j) in features
+            ], dtype=float)
+
+    def weigh_pairs(
+        self,
+        features: np.ndarray,
+    ) -> np.ndarray:
+        return self._weigh_features(
+            features,
+            self.residue_spaces[0].amino_masses,
+            self.fragment_space.loss_masses,
+            self.fragment_space.loss_masses,
+            self.residue_spaces[0].modification_masses,
+        )
+
+    def weigh_boundaries(
+        self,
+        features: np.ndarray,
+    ) -> np.ndarray:
+        return self._weigh_features(
+            features,
+            self.residue_spaces[0].amino_masses,
+            [0.,],
+            self.boundary_space.loss_masses,
+            self.residue_spaces[0].modification_masses,
+        )
     
     @staticmethod
     def _symbolize_features(
@@ -190,9 +234,12 @@ class TargetMassStateSpace:
         right_loss_symbols: np.ndarray,
         modification_symbols: np.ndarray,
     ) -> np.ndarray:
-        return np.vstack([
-            [amino_symbols[i],left_loss_symbols[l],right_loss_symbols[r],modification_symbols[j]] for (i,l,r,j) in features
-        ])
+        if (features == -1).all():
+            return np.full_like(features, '')
+        else:
+            return np.vstack([
+                [amino_symbols[i],left_loss_symbols[l],right_loss_symbols[r],modification_symbols[j]] for (i,l,r,j) in features
+            ])
 
     def symbolize_pairs(
         self,
@@ -289,21 +336,41 @@ class TargetMassStateSpace:
         )
 
 @dataclasses.dataclass(slots=True)
-class AbstractAnnotationResult(abc.ABC):
+class AbstractAnnotation(abc.ABC):
 
     def len(self):
         return len(self.segments) - 1
 
+
     def get_annotation(self, i: int) -> tuple[float,np.ndarray]:
-        l, r = self.segments[i:i+2]
-        data = (
-            self.costs[l:r],
-            self.features[l:r,:],
-        )
-        return data
+        if i == -1:
+            return (
+                np.array([0.,]),
+                np.full((1,self.features.shape[1]),-1),
+            )
+            # null annotation
+        else:
+            l, r = self.segments[i:i+2]
+            data = (
+                self.costs[l:r],
+                self.features[l:r,:],
+            )
+            return data
+
+    def _symbolize(self, features: np.ndarray, sym: list[str], segments: np.ndarray, idx: np.ndarray, costs: np.ndarray) -> str:
+        for (i, (l, r)) in enumerate(it.pairwise(segments)):
+            cost = costs[l:r]
+            ord = np.argsort(cost)
+            feat = features[l:r]
+            sym.append(f"{i} {idx[i]} {[' '.join(x).strip() for x in feat[ord]]} {cost[ord]}")
+        return '\n'.join(sym)
+        
+    @abc.abstractmethod
+    def symbolize(self, targets: TargetMassStateSpace) -> str:
+        """Generate symbolic representations of annotated features."""
 
 @dataclasses.dataclass(slots=True)
-class PairResult(AbstractAnnotationResult):
+class PairResult(AbstractAnnotation):
     indices: np.ndarray
     # [(int,int); m]
 
@@ -322,8 +389,13 @@ class PairResult(AbstractAnnotationResult):
     mass: np.ndarray
     # [float; m]
 
+    def symbolize(self, targets: TargetMassStateSpace) -> str:
+        features = targets.symbolize_pairs(self.features)
+        sym = ["PairResult"]
+        return self._symbolize(features, sym, self.segments, self.indices.T, self.costs)
+
 @dataclasses.dataclass(slots=True)
-class BoundaryResult(AbstractAnnotationResult):
+class BoundaryResult(AbstractAnnotation):
     index: np.ndarray
     # [int; l]
 
@@ -341,6 +413,11 @@ class BoundaryResult(AbstractAnnotationResult):
 
     mass: np.ndarray
     # [float; l]
+
+    def symbolize(self, targets: TargetMassStateSpace) -> str:
+        features = targets.symbolize_boundaries(self.features)
+        sym = ["BoundaryResult"]
+        return self._symbolize(features, sym, self.segments, self.index, self.costs)
 
 @dataclasses.dataclass(slots=True)
 class PivotResult:

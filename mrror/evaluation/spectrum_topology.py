@@ -130,21 +130,32 @@ def _construct_spectrum_graphs(
     pivot_adj = [None for _ in range(k)]
     for (i, (right_boundaries, rb_mz, pivot)) in enumerate(zip(right_boundary_arrs, right_boundary_mz, pivots)):
         left_pair_mask = pair_mz[1,:] < pivot
+        expected_max_mass = 2 * (pivot + tolerance)
+        right_pair_mask = np.logical_and(
+            pair_mz[0,:] > pivot,
+            pair_mz[1,:] < expected_max_mass,
+        )
+        # partition the pairs into left and right around the pivot.
+
+        pivot_pairs = pairs[:,np.logical_not(left_pair_mask + right_pair_mask)]
+        left_sinks = pivot_pairs[0,:]
+        right_sinks = pivot_pairs[1,:]
+        pivot_adj[i] = PivotGraph.from_edges(
+            edges = pivot_pairs,
+        )
+        # construct the pivot graph from undirected pairs intersected by pivot.
+        
         left_edges = pairs[:,left_pair_mask]
         left_boundaries_mask = lb_mz < pivot
         left_sources = left_boundaries[:,left_boundaries_mask]
         left_adj[i] = SpectrumGraph.from_edges_and_boundaries(
             edges = left_edges,
             boundaries = left_sources,
+            pivots = left_sinks,
             weight_key = weight_key,
         )
-        # left graph, nodes lower than pivot, ascending w.r.t. mz.
+        # construct the left graph from nodes lower than pivot, ascending w.r.t. mz.
 
-        expected_max_mass = 2 * (pivot + tolerance)
-        right_pair_mask = np.logical_and(
-            pair_mz[0,:] > pivot,
-            pair_mz[1,:] < expected_max_mass,
-        )
         right_edges = pairs[:,right_pair_mask]
         right_edges = right_edges[[1,0,2],:] # transpose edge sources and targets
         right_boundaries_mask = np.logical_and(
@@ -155,15 +166,11 @@ def _construct_spectrum_graphs(
         right_adj[i] = SpectrumGraph.from_edges_and_boundaries(
             edges = right_edges,
             boundaries = right_sources,
+            pivots = right_sinks,
             weight_key = weight_key,
         )
-        # right graph, nodes higher than pivot, descending.
+        # construct the right graph from nodes higher than pivot, descending w.r.t. mz.
 
-        pivot_pairs = pairs[:,np.logical_not(left_pair_mask + right_pair_mask)]
-        pivot_adj[i] = PivotGraph.from_edges(
-            edges = pivot_pairs,
-        )
-        # cut graph, undirected edges intersected by pivot, relate sinks between left and right.
     return (
         left_adj,
         right_adj,
@@ -203,7 +210,12 @@ def construct_spectrum_topology(
         tolerance,
         weight_key,
     )
-    sym_nodes = [np.vstack([s, [np.array([l.boundary_source, r.boundary_source]),]]) for (s,l,r) in zip(sym_idx,left_adj,right_adj)]
+    sym_nodes = [np.vstack([
+            s, 
+            [np.array([l.boundary_source, r.boundary_source]),],
+            [np.array([l.pivot_sink, r.pivot_sink]),],
+        ]) for (s,l,r) in zip(sym_idx,left_adj,right_adj)
+    ]
     return (
         fragment_masses,
         sym_nodes,

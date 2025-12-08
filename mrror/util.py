@@ -11,6 +11,15 @@ def pairwise_disjoint(
 ) -> bool:
     return set(it.pairwise(a)).isdisjoint(it.pairwise(b))
 
+def combine_masses(
+    left_masses: np.ndarray,
+    right_masses: np.ndarray,
+) -> np.ndarray:
+    return np.stack([
+        np.sum(x, axis=1) 
+        for x in (left_masses, right_masses)
+    ]).T
+
 def combine_symbols(
     left_symbols: np.ndarray,
     right_symbols: np.ndarray,
@@ -31,15 +40,15 @@ def ravel(
     j: int,
     n: int,
 ) -> int:
-    return (i * n) + j
+    return int((i * n) + j)
 
 def unravel(
     k: int,
     n: int,
 ) -> tuple[int,int]:
     return (
-        k // n,
-        k % n,
+        int(k // n),
+        int(k % n),
     )
 
 @numba.jit(nopython=True)
