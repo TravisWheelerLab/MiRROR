@@ -78,13 +78,13 @@ class AnnotatedPeaks(Peaks):
         else:
             raise ValueError(f"unrecognized side \"{side}\". try \"left\" or \"right\".")
 
-    def left_boundaries(self) -> tuple[int,int]:
+    def lower_boundaries(self) -> tuple[int,int]:
         return (
             self._boundary('b','left'),
             self._boundary('y','left'),
         )
     
-    def right_boundaries(self) -> tuple[int,int]:
+    def upper_boundaries(self) -> tuple[int,int]:
         return (
             self._boundary('b','right'),
             self._boundary('y','right'),
@@ -167,22 +167,24 @@ class AnnotatedPeaks(Peaks):
                 anno_type = AnnotationType.CANDIDATE
                 candidate_cluster = enumeration[0].candidates[cluster]
                 peptide = candidate_cluster.get_sequence(candidate)
-                mz, intensity = candidate_cluster.get_peaks(
+                mz, intensity, charge = candidate_cluster.get_peaks(
                     candidate,
                     peaks,
                     annotation[0].pairs,
-                    annotation[0].left_boundaries,
-                    annotation[0].right_boundaries[cluster],
+                    annotation[0].lower_boundaries,
+                    annotation[0].upper_boundaries[cluster],
                     alignment[0].prod_topology[cluster],
-                    alignment[0].left_topology[cluster],
-                    alignment[0].right_topology[cluster],
+                    alignment[0].lower_topology[cluster],
+                    alignment[0].upper_topology[cluster],
                 )
                 mz_ord = np.argsort(mz)
                 mz = mz[mz_ord]
                 intensity = intensity[mz_ord]
                 series = candidate_cluster.get_series(candidate)
                 position = candidate_cluster.get_position(candidate)
-                charge, loss, mods = candidate_cluster.get_annotation(candidate)
+                # loss, mods = candidate_cluster.get_annotation(candidate)
+                loss = np.zeros_like(mz)
+                mods = np.zeros_like(mz)
             else:
                 anno_type = AnnotationType.FRAGMENTS
                 peptide = ""
@@ -190,9 +192,9 @@ class AnnotatedPeaks(Peaks):
                 intensity = annotation[0].peaks.intensity
                 series = ['' for _ in mz]
                 position = [-1 for _ in mz]
-                charge = annotation[0].get_peak_charges()
-                loss = annotation[0].get_peak_losses()
-                mods = annotation[0].get_peak_modifications()
+                charge = annotation[0].get_peak_charges(cluster)
+                loss = annotation[0].get_peak_losses(cluster)
+                mods = annotation[0].get_peak_modifications(cluster)
                 # peptide, series, and position cannot be calculated without a peptide. the rest can be derived with less specificity from the AnnotationResult.
             return cls(
                 anno_type = anno_type,

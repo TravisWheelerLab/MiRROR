@@ -74,8 +74,8 @@ def enumerate_candidates(
                 AnnotatedResiduePathCostModel(
                     anno.pivots.cluster_points[i],
                     algn.prod_topology[i],
-                    algn.left_topology[i],
-                    algn.right_topology[i],
+                    algn.lower_topology[i],
+                    algn.upper_topology[i],
                     targets,
                 ),
             )
@@ -96,8 +96,8 @@ def enumerate_candidates(
                     anno.pivots.cluster_points[i],
                     reversed_suffix_array,
                     algn.prod_topology[i],
-                    algn.left_topology[i],
-                    algn.right_topology[i],
+                    algn.lower_topology[i],
+                    algn.upper_topology[i],
                     targets,
                 ),
             )
@@ -110,8 +110,8 @@ def enumerate_candidates(
                 SuffixArrayPathCostModel(
                     suffix_array,
                     algn.prod_topology[i],
-                    algn.left_topology[i],
-                    algn.right_topology[i],
+                    algn.lower_topology[i],
+                    algn.upper_topology[i],
                     targets,
                 ),
             )

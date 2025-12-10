@@ -227,8 +227,8 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
         print("peptide\n- ", peaks.peptide)
         print("peaks\n- ", peaks.mz)
         print("pivot\n- ", peaks.pivot)
-        print("left boundaries\n- ", peaks.left_boundaries())
-        print("right boundaries\n- ", peaks.right_boundaries())
+        print("left boundaries\n- ", peaks.lower_boundaries())
+        print("right boundaries\n- ", peaks.upper_boundaries())
         print("pairs\n- ", peaks.pairs())
         print("paths\n- ", peaks.paths())
         print("alignments\n- ", true_alignments)
@@ -238,9 +238,9 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
 
     print("annotated pivots\n", anno_res.pivots.cluster_points)
     print("annotated pairs\n", anno_res.pairs.symbolize(targets))
-    print("annotated boundaries\n- left\n", anno_res.left_boundaries.symbolize(targets))
+    print("annotated boundaries\n- left\n", anno_res.lower_boundaries.symbolize(targets))
     print("- right")
-    for rb in anno_res.right_boundaries:
+    for rb in anno_res.upper_boundaries:
         print(rb.symbolize(targets))
     print("anno symmetries: ", [sym.tolist() for sym in anno_res.pivots.symmetries], '\n', [np.round(peaks.mz[sym], 4).tolist() for sym in anno_res.pivots.symmetries])
 
@@ -265,8 +265,8 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
     print("fragment masses:", masses)
 
     if app_cfg.verbosity > 0:
-        print("left topologies", '\n'.join([x.display() for x in algn_res.left_topology]))
-        print("right topologies", '\n'.join([x.display() for x in algn_res.right_topology]))
+        print("left topologies", '\n'.join([x.display() for x in algn_res.lower_topology]))
+        print("right topologies", '\n'.join([x.display() for x in algn_res.upper_topology]))
 
     enmr_res = enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 3)
 

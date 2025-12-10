@@ -41,12 +41,12 @@ class SpectrumGraph:
         weight_key: str = 'weight',
     ) -> Self:
         g = nx.DiGraph()
-        g.add_weighted_edges_from(edges.T, weight=weight_key)
+        g.add_weighted_edges_from(edges, weight=weight_key)
         # construct digraph with edges
         boundary_source = max(edges.max(),boundaries.max()) + 1
         pivot_sink = boundary_source + 1
         # create an artificial source to point to boundaries and likewise a sink to pivots.
-        g.add_weighted_edges_from(((boundary_source,x,(w,1)) for (x,w) in boundaries.T), weight=weight_key)
+        g.add_weighted_edges_from(((boundary_source,x,(w,1)) for (x,w) in boundaries), weight=weight_key)
         # construct boundary edges weighted with k = 1 to denote single-residue ids
         g.add_weighted_edges_from(((x,pivot_sink,-1) for x in pivots), weight=weight_key)
         # construct pivot edges weighted with -1 to denote null annotation.
@@ -55,7 +55,7 @@ class SpectrumGraph:
                 np.full(multi_boundaries.shape[1],boundary_source),
                 multi_boundaries,
             ])
-            g.add_weighted_edges_from(((i,j,(x,k + 1)) for (i,j,x) in boundary_edges.T), weight=weight_key)
+            g.add_weighted_edges_from(((i,j,(x,k + 1)) for (i,j,x) in boundary_edges), weight=weight_key)
             # construct multi-residue boundary edges weighted with k > 1 to denote multi-residue ids.
 
         return cls(
@@ -86,7 +86,7 @@ class PivotGraph:
         weight_key: str = 'weight',
     ) -> Self:
         g = nx.Graph()
-        g.add_weighted_edges_from(edges.T, weight=weight_key)
+        g.add_weighted_edges_from(edges, weight=weight_key)
         return cls(g, weight_key)
 
 @dataclasses.dataclass(slots=True)
@@ -95,8 +95,8 @@ class ProductEdgeWeight:
     
     Note that comparisons between ProductEdgeWeight are computed from the order of their minimum cost. Two completely different annotations may be equal if they have the same minimum cost."""
     costs: np.ndarray
-    left_annotation: np.ndarray
-    right_annotation: np.ndarray
+    lower_annotation: np.ndarray
+    upper_annotation: np.ndarray
 
     def __eq__(self, other):
         return self.costs.min() == other.costs.min()
@@ -108,17 +108,17 @@ class ProductEdgeWeight:
     def from_comparison(
         cls,
         costs: np.ndarray,
-        left_anno: np.ndarray,
-        right_anno: np.ndarray,
+        lower_anno: np.ndarray,
+        upper_anno: np.ndarray,
     ) -> Self:
         return cls(
             costs,
-            left_anno,
-            right_anno,
+            lower_anno,
+            upper_anno,
         )
 
     @classmethod
-    def from_left_gap(
+    def from_lower_gap(
         cls,
         costs: list[np.ndarray],
         anno: list[np.ndarray],
@@ -130,7 +130,7 @@ class ProductEdgeWeight:
         )
     
     @classmethod
-    def from_right_gap(
+    def from_upper_gap(
         cls,
         costs: list[np.ndarray],
         anno: list[np.ndarray],
@@ -146,7 +146,7 @@ class ProductEdgeWeight:
 class WeightedProductGraph:
     """A sparse product of two graphs as returned by propagate_cost. Stores node and edge weights in dictionaries. Implements ravel and unravel, which map between nodes in the product and pairs of nodes in the operand graphs."""
     graph: nx.DiGraph
-    right_operand_order: int
+    upper_operand_order: int
     node_weights: dict[int,float]
     edge_weights: dict[int,dict[int,tuple[float,ProductEdgeWeight]]] 
 
@@ -155,16 +155,16 @@ class WeightedProductGraph:
 
     def ravel(
         self,
-        left_node: int,
-        right_node: int,
+        lower_node: int,
+        upper_node: int,
     ) -> int:
-        return (left_node * self.right_operand_order) + right_node
+        return (lower_node * self.upper_operand_order) + upper_node
 
     def unravel(
         self,
         product_node: int,
     ) -> tuple[int,int]:
         return (
-            product_node // self.right_operand_order,
-            product_node % self.right_operand_order,
+            product_node // self.upper_operand_order,
+            product_node % self.upper_operand_order,
         )

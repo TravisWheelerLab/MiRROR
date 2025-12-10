@@ -22,8 +22,8 @@ class AlignmentResult(SerializableDataclass):
     fragment_masses: np.ndarray
     symmetries: list[np.ndarray]
     prod_topology: list[WeightedProductGraph]
-    left_topology: list[SpectrumGraph]
-    right_topology: list[SpectrumGraph]
+    lower_topology: list[SpectrumGraph]
+    upper_topology: list[SpectrumGraph]
     pivot_topology: list[PivotGraph]
     _profile: dict[str, float]
 
@@ -62,12 +62,12 @@ def align(
     profile = {}
 
     t = time()
-    fragment_masses, symmetries, left_topology, right_topology, pivot_topology = construct_spectrum_topology(
+    fragment_masses, symmetries, lower_topology, upper_topology, pivot_topology = construct_spectrum_topology(
         anno.peaks,
         anno.pairs,
-        anno.left_boundaries,
+        anno.lower_boundaries,
         anno.pivots,
-        anno.right_boundaries,
+        anno.upper_boundaries,
         anno.tolerance,
         params.weight_key,
     )
@@ -79,26 +79,26 @@ def align(
     prod_topology = [propagate_cost(
             l,
             l.sources(),
-            r,
-            r.sources(),
+            u,
+            u.sources(),
             params.cost_threshold,
             MatchedNodeCostModel(
-                (ravel(i, j, r.order()) for (i,j) in sym),
+                (ravel(i, j, u.order()) for (i,j) in sym),
                 params.node_match_cost,
                 params.node_mismatch_cost,
             ),
             AnnotatedProductEdgeCostModel(
                 l,
-                r,
+                u,
                 params.weight_key,
                 anno.pairs,
-                anno.left_boundaries,
+                anno.lower_boundaries,
                 rb,
                 params.edge_match_cost,
                 params.edge_mismatch_cost,
                 params.edge_gap_cost,
             ),
-        ) for (l,r,sym,rb) in zip(left_topology,right_topology,symmetries,anno.right_boundaries)]
+        ) for (l,u,sym,rb) in zip(lower_topology,upper_topology,symmetries,anno.upper_boundaries)]
     profile["propagate"] = time() - t
     if verbose:
         pass
@@ -109,8 +109,8 @@ def align(
         fragment_masses,
         symmetries,
         prod_topology,
-        left_topology,
-        right_topology,
+        lower_topology,
+        upper_topology,
         pivot_topology,
         profile,
     )

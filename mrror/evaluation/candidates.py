@@ -46,7 +46,7 @@ class CandidateResult:
         l, r = self.seq_segment[i:i+2]
         return self.sequence[l:r]
 
-    def _get_peak_indices(
+    def _peak_index_and_charge(
         self,
         path: Iterable[int],
         peaks: Peaks,
@@ -57,8 +57,13 @@ class CandidateResult:
     ) -> np.ndarray:
         weights = [topology.get_weight(j, i) for (i, j) in it.pairwise(path)]
         boundary_index = boundaries.index[weights[-1][0]]
-        pair_indices = [pairs.indices[pair_component,x].tolist() for x in weights[:-1]]
-        return np.array(pair_indices + [boundary_index,])
+        boundary_charge = boundaries.charge[weights[-1][0]]
+        pair_indices = [pairs.indices[x,pair_component].tolist() for x in weights[:-1]]
+        pair_charges = [pairs.charges[x,pair_component].tolist() for x in weights[:-1]]
+        return (
+            np.array(pair_indices + [boundary_index,]),
+            np.array(pair_charges + [boundary_charge,]),
+        )
 
     def _get_peaks(
         self,
@@ -71,7 +76,7 @@ class CandidateResult:
         pair_component: int # 0 or 1
     ) -> tuple[np.ndarray, np.ndarray]:
         prefix_path = path[:pivot_idx][::-1]
-        prefix_peak_idx = self._get_peak_indices(
+        prefix_peak_idx, prefix_charge = self._peak_index_and_charge(
             prefix_path,
             peaks,
             topology,
@@ -83,7 +88,7 @@ class CandidateResult:
         prefix_intensity = peaks.intensity[prefix_peak_idx]
         # flip the first half of the path and recover its data.
         suffix_path = path[pivot_idx:]
-        suffix_peak_idx = self._get_peak_indices(
+        suffix_peak_idx, suffix_charge = self._peak_index_and_charge(
             suffix_path,
             peaks,
             topology,
@@ -97,6 +102,7 @@ class CandidateResult:
         return (
             np.concat([prefix_mz[::-1], suffix_mz]),
             np.concat([prefix_intensity[::-1], suffix_intensity]),
+            np.concat([prefix_charge[::-1], suffix_charge])
         )
 
     def get_peaks(
@@ -104,11 +110,11 @@ class CandidateResult:
         i: int,
         peaks: Peaks,
         pairs: PairResult,
-        left_boundaries: BoundaryResult,
-        right_boundaries: BoundaryResult,
+        lower_boundaries: BoundaryResult,
+        upper_boundaries: BoundaryResult,
         prod_topology: WeightedProductGraph,
-        left_topology: SpectrumGraph,
-        right_topology: SpectrumGraph,
+        lower_topology: SpectrumGraph,
+        upper_topology: SpectrumGraph,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Reconstruct the m/z and intensity values of the peaks supporting a given candidate.
         NOTE: the arrays returned by this function are ordered according to the candidate path in the product topology, not by m/z. The output takes the form (
@@ -121,50 +127,45 @@ class CandidateResult:
         # recover the path and unravel it
         path_pivot = self.path_pivot_idx[i]
         # describes where the direction of the path flips
-        left_mz, left_intensity = self._get_peaks(
+        left_mz, left_intensity, left_charge = self._get_peaks(
             left_path,
             peaks,
             path_pivot,
-            left_topology,
+            lower_topology,
             pairs,
-            left_boundaries,
+            lower_boundaries,
             pair_component = 1,
         )
-        right_mz, right_intensity = self._get_peaks(
+        right_mz, right_intensity, right_charge = self._get_peaks(
             right_path,
             peaks,
             path_pivot,
-            right_topology,
+            upper_topology,
             pairs,
-            right_boundaries,
+            upper_boundaries,
             pair_component = 0,
         )
         # retrieve data for left and right components of path.
         return (
             np.concat([left_mz, right_mz]),
             np.concat([left_intensity, right_intensity]),
+            np.concat([left_charge, right_charge]),
         )
 
     def get_series(self, i: int) -> np.ndarray:
-        """Annotate the series of each peak supporting a given candidate.
-        NOTE: the arrays returned by this function are ordered according to the candidate path in the product topology."""
+        """Annotate the series of each peak supporting a given candidate."""
         seq = self.get_sequence(i)
-        return np.concat([['b','y'] for _ in range(self.seq_segment[i + 1] - self.seq_segment[i] - 1)])
+        return np.concat([
+            ['b','y'] 
+            for _ in range(self.seq_segment[i + 1] - self.seq_segment[i] - 1)
+        ])
 
     def get_position(self, i: int) -> np.ndarray:
-        """Annotate the position of each peak supporting a given candidate.
-        NOTE: the arrays returned by this function are ordered according to the candidate path in the product topology."""
-        return 1 + np.concat([[x, x] for x in range(self.seq_segment[i + 1] - self.seq_segment[i] - 1)])
-
-    def get_annotation(
-        self,
-        i: int,
-    ) -> tuple[list[np.ndarray], list[np.ndarray], list[np.ndarray]]:
-        """Annotate the charge, loss, and modifications of each peak supporting a given candidate.
-        NOTE: the arrays returned by this function are ordered according to the candidate peptide sequence, not by any intrinsic properties. To get something resembling a spectrum, sort by m/z."""
-        # TODO
-        dummy = 2 * [-1 for _ in range(self.seq_segment[i + 1] - self.seq_segment[i] - 1)]
-        return (dummy, dummy, dummy)
+        """Annotate the position of each peak supporting a given candidate."""
+        return 1 + np.concat([
+            [x, x] 
+            for x in range(self.seq_segment[i + 1] - self.seq_segment[i] - 1)
+        ])
 
     @classmethod
     def from_list(
@@ -172,6 +173,7 @@ class CandidateResult:
         candidates: list[tuple[float,str,np.ndarray,float,float]],
     ):
         masses, paths, path_pivots, sequences, annotations, offsets, costs = [np.array(x,dtype=object) for x in zip(*candidates)]
+        print("ANNOTATIONS", len(annotations))
         order = np.argsort(costs)
         return cls(
             mass = masses[order],
@@ -256,11 +258,13 @@ def generate_candidates(
         suffix_cost, suffix_path, suffix_sym, suffix_masses = aligned_affixes[suffix_id][:4]
         # retrieve affix costs, symbols, and masses.
        
-        candidate_masses = prefix_masses[::-1] + [pivot_mass,] + suffix_masses
+        candidate_masses = prefix_masses[1:][::-1] + [pivot_mass,] + suffix_masses[1:]
         candidate_path = np.concat([prefix_path[::-1], suffix_path])
-        candidate_annotation = prefix_sym[::-1] + [pivot_sym,] + suffix_sym
+        candidate_annotation = prefix_sym[1:][::-1] + [pivot_sym,] + suffix_sym[1:]
         candidate_cost = prefix_cost + pivot_cost + suffix_cost
-        seq = [x[0][0] for x in candidate_annotation]
+        # combine affix and pivot data. prefixes need to be reversed. all affixe annotations begin with a null character, due to the pivot sink edge, which must be trimmed.
+        print("ANNO",len(candidate_annotation))
+        
         mass_seq = [x[0] for x in candidate_masses]
         observed_mass = np.sum(mass_seq) / 2
         expected_mass = 2 * pivot_cluster
@@ -269,12 +273,15 @@ def generate_candidates(
         candidate_expected_mass = expected_mass[optimal_pivot]
         candidate_mass_offset = mass_offset_cluster[optimal_pivot]
         # form candidate.
-        
+
+        greedy_seq = ''.join([x[0][0].strip() for x in candidate_annotation])
+        # assemble a greedy candidate sequence.
+
         candidates.append((
             candidate_expected_mass,            # mass
             candidate_path,                     # path
             len(prefix_path),                   # path pivot
-            ''.join([x.strip() for x in seq]),  # sequence
+            greedy_seq,                         # sequence
             candidate_annotation,               # annotation
             candidate_mass_offset,              # offset from pivot mass
             candidate_cost,                     # integrated cost

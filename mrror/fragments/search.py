@@ -37,9 +37,11 @@ def _find_pairs_minimal(
         ])
         results.append(result_data[result_mask])
         queries.append(query_masses[result_mask])
+    results = np.vstack(results)
+    queries = np.concat(queries)
     return (
-        np.vstack(results).T,
-        np.hstack(queries),
+        results,
+        queries,
     )
 
 def _find_pairs(
@@ -83,8 +85,8 @@ def _find_pairs(
         right_indices,
         hits_lo,
         hits_hi,
-    ])
-    result_data = result_data[:,result_mask]
+    ]).T
+    result_data = result_data[result_mask]
     query_masses = query_masses[result_mask]
     # remove results with no hits
 
@@ -113,17 +115,17 @@ def find_pairs(
         )
     else:
         raise ValueError(f"unrecognized pair search mode {mode}")
-    local_indices = results[:2,:]
+    local_indices = results[:,:2]
     global_indices = peaks.get_original_indices(local_indices)
     # reindex augmented peak indices to original peak indices
-    loop_mask = global_indices[0,:] != global_indices[1,:]
+    loop_mask = global_indices[:,0] != global_indices[:,1]
     # remove loops
     query_masses = queries[loop_mask]
-    features, feature_costs, feature_segments = targets.resolve_pairs(results[2:4,loop_mask], query_masses)
+    features, feature_costs, feature_segments = targets.resolve_pairs(results[loop_mask,2:4], query_masses)
     # expand target hit range to features and calculate costs
     return PairResult(
-        indices = global_indices[:,loop_mask],
-        charges = peaks.get_augmenting_charges(local_indices[:,loop_mask]),
+        indices = global_indices[loop_mask],
+        charges = peaks.get_augmenting_charges(local_indices[loop_mask]),
         features = features,
         costs = feature_costs,
         segments = feature_segments,
@@ -167,8 +169,8 @@ def _find_boundaries(
         query_indices,
         hits_lo,
         hits_hi,
-    ])
-    result_data = result_data[:,result_mask]
+    ]).T
+    result_data = result_data[result_mask]
     query_masses = query_masses[result_mask]
     # remove results with no hits
 
@@ -188,10 +190,10 @@ def find_boundaries(
         tolerance,
         targets.boundary_masses[k - 1]
     )
-    features, feature_costs, feature_segments = targets.resolve_boundaries(results[1:,:], queries, k - 1)
+    features, feature_costs, feature_segments = targets.resolve_boundaries(results[:,1:], queries, k - 1)
     return BoundaryResult(
-        index = peaks.get_original_indices(results[0,:]),
-        charge = peaks.get_augmenting_charges(results[0,:]),
+        index = peaks.get_original_indices(results[:,0]),
+        charge = peaks.get_augmenting_charges(results[:,0]),
         features = features,
         costs = feature_costs,
         segments = feature_segments,
@@ -225,7 +227,7 @@ def _find_overlap_pivots(
     tolerance: float,
 ) -> Iterator[tuple[int,int]]:
     n = len(spectrum)
-    for (i, i2) in zip(pairs[0,:],pairs[1,:]):
+    for (i, i2) in zip(pairs[:,0],pairs[:,1]):
         mass_i = spectrum[i2] - spectrum[i]
         for j in range(i + 1, i2):
             for j2 in range(i2 + 1, n):

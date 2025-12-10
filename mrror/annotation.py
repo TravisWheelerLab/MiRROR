@@ -18,8 +18,8 @@ class AnnotationResult(SerializableDataclass):
     peaks: Peaks
     pairs: PairResult
     pivots: PivotResult
-    left_boundaries: BoundaryResult
-    right_boundaries: list[BoundaryResult]
+    lower_boundaries: BoundaryResult
+    upper_boundaries: list[BoundaryResult]
     tolerance: float
     
     _profile: dict[str,float] = None
@@ -32,18 +32,18 @@ class AnnotationResult(SerializableDataclass):
         peaks: Peaks,
         pairs: PairResult,
         pivots: PivotResult,
-        left_boundaries: BoundaryResult,
-        right_boundaries: list[BoundaryResult],
+        lower_boundaries: BoundaryResult,
+        upper_boundaries: list[BoundaryResult],
         tolerance: float,
         profile: dict[str,float],
     ) -> Self:
-        assert len(pivots) == len(right_boundaries)
+        assert len(pivots) == len(upper_boundaries)
         return cls(
             peaks = peaks.to_peaks(),
             pairs = pairs,
             pivots = pivots,
-            left_boundaries = left_boundaries,
-            right_boundaries = right_boundaries,
+            lower_boundaries = lower_boundaries,
+            upper_boundaries = upper_boundaries,
             tolerance = tolerance,
             _profile = profile,
         )
@@ -217,14 +217,14 @@ def annotate(
     # pivots
     
     t = time()
-    left_boundaries = find_boundaries(
+    lower_boundaries = find_boundaries(
         peaks = decharged_peaks,
         tolerance = params.query_tolerance,
         targets = targets,
     )
-    profile["left_boundaries"] = time() - t
+    profile["lower_boundaries"] = time() - t
     if verbose:
-        print(left_boundaries)
+        print(lower_boundaries)
     # low-mz boundaries
     
     t = time()
@@ -234,15 +234,15 @@ def annotate(
             pivot_point=pivot_pt,
         ) for pivot_pt in pivots.cluster_points]
     ## cluster points correspond to reflections
-    right_boundaries = [find_boundaries(
+    upper_boundaries = [find_boundaries(
             peaks = refl,
             tolerance = params.query_tolerance,
             targets = targets,
         ) for refl in reflected_peaks]
     ## each reflected spectrum has its own set of right boundaries
-    profile["right_boundaries"] = time() - t
+    profile["upper_boundaries"] = time() - t
     if verbose:
-        print(right_boundaries)
+        print(upper_boundaries)
     # high-mz boundaries
     
     if verbose:
@@ -251,8 +251,8 @@ def annotate(
         peaks,
         pairs,
         pivots,
-        left_boundaries,
-        right_boundaries,
+        lower_boundaries,
+        upper_boundaries,
         params.query_tolerance,
         profile,
     )

@@ -20,26 +20,26 @@ class AbstractEdgeCostModel(abc.ABC):
         """Calculates the cost of traversing an edge."""
 
 def strong_product_neighbors(
-    left_adj: list[list[int]],
-    right_adj: list[list[int]],
-    curr_left_node: int,
-    curr_right_node: int,
+    lower_adj: list[list[int]],
+    upper_adj: list[list[int]],
+    curr_lower_node: int,
+    curr_upper_node: int,
 ) -> Iterator[tuple[int,int,float]]:
-    for next_left_node in left_adj[curr_left_node]:
-        for next_right_node in right_adj[curr_right_node]:
-            yield (next_left_node, next_right_node)
+    for next_lower_node in lower_adj[curr_lower_node]:
+        for next_upper_node in upper_adj[curr_upper_node]:
+            yield (next_lower_node, next_upper_node)
     # direct edges
-    for next_left_node in left_adj[curr_left_node]:
-        yield (next_left_node, curr_right_node)
+    for next_lower_node in lower_adj[curr_lower_node]:
+        yield (next_lower_node, curr_upper_node)
     # vertical box edges
-    for next_right_node in right_adj[curr_right_node]:
-        yield (curr_left_node, next_right_node)
+    for next_upper_node in upper_adj[curr_upper_node]:
+        yield (curr_lower_node, next_upper_node)
     # horizontal box edges
 
 def _propagate_cost(
-    left_adj: list[np.ndarray],
-    right_adj: list[np.ndarray],
-    right_order: int,
+    lower_adj: list[np.ndarray],
+    upper_adj: list[np.ndarray],
+    upper_order: int,
     initial_conditions: list[tuple[float,Any,int,int]],
     threshold: float,
     node_cost_model: Callable[[int],float],
@@ -66,9 +66,9 @@ def _propagate_cost(
                 prod.add_node(curr_node)
                 cost[int(curr_node)] = curr_cost
                 # reached a new node; record its index, label, and cost.
-                neighbors = list(strong_product_neighbors(left_adj, right_adj, *unravel(curr_node, right_order)))
+                neighbors = list(strong_product_neighbors(lower_adj, upper_adj, *unravel(curr_node, upper_order)))
                 for (l, r) in neighbors:
-                    next_node = ravel(l, r, right_order)
+                    next_node = ravel(l, r, upper_order)
                     node_cost = node_cost_model(next_node)
                     edge_cost, next_edge_weight = edge_cost_model(curr_node, next_node)
                     next_cost = curr_cost + edge_cost + node_cost
@@ -93,20 +93,20 @@ def _propagate_cost(
 
 def propagate_cost(
     left: SpectrumGraph,
-    left_sources: Iterator[int],
+    lower_sources: Iterator[int],
     right: SpectrumGraph,
-    right_sources: Iterator[int],
+    upper_sources: Iterator[int],
     threshold: float,
     node_cost_model: AbstractNodeCostModel,
     edge_cost_model: AbstractEdgeCostModel,
 ) -> WeightedProductGraph:
-    right_order = int(right.order())
-    product_sources = [ravel(u, w, right_order) for (u,w) in it.product(left_sources,right_sources)]
+    upper_order = int(right.order())
+    product_sources = [ravel(u, w, upper_order) for (u,w) in it.product(lower_sources,upper_sources)]
     initial_conditions = [(node_cost_model(v), None, None, v) for v in product_sources]
     sparse_product, propagated_costs, compared_edges = _propagate_cost(
         left.graph.adj,
         right.graph.adj,
-        right_order,
+        upper_order,
         initial_conditions,
         threshold,
         node_cost_model,
@@ -114,7 +114,7 @@ def propagate_cost(
     )
     return WeightedProductGraph(
         graph = sparse_product,
-        right_operand_order = right_order,
+        upper_operand_order = upper_order,
         node_weights = propagated_costs,
         edge_weights = compared_edges,
     )

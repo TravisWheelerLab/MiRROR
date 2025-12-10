@@ -140,17 +140,17 @@ class TargetMassStateSpace:
         target_features: np.ndarray,
         null_indices: list[np.ndarray],
     ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-        features = [target_features[l:r,:] for (l,r) in hit_ranges.T]
-        offsets = [np.abs(qm - target_masses[l:r]) for (qm,(l,r)) in zip(query_masses,hit_ranges.T)]
+        features = [target_features[l:r,:] for (l,r) in hit_ranges]
+        offsets = [np.abs(qm - target_masses[l:r]) for (qm,(l,r)) in zip(query_masses,hit_ranges)]
         complexities = [cls._count_nonnull(x[:,1:],null_indices) for x in features]
         costs = [(o * (1 + c)) for (o,c) in zip(offsets,complexities)]
-        segments = np.cumsum(hit_ranges[1,:] - hit_ranges[0,:]) # + 1
+        segments = np.cumsum(hit_ranges[:,1] - hit_ranges[:,0]) # + 1
         return (
             np.concat(features),
             np.concat(costs),
             np.concat([[0], segments]),
             np.concat(offsets),
-            np.concat([target_masses[l:r] for (l,r) in hit_ranges.T])
+            np.concat([target_masses[l:r] for (l,r) in hit_ranges])
         )
     
     def resolve_pairs(
@@ -341,7 +341,6 @@ class AbstractAnnotation(abc.ABC):
     def len(self):
         return len(self.segments) - 1
 
-
     def get_annotation(self, i: int) -> tuple[float,np.ndarray]:
         if i == -1:
             return (
@@ -392,7 +391,7 @@ class PairResult(AbstractAnnotation):
     def symbolize(self, targets: TargetMassStateSpace) -> str:
         features = targets.symbolize_pairs(self.features)
         sym = ["PairResult"]
-        return self._symbolize(features, sym, self.segments, self.indices.T, self.costs)
+        return self._symbolize(features, sym, self.segments, self.indices, self.costs)
 
 @dataclasses.dataclass(slots=True)
 class BoundaryResult(AbstractAnnotation):
