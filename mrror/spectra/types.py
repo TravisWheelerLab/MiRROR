@@ -63,13 +63,13 @@ class SimulatedPeaks(Peaks):
             opt = np.argmax(pos)
         return idx[opt]
 
-    def left_boundaries(self) -> tuple[int,int]:
+    def lower_boundaries(self) -> tuple[int,int]:
         return (
             self._boundary('b','left'),
             self._boundary('y','left'),
         )
 
-    def right_boundaries(self) -> tuple[int,int]:
+    def upper_boundaries(self) -> tuple[int,int]:
         return (
             self._boundary('b','right'),
             self._boundary('y','right'),

@@ -122,7 +122,11 @@ def pair_affixes(
     sfx_clusters, sfx_clust_id = np.unique(sfx_nodes, axis=0, return_inverse=True)
     # cluster initial nodes, effectively grouping paths by the node they start on.
 
+    print(unraveled_pfx_clusters)
+
     pivot_adj = pivot_topology.graph.adj
+    for x in pivot_adj:
+        print(x, list(pivot_adj[x].keys()))
     pfx_adj_nodes = [[product_topology.ravel(x,v) for (v,x) in it.product(pivot_adj[u],pivot_adj[w])] for (u,w) in unraveled_pfx_clusters]
     pfx_adj_offset = np.cumsum([0,] + [len(x) for x in pfx_adj_nodes])
     pfx_adj_nodes = np.concat(pfx_adj_nodes)

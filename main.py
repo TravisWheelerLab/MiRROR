@@ -222,7 +222,6 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
 
     peaks = SimulatedPeaks.from_peptide(cfg['input'],initial_b=spec_cfg.initial_b)
 
-    true_alignments = peaks.alignments()
     if app_cfg.verbosity > 0:
         print("peptide\n- ", peaks.peptide)
         print("peaks\n- ", peaks.mz)
@@ -231,7 +230,11 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
         print("right boundaries\n- ", peaks.upper_boundaries())
         print("pairs\n- ", peaks.pairs())
         print("paths\n- ", peaks.paths())
-        print("alignments\n- ", true_alignments)
+        try:
+            true_alignments = peaks.alignments()
+            print("alignments\n- ", true_alignments)
+        except ValueError:
+            print("alignments could not be produced for this spectrum.")
 
     anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 3)
     anno_res.save(output_dir / f"{app_cfg.session_name}.anno")
@@ -296,25 +299,28 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
     c = 0
     print("peaks:", peaks, len(peaks))
     for (i, cand_res) in enumerate(enmr_res.candidates):
-        abs_offset = np.abs(cand_res.offset)
-        min_offset = abs_offset.min()
-        max_offset = abs_offset.max()
-        for (j, cand) in enumerate(cand_res):
-            if c < cfg.num_out:
-                c += 1
-                cost, seq, path, anno, offset = cand
-                normalized_offset = (np.abs(offset) - min_offset) / (max_offset - min_offset)
-                print(c, (i, j), float(cost.round(4)), seq.replace(' ',''), float(offset.round(4)))
-                annotated_peaks = AnnotatedPeaks.from_evaluation(
-                    peaks = peaks,
-                    annotation = (anno_res, anno_params),
-                    cluster = i,
-                    alignment = (algn_res, algn_params),
-                    enumeration = (enmr_res, enmr_params),
-                    candidate = j,
-                )
-            else:
-                break
+        n_cand = len(cand_res)
+        print(f"cluster {i} produced {n_cand} candidate{'s' if n_cand != 1 else ''}.")
+        if n_cand > 0:
+            abs_offset = np.abs(cand_res.offset)
+            min_offset = abs_offset.min()
+            max_offset = abs_offset.max()
+            for (j, cand) in enumerate(cand_res):
+                if c < cfg.num_out:
+                    c += 1
+                    cost, seq, path, anno, offset = cand
+                    normalized_offset = (np.abs(offset) - min_offset) / (max_offset - min_offset) if n_cand > 1 else cand_res.offset[0]
+                    print(c, (i, j), float(cost.round(4)), seq.replace(' ',''), float(offset.round(4)))
+                    annotated_peaks = AnnotatedPeaks.from_evaluation(
+                        peaks = peaks,
+                        annotation = (anno_res, anno_params),
+                        cluster = i,
+                        alignment = (algn_res, algn_params),
+                        enumeration = (enmr_res, enmr_params),
+                        candidate = j,
+                    )
+                else:
+                    break
 
 @hydra.main(version_base=None, config_path="params", config_name="config")
 def main(cfg: DictConfig) -> None:

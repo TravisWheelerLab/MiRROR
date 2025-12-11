@@ -190,10 +190,13 @@ class CandidateResult:
     @classmethod
     def empty(cls) -> Self:
         return cls(
-            mass = 0.,
+            mass = np.array([]),
             sequence = "",
+            seq_segment = np.array([0]),
+            path = np.array([]),
+            path_segment = np.array([0]),
+            path_pivot_idx = 0,
             annotation = np.array([]),
-            segment = np.array([0]),
             offset = np.array([],dtype=float),
             cost = np.array([np.inf]),
         )

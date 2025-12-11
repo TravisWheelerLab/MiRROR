@@ -43,7 +43,11 @@ class SpectrumGraph:
         g = nx.DiGraph()
         g.add_weighted_edges_from(edges, weight=weight_key)
         # construct digraph with edges
-        boundary_source = max(edges.max(),boundaries.max()) + 1
+        if boundaries.size > 0:
+            boundary_source = max(edges.max(),boundaries.max()) + 1
+        else:
+            boundary_source = edges.max() + 1
+            # handle empty boundaries.
         pivot_sink = boundary_source + 1
         # create an artificial source to point to boundaries and likewise a sink to pivots.
         g.add_weighted_edges_from(((boundary_source,x,(w,1)) for (x,w) in boundaries), weight=weight_key)

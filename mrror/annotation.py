@@ -79,7 +79,7 @@ class AnnotationParams(SerializableDataclass):
         mod_mass = np.array(mod['masses'])
         mod_sym = np.array(mod['symbols'])
         mod_appl = [np.array(x) for x in mod['application']]
-        mod_max_num = mod['max_num']
+        max_num_mods= mod['max_num']
         mod_nulls = np.array(mod['nulls'])
         residue_space = ResidueStateSpace(
             res_mass,
@@ -88,7 +88,7 @@ class AnnotationParams(SerializableDataclass):
             mod_sym,
             mod_nulls,
             mod_appl,
-            mod_max_num,
+            max_num_mods,
         )
         # residue space
 
@@ -106,18 +106,22 @@ class AnnotationParams(SerializableDataclass):
         dimer_space = MultiResidueStateSpace.from_nonunique_pairs(
             dimer_masses,
             dimers,
-            #mod_mass,
-            #mod_sym,
-            #mod_appl,
-            #mod_num * 2,
+            mod_mass,
+            mod_sym,
+            mod_nulls,
+            mod_appl,
+            max_num_mods = max_num_mods * 2,
+            alphabet = res_sym,
         )
         trimer_space = MultiResidueStateSpace.from_nonunique_pairs(
             trimer_masses,
             trimers,
-            #=od_mass,
-            #=od_sym,
-            #=od_appl,
-            #=od_num * 3,
+            mod_mass,
+            mod_sym,
+            mod_nulls,
+            mod_appl,
+            max_num_mods = max_num_mods * 3,
+            alphabet = res_sym,
         )
         # dimer and trimer spaces. restricted by a suffix array, if passed.
         
@@ -144,8 +148,7 @@ class AnnotationParams(SerializableDataclass):
         boundary_mass = (ser_mass.reshape(n_ser,1) + loss_mass.reshape(1, n_loss)).flatten()
         boundary_sym = (ser_sym.reshape(n_ser,1) + ' ' + loss_sym.reshape(1, n_loss)).flatten()
         boundary_nulls = [x + (i * n_loss) for x in loss_nulls for i in range(n_ser)]
-        # TODO TODO TODO TODO TODO TODO TODO TODO TODO
-        boundary_appl = sum([loss_appl] * n_ser, start=[])
+        boundary_appl = [np.concat([boundary_nulls, x[1:]]) for x in loss_appl]
         boundary_fragment_space = FragmentStateSpace(
             boundary_mass,
             boundary_sym,

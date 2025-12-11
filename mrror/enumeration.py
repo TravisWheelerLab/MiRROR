@@ -131,14 +131,18 @@ def enumerate_candidates(
     profile["trace"] = time() - t
     # end step 1, print results.
     if verbose:
+        cluster = 0
         for (a,p,s,i) in zip(aligned_affixes,prefixes,suffixes,infixes):
             for (tag,afx) in (("prefix",p),("suffix",s),("infix",i)):
                 for (x,y) in afx:
-                    cost, __, annotation = a[x][:3]
+                    cost, path, annotation = a[x][:3]
                     anno_res = [u[:,0] for u in annotation]
                     anno_loss = [u[:,2] for u in annotation]
                     term = anno_loss[-1][y]
-                    print(f"{tag} {x} {y} {cost} {[v[0] for v in anno_res]} {term}")
+                    unraveled_path = [algn.prod_topology[cluster].unravel(x) for x in path]
+                    lpath, upath = zip(*unraveled_path)
+                    print(f"{tag} {x} {y} {cost} {[v[0] for v in anno_res]} {term} {path} {lpath} {upath}")
+            cluster += 1
 
     # step 2: combine affixes and pivot edges to construct peptide sequences.
     for i in range(n):

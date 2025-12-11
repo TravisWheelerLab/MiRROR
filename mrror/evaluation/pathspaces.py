@@ -76,6 +76,9 @@ class AnnotatedResiduePathSpace(AbstractPathSpace):
     ) -> Self:
         trace_results = list(trace_results)
         n_paths = len(trace_results)
+        if n_paths == 0:
+            return cls.empty()
+            # handle empty results.
         costs = np.empty((n_paths,), dtype=float)
         paths = np.empty((n_paths,), dtype=list)
         path_annotations = np.empty((n_paths,), dtype=list)

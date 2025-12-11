@@ -26,8 +26,11 @@ class FragmentStateSpace:
             applicable_losses = [np.array([0]) for _ in range(20)],
             charges = np.array([1]))
 
-    def n_losses(self) -> int:
-        return len(self.loss_masses)
+    def n_losses(self, amino_id: int) -> int:
+        return len(self.applicable_losses[amino_id])
+
+    def get_losses(self, amino_id: int) -> list[float]:
+        return self.applicable_losses[amino_id]
 
 @dataclasses.dataclass(slots=True)
 class ResidueStateSpace:
@@ -54,7 +57,7 @@ class ResidueStateSpace:
         return len(self.applicable_modifications[amino_id])
 
     def get_modifications(self, amino_id: int) -> list[float]:
-        return self.modification_masses[self.applicable_modifications[amino_id]]
+        return self.applicable_modifications[amino_id]
 
 @dataclasses.dataclass(slots=True)
 class MultiResidueStateSpace(ResidueStateSpace):
@@ -62,6 +65,8 @@ class MultiResidueStateSpace(ResidueStateSpace):
     # [float; k]
     amino_symbols: list[np.ndarray]
     # [[str; _]; k]
+    amino_clusters: list[list[np.ndarray]]
+    # [[int; _]; k]
     modification_masses: np.ndarray
     # [float; k]
     modification_symbols: np.ndarray
@@ -79,24 +84,47 @@ class MultiResidueStateSpace(ResidueStateSpace):
         cls,
         masses: np.ndarray,
         words: np.ndarray,
-        #mod_masses: np.ndarray,
-        #mod_symbols: np.ndarray,
-        #applicable_mods: list[np.ndarray],
-        #max_num_mods: int,
+        mod_masses: np.ndarray,
+        mod_symbols: np.ndarray,
+        mod_nulls: np.ndarray,
+        applicable_mods: list[np.ndarray],
+        max_num_mods: int,
+        alphabet: np.ndarray,
     ) -> Self:
         unique_masses, reindexer = np.unique_inverse(masses)
-        clustered_words = [[] for _ in range(len(unique_masses))]
-        clustered_mods = [[] for _ in range(len(unique_masses))]
-        for (i, w) in enumerate(words):
-            clustered_words[reindexer[i]].append(w)
+        n_masses = len(unique_masses)
+        # construct mass clusters
+
+        clustered_words = [[] for _ in range(n_masses)]
+        for (idx, word) in enumerate(words):
+            clustered_words[reindexer[idx]].append(word)
+        clustered_words = [np.array(x) for x in clustered_words]
+        # group words by mass clusters
+
+        amino_ids = np.arange(len(alphabet))
+        alphabet = np.array(alphabet)
+        alphabet_order = np.argsort(alphabet)
+        sorted_alphabet = np.array(alphabet)[alphabet_order]
+        sorted_amino_ids = amino_ids[alphabet_order]
+        clustered_ids = [[] for _ in range(n_masses)]
+        for i in range(n_masses):
+            id_cluster = set()
+            for word in clustered_words[i]:
+                word_amino_ids = sorted(np.searchsorted(sorted_alphabet, np.array(list(word))))
+                word_amino_ids = sorted_amino_ids[word_amino_ids]
+                id_cluster.add(tuple(word_amino_ids))
+            clustered_ids[i] = [np.array(list(x)) for x in id_cluster]
+        # group amino ids by mass clusters
+
         return cls(
-            unique_masses,
-            [np.array(x) for x in clustered_words],
-            np.array([0.]),#mod_masses,
-            np.array(['']),#mod_symbols,
-            np.array([0]),#mod_nulls,
-            [np.array([0]) for _ in unique_masses],#applicable_mods,
-            0,#max_num_mods,
+            amino_masses = unique_masses,
+            amino_symbols = clustered_words,
+            amino_clusters = clustered_ids,
+            modification_masses = mod_masses,
+            modification_symbols = mod_symbols,
+            modification_null_indices = mod_nulls,
+            applicable_modifications = applicable_mods,
+            max_num_modifications = max_num_mods,
         )
 
     def n_aminos(self) -> int:
@@ -270,36 +298,109 @@ class TargetMassStateSpace:
         return ([x for x in series_loss_symbols if x.startswith(series_sym)] for series_sym in series)
 
     @staticmethod
-    def _augment_masses(
+    def _augment_single_residue_masses(
         left_fragment_space: FragmentStateSpace,
         right_fragment_space: FragmentStateSpace,
         residue_space: ResidueStateSpace,
     ) -> tuple[list[float],list[tuple[int,int,int,int]]]:
-        amino_masses = residue_space.amino_masses.reshape(residue_space.n_aminos(), 1, 1, 1)
-        left_loss_masses = left_fragment_space.loss_masses.reshape(1, left_fragment_space.n_losses(), 1, 1)
-        right_loss_masses = right_fragment_space.loss_masses.reshape(1, 1, right_fragment_space.n_losses(), 1)
-        # generate the unconditional augments as the 3-tensor sum of orthogonal amino, left loss, and right loss vectors. it is shaped/typed as a 4-tensor because we'll need the extra dimension later when adding in the conditional
-        unconditional_augment_tensor = amino_masses + left_loss_masses - right_loss_masses
-        ## recall: the residue mass = right fragment mass - left fragment mass. that means:
-        ## left loss decreases the left fragment mass, which increases the observed residue mass.
-        ## right loss decreases the right fragment mass, which decreases the observed residue mass.
-        augmented_masses = []
-        augmented_indices = []
-        for amino_id in range(residue_space.n_aminos()):
-            unc_aug_matrix = unconditional_augment_tensor[amino_id, :, :, :]
-            con_aug_vector = residue_space.get_modifications(amino_id).reshape(1, 1, 1, residue_space.n_modifications(amino_id))
-            amino_aug_tensor = unc_aug_matrix + con_aug_vector
-            amino_aug_masses = amino_aug_tensor.flatten()
-            augmented_masses.extend(amino_aug_masses)
-            x, left_loss_ind, right_loss_ind, modification_ind = np.unravel_index(np.arange(len(amino_aug_masses)), amino_aug_tensor.shape)
-            amino_aug_indices = zip(it.repeat(amino_id), left_loss_ind, right_loss_ind, modification_ind)
-            augmented_indices.extend(amino_aug_indices)
-        # iterate along the amino (first) axis, construct the conditional augment vectors and apply them to the unconditional augment matrix associated to each amino id.
+        n_aminos = residue_space.n_aminos()
+        n_augments_per_amino = [
+            left_fragment_space.n_losses(i) * right_fragment_space.n_losses(i) * residue_space.n_modifications(i)
+            for i in range(n_aminos)
+        ]
+        n_augmented_masses = sum(n_augments_per_amino)
+        augmented_masses = np.empty((n_augmented_masses,), dtype=float)
+        augmented_indices = np.empty((n_augmented_masses,4), dtype=int)
+        # count augments and set up augment arrays
+
+        pos = 0
+        for amino_id in range(n_aminos):
+            amino_mass = residue_space.amino_masses[amino_id]
+            mods = residue_space.get_modifications(amino_id)
+            left_losses = left_fragment_space.get_losses(amino_id)
+            right_losses = right_fragment_space.get_losses(amino_id)
+            for mod_id in mods:
+                mod_mass = residue_space.modification_masses[mod_id]
+                for left_loss_id in left_losses:
+                    left_loss_mass = left_fragment_space.loss_masses[left_loss_id]
+                    for right_loss_id in right_losses:
+                        right_loss_mass = right_fragment_space.loss_masses[right_loss_id]
+                        augmented_masses[pos] = amino_mass + left_loss_mass - right_loss_mass + mod_mass
+                        augmented_indices[pos] = [amino_id, left_loss_id, right_loss_id, mod_id]
+                        pos += 1
+        # iterate aminos, conditionally iterate modifications and losses.
+
         augmented_masses = np.array(augmented_masses)
         augmented_indices = np.array(augmented_indices)
         index_key = np.argsort(augmented_masses)
         # argsort by augmented mass and reorder the indices accordingly to construct the index unaveler.
+
         return augmented_masses[index_key], augmented_indices[index_key]
+
+    @staticmethod
+    def _augment_multi_residue_masses(
+        left_fragment_space: FragmentStateSpace,
+        right_fragment_space: FragmentStateSpace,
+        residue_space: MultiResidueStateSpace,
+    ) -> tuple[list[float],list[tuple[int,int,int,int]]]:
+        raise NotImplementedError()
+        n_words = residue_space.n_aminos()
+        n_augments_per_word = [
+            np.prod([
+                left_fragment_space.n_losses(i) * right_fragment_space.n_losses(i) * residue_space.n_modifications(i)
+                for amino_ids in residue_space.amino_clusters[x]
+                for i in amino_ids
+            ]) for x in range(n_words)
+        ]
+        n_augmented_masses = sum(n_augments_per_word)
+        augmented_masses = np.empty((n_augmented_masses,), dtype=float)
+        augmented_indices = np.empty((n_augmented_masses,4), dtype=int)
+        # count augments and set up augment arrays
+
+        pos = 0
+        for word_id in range(n_words):
+            word_amino_mass = residue_space.amino_masses[word_id]
+            amino_id_cluster = residue_space.amino_clusters[word_id]
+            mods = residue_space.get_modifications(amino_id_cluster)
+            left_losses = left_fragment_space.get_losses(amino_id_cluster)
+            right_losses = right_fragment_space.get_losses(amino_id_cluster)
+            for mod_id in mods:
+                mod_mass = residue_space.modification_masses[mod_id]
+                for left_loss_id in left_losses:
+                    left_loss_mass = left_fragment_space.loss_masses[left_loss_id]
+                    for right_loss_id in right_losses:
+                        right_loss_mass = right_fragment_space.loss_masses[right_loss_id]
+                        augmented_masses[pos] = amino_mass + left_loss_mass - right_loss_mass + mod_mass
+                        augmented_indices[pos] = [word_id, left_loss_id, right_loss_id, mod_id]
+                        pos += 1
+        # iterate aminos, conditionally iterate modifications and losses.
+
+        augmented_masses = np.array(augmented_masses)
+        augmented_indices = np.array(augmented_indices)
+        index_key = np.argsort(augmented_masses)
+        # argsort by augmented mass and reorder the indices accordingly to construct the index unaveler.
+
+        return augmented_masses[index_key], augmented_indices[index_key]
+
+    @classmethod
+    def _augment_masses(
+        cls,
+        left_fragment_space: FragmentStateSpace,
+        right_fragment_space: FragmentStateSpace,
+        residue_space: ResidueStateSpace,
+    ) -> tuple[list[float],list[tuple[int,int,int,int]]]:
+        if type(residue_space) is MultiResidueStateSpace:
+            return cls._augment_multi_residue_masses(
+                left_fragment_space,
+                right_fragment_space,
+                residue_space,
+            )
+        else:
+            return cls._augment_single_residue_masses(
+                left_fragment_space,
+                right_fragment_space,
+                residue_space,
+            )
 
     @classmethod
     def from_state_spaces(cls,
@@ -316,7 +417,7 @@ class TargetMassStateSpace:
             FragmentStateSpace.trivial(),
             boundary_space,
             residue_space,
-        ) for residue_space in residue_spaces])
+        ) for residue_space in residue_spaces[:1]])
         # construct masses and feature indices
         pair_null_losses = fragment_space.loss_null_indices
         pair_null_indices = [pair_null_losses, pair_null_losses, residue_spaces[0].modification_null_indices]
@@ -368,6 +469,11 @@ class AbstractAnnotation(abc.ABC):
     def symbolize(self, targets: TargetMassStateSpace) -> str:
         """Generate symbolic representations of annotated features."""
 
+    @classmethod
+    @abc.abstractmethod
+    def empty(cls) -> Self:
+        """Create an empty annotation."""
+
 @dataclasses.dataclass(slots=True)
 class PairResult(AbstractAnnotation):
     indices: np.ndarray
@@ -393,6 +499,17 @@ class PairResult(AbstractAnnotation):
         sym = ["PairResult"]
         return self._symbolize(features, sym, self.segments, self.indices, self.costs)
 
+    @classmethod
+    def empty(cls) -> Self:
+        return cls(
+            indices = np.empty((0,2),dtype=int),
+            charges = np.empty((0,2),dtype=int),
+            features = np.empty((0,4),dtype=int),
+            costs = np.empty((0,),dtype=float),
+            segments = np.empty((0,),dtype=int),
+            mass= np.empty((0,),dtype=float),
+        )
+
 @dataclasses.dataclass(slots=True)
 class BoundaryResult(AbstractAnnotation):
     index: np.ndarray
@@ -417,6 +534,17 @@ class BoundaryResult(AbstractAnnotation):
         features = targets.symbolize_boundaries(self.features)
         sym = ["BoundaryResult"]
         return self._symbolize(features, sym, self.segments, self.index, self.costs)
+
+    @classmethod
+    def empty(cls) -> Self:
+        return cls(
+            index = np.empty((0,),dtype=int),
+            charge = np.empty((0,),dtype=int),
+            features = np.empty((0,4),dtype=int),
+            costs = np.empty((0,),dtype=float),
+            segments = np.empty((0,),dtype=int),
+            mass= np.empty((0,),dtype=float),
+        )
 
 @dataclasses.dataclass(slots=True)
 class PivotResult:

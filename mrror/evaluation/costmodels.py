@@ -79,7 +79,9 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
             # (gap cost is added during comparison)
         else:
             idx = topology.graph[curr_node][next_node][self._weight_key]
-            if curr_node == topology.boundary_source:
+            if next_node == topology.pivot_sink:
+                return self._pairs.get_annotation(idx)
+            elif curr_node == topology.boundary_source:
                 idx, k = idx
                 return boundaries.get_annotation(idx)
             else:

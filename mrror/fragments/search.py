@@ -140,7 +140,6 @@ def _find_boundaries(
     min_target = target_masses[0] - tolerance
     max_target = target_masses[-1] + tolerance
     n = len(peaks)
-
     query_lo = bisect_left(peaks, np.array([min_target]))
     query_hi = bisect_right(peaks, np.array([max_target]))
     query_data = np.vstack([
@@ -150,6 +149,12 @@ def _find_boundaries(
     # find the query range for each left index
 
     left_mask = (query_hi - query_lo) > 0
+    if not(any(left_mask)):
+        return (
+            np.empty((0,4),dtype=int),
+            np.empty((0,),dtype=float),
+        )
+        # catch empty results before they crash.
     query_data = query_data[:,left_mask]
     query_lo, query_hi = query_data
     # remove indices with empty query ranges
@@ -172,6 +177,7 @@ def _find_boundaries(
     ]).T
     result_data = result_data[result_mask]
     query_masses = query_masses[result_mask]
+    print("hit masses", query_masses)
     # remove results with no hits
 
     return (
@@ -190,6 +196,9 @@ def find_boundaries(
         tolerance,
         targets.boundary_masses[k - 1]
     )
+    if results.size == 0:
+        return BoundaryResult.empty()
+        # catch empty results before they crash.
     features, feature_costs, feature_segments = targets.resolve_boundaries(results[:,1:], queries, k - 1)
     return BoundaryResult(
         index = peaks.get_original_indices(results[:,0]),
