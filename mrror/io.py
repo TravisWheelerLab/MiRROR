@@ -200,7 +200,7 @@ def read_mzlib(
     """From a path string, load a .mzlib file as an MzSpecLib;
     wraps the mzspeclib.SpectrumLibrary object."""
     with warnings.catch_warnings(action="ignore"):
-        return mzlib.SpectrumLibrary(filename = path_to_mzlib)
+        return mzlib.SpectrumLibrary(filename = filepath)
 
 def read_mgf():
     pass

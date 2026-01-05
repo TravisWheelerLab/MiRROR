@@ -2,7 +2,10 @@ import dataclasses, abc
 from typing import Self, Iterator
 import itertools as it
 
+from ..util import HYDROGEN_MASS
+
 import numpy as np
+from omegaconf.dictconfig import DictConfig
 
 @dataclasses.dataclass(slots=True)
 class FragmentStateSpace:
@@ -14,23 +17,84 @@ class FragmentStateSpace:
     # [int; m]
     applicable_losses: list[np.ndarray]
     # [[int; _]; m] 
-    # amino idx -> {applicable loss indices}.
-    charges: np.ndarray
-
-    @classmethod
-    def trivial(cls) -> Self:
-        return cls(
-            loss_masses = np.array([0.]),
-            loss_symbols = np.array(['']),
-            loss_null_indices = np.ndarray([0]),
-            applicable_losses = [np.array([0]) for _ in range(20)],
-            charges = np.array([1]))
+    # amino index -> {applicable loss indices}.
 
     def n_losses(self, amino_id: int) -> int:
         return len(self.applicable_losses[amino_id])
 
-    def get_losses(self, amino_id: int) -> list[float]:
+    def get_losses(self, amino_id: int) -> list[int]:
         return self.applicable_losses[amino_id]
+
+    def get_all_losses(self) -> list[int]:
+        return list(range(len(self.loss_masses)))
+
+    def tabulate(self) -> str:
+        ""
+
+    @classmethod
+    def trivial(cls) -> Self:
+        return cls(
+            loss_masses = np.array([0.],dtype=float),
+            loss_symbols = np.array([''],dtype=str),
+            loss_null_indices = np.array([0],dtype=int),
+            applicable_losses = [np.array([0],dtype=int) for _ in range(20)],
+        )
+
+    @classmethod
+    def from_config_to_pairs(
+        cls,
+        cfg: DictConfig,
+    ) -> Self:
+        return cls(
+            loss_masses = np.array(cfg.loss.masses),
+            loss_symbols = np.array(cfg.loss.symbols),
+            loss_null_indices = np.array(cfg.loss.nulls),
+            applicable_losses = [np.array(x) for x in cfg.loss.application],
+        )
+
+    @classmethod
+    def _from_config_to_boundaries(
+        cls,
+        series_masses,
+        series_symbols,
+        loss_masses,
+        loss_symbols,
+        loss_nulls,
+        applicable_losses,
+        sep = ' ',
+    ) -> Self:
+        n_ser = series_masses.size
+        n_loss = loss_masses.size
+        boundary_nulls = np.array([i + (j * n_loss) for i in loss_nulls for j in range(n_ser)])
+        boundary_appl = [
+            np.concat([boundary_nulls,] + 
+                      [x[1:] + (i * n_loss) for i in range(n_ser)]) 
+            for x in applicable_losses]
+        return cls(
+            loss_masses = (series_masses.reshape(n_ser,1) + loss_masses.reshape(1,n_loss)).flatten(),
+            loss_symbols = np.strings.strip(series_symbols.reshape(n_ser,1) + sep + loss_symbols.reshape(1,n_loss)).flatten(),
+            loss_null_indices = boundary_nulls,
+            applicable_losses = boundary_appl,
+        )
+
+    @classmethod
+    def from_config_to_boundaries(
+        cls,
+        cfg: DictConfig,
+        reflect = False,
+    ) -> Self:
+        key = -1 if reflect else 1
+        return cls._from_config_to_boundaries(
+            series_masses = np.concat([cfg.series.prefix_masses, cfg.series.suffix_masses][::key]),
+            series_symbols = np.concat([cfg.series.prefix_symbols, cfg.series.suffix_symbols][::key]),
+            loss_masses = key * np.array(cfg.loss.masses),
+            # reflection transposes prefix and suffix ion series (b and y, a and x, etc.)
+            # reflection flips the sign of losses; r - (x - l) = r - x + l.
+            # so b_n - H2O1 reflects to y_1 + H2O1.
+            loss_symbols = np.array(cfg.loss.symbols),
+            loss_nulls = np.array(cfg.loss.nulls),
+            applicable_losses = [np.array(x) for x in cfg.loss.application],
+        )
 
 @dataclasses.dataclass(slots=True)
 class ResidueStateSpace:
@@ -56,8 +120,27 @@ class ResidueStateSpace:
     def n_modifications(self, amino_id: int) -> int:
         return len(self.applicable_modifications[amino_id])
 
-    def get_modifications(self, amino_id: int) -> list[float]:
+    def get_modifications(self, amino_id: int) -> list[int]:
         return self.applicable_modifications[amino_id]
+
+    @classmethod
+    def from_config(
+        cls,
+        cfg: DictConfig,
+        reflect = False,
+    ) -> Self:
+        key = -1 if reflect else 1
+        return cls(
+            amino_masses = np.array(cfg.res.masses),
+            amino_symbols = np.array(cfg.res.symbols),
+            modification_masses = key * np.array(cfg.mod.masses),
+            # reflection flips the sign of losses and modifications; r - (x - l) = r - x + l.
+            # so b_n - H2O1 reflects to y_1 + H2O1.
+            modification_symbols = np.array(cfg.mod.symbols),
+            modification_null_indices = np.array(cfg.mod.nulls),
+            applicable_modifications = [np.array(x) for x in cfg.mod.application],
+            max_num_modifications = cfg.mod.max_num,
+        )
 
 @dataclasses.dataclass(slots=True)
 class MultiResidueStateSpace(ResidueStateSpace):
@@ -137,6 +220,81 @@ class MultiResidueStateSpace(ResidueStateSpace):
         selected_mod = self.applicable_modifications[amino_id]
         return self.modification_masses[self.applicable_modifications[amino_id]]
 
+@dataclasses.dataclass(slots=True)
+class TargetMasses(abc.ABC):
+    target_masses: np.ndarray                   # [float; n]
+    target_states: np.ndarray                   # [[int; 4]; n]
+    null_states: list[np.ndarray]               # [[int; _]; 3]
+    residue_space: ResidueStateSpace
+    left_fragment_space: FragmentStateSpace
+    right_fragment_space: FragmentStateSpace
+
+    @staticmethod
+    def _count_nonnull(
+        hit_states: np.ndarray,
+        null_states: list[np.ndarray],
+    ) -> np.ndarray:
+        state_nulls = [
+            np.all([x != i for i in nullstate], axis=0) 
+            for (x,nullstate) in zip(hit_states.T,null_states)
+        ]
+        return np.sum(state_nulls, axis=0)
+
+    def get_series_loss_symbols(self, series=['b','y']) -> tuple[list[str],list[str]]:
+        series_loss_symbols = self.boundary_space.loss_symbols
+        return ([x for x in series_loss_symbols if x.startswith(series_sym)] for series_sym in series)
+
+    def get_hit_states(
+        self,
+        hit_ranges: np.ndarray,
+        query_masses: np.ndarray,
+    ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
+        hit_states = [self.target_states[l:r,:] for (l,r) in hit_ranges]
+        offsets = [np.abs(qm - self.target_masses[l:r]) for (qm,(l,r)) in zip(query_masses,hit_ranges)]
+        complexities = [self._count_nonnull(x[:,1:],self.null_states) for x in hit_states]
+        costs = [(o * (1 + c)) for (o,c) in zip(offsets,complexities)]
+        segments = np.cumsum(hit_ranges[:,1] - hit_ranges[:,0]) # + 1
+        return (
+            np.concat(hit_states),
+            np.concat(costs),
+            np.concat([[0], segments]),
+            np.concat(offsets),
+            np.concat([self.target_masses[l:r] for (l,r) in hit_ranges])
+        )
+
+    def get_state_weights(
+        states: np.ndarray,
+    ) -> np.ndarray:
+        if (states == -1).all():
+            return np.zeros(states.shape[0], dtype=float)
+            # empty states, usually from the spectrum graph edge connecting pivot peaks to the virtual pivot sink.
+        else:
+            return np.array([
+                [
+                    self.residue_space.amino_masses[i],
+                    self.left_fragment_space.loss_masses[l],
+                    -1 * self.right_fragment_space.loss_masses[r],
+                    self.residue_space.modification_masses[j],
+                ]  for (i,l,r,j) in states
+            ], dtype=float)
+
+    def get_state_symbols(
+        states: np.ndarray,
+    ) -> np.ndarray:
+        if (states == -1).all():
+            return np.full_like(states, '')
+            # empty states, usually from the spectrum graph edge connecting pivot peaks to the virtual pivot sink.
+        else:
+            return np.array([
+                [
+                    self.residue_space.amino_symbols[i],
+                    self.left_fragment_space.loss_symbols[l],
+                    self.right_fragment_space.loss_symbols[r],
+                    self.residue_space.modification_symbols[j],
+                ] for (i,l,r,j) in states
+            ])
+        # NOTE, in case this breaks - the return was a 'np.vstack' call but that seemed unnecessary.
+    
 @dataclasses.dataclass(slots=True)
 class TargetMassStateSpace:
     residue_spaces: list[ResidueStateSpace]
@@ -304,11 +462,15 @@ class TargetMassStateSpace:
         residue_space: ResidueStateSpace,
     ) -> tuple[list[float],list[tuple[int,int,int,int]]]:
         n_aminos = residue_space.n_aminos()
-        n_augments_per_amino = [
-            left_fragment_space.n_losses(i) * right_fragment_space.n_losses(i) * residue_space.n_modifications(i)
-            for i in range(n_aminos)
-        ]
-        n_augmented_masses = sum(n_augments_per_amino)
+        # n_augments_per_amino = [
+        #     right_fragment_space.n_losses(i) * residue_space.n_modifications(i)
+        #     for i in range(n_aminos)
+        # ]
+        # n_augmented_masses = sum(n_augments_per_amino) * len(left_fragment_space.loss_masses)
+        n_left_losses = len(left_fragment_space.loss_masses)
+        n_right_losses = len(right_fragment_space.loss_masses)
+        n_mods = len(residue_space.modification_masses)
+        n_augmented_masses = n_aminos * n_left_losses * n_right_losses * n_mods
         augmented_masses = np.empty((n_augmented_masses,), dtype=float)
         augmented_indices = np.empty((n_augmented_masses,4), dtype=int)
         # count augments and set up augment arrays
@@ -316,14 +478,14 @@ class TargetMassStateSpace:
         pos = 0
         for amino_id in range(n_aminos):
             amino_mass = residue_space.amino_masses[amino_id]
-            mods = residue_space.get_modifications(amino_id)
-            left_losses = left_fragment_space.get_losses(amino_id)
-            right_losses = right_fragment_space.get_losses(amino_id)
-            for mod_id in mods:
+            # mods = residue_space.get_modifications(amino_id)
+            # right_losses = right_fragment_space.get_losses(amino_id)
+            # left_losses = left_fragment_space.get_all_losses()
+            for mod_id in range(n_mods):
                 mod_mass = residue_space.modification_masses[mod_id]
-                for left_loss_id in left_losses:
+                for left_loss_id in range(n_left_losses):
                     left_loss_mass = left_fragment_space.loss_masses[left_loss_id]
-                    for right_loss_id in right_losses:
+                    for right_loss_id in range(n_right_losses):
                         right_loss_mass = right_fragment_space.loss_masses[right_loss_id]
                         augmented_masses[pos] = amino_mass + left_loss_mass - right_loss_mass + mod_mass
                         augmented_indices[pos] = [amino_id, left_loss_id, right_loss_id, mod_id]
@@ -362,7 +524,7 @@ class TargetMassStateSpace:
             word_amino_mass = residue_space.amino_masses[word_id]
             amino_id_cluster = residue_space.amino_clusters[word_id]
             mods = residue_space.get_modifications(amino_id_cluster)
-            left_losses = left_fragment_space.get_losses(amino_id_cluster)
+            left_losses = left_fragment_space.get_all_losses()
             right_losses = right_fragment_space.get_losses(amino_id_cluster)
             for mod_id in mods:
                 mod_mass = residue_space.modification_masses[mod_id]
@@ -439,7 +601,7 @@ class TargetMassStateSpace:
 @dataclasses.dataclass(slots=True)
 class AbstractAnnotation(abc.ABC):
 
-    def len(self):
+    def __len__(self):
         return len(self.segments) - 1
 
     def get_annotation(self, i: int) -> tuple[float,np.ndarray]:
@@ -466,8 +628,9 @@ class AbstractAnnotation(abc.ABC):
         return '\n'.join(sym)
         
     @abc.abstractmethod
-    def symbolize(self, targets: TargetMassStateSpace) -> str:
+    def symbolize(self, targets: TargetMasses) -> str:
         """Generate symbolic representations of annotated features."""
+        # TODO- replace this with a 'tabulate' method.
 
     @classmethod
     @abc.abstractmethod
@@ -477,6 +640,9 @@ class AbstractAnnotation(abc.ABC):
 @dataclasses.dataclass(slots=True)
 class PairResult(AbstractAnnotation):
     indices: np.ndarray
+    # [(int,int); m]
+
+    inner_indices: np.ndarray
     # [(int,int); m]
 
     charges: np.ndarray
@@ -494,7 +660,7 @@ class PairResult(AbstractAnnotation):
     mass: np.ndarray
     # [float; m]
 
-    def symbolize(self, targets: TargetMassStateSpace) -> str:
+    def symbolize(self, targets: TargetMassStateSpace) -> str: # TODO convert to tabulate, use TargetMasses
         features = targets.symbolize_pairs(self.features)
         sym = ["PairResult"]
         return self._symbolize(features, sym, self.segments, self.indices, self.costs)
@@ -503,6 +669,7 @@ class PairResult(AbstractAnnotation):
     def empty(cls) -> Self:
         return cls(
             indices = np.empty((0,2),dtype=int),
+            inner_indices = np.empty((0,2),dtype=int),
             charges = np.empty((0,2),dtype=int),
             features = np.empty((0,4),dtype=int),
             costs = np.empty((0,),dtype=float),
@@ -513,6 +680,9 @@ class PairResult(AbstractAnnotation):
 @dataclasses.dataclass(slots=True)
 class BoundaryResult(AbstractAnnotation):
     index: np.ndarray
+    # [int; l]
+
+    inner_index: np.ndarray
     # [int; l]
 
     charge: np.ndarray
@@ -530,7 +700,7 @@ class BoundaryResult(AbstractAnnotation):
     mass: np.ndarray
     # [float; l]
 
-    def symbolize(self, targets: TargetMassStateSpace) -> str:
+    def symbolize(self, targets: TargetMassStateSpace) -> str: # TODO convert to tabulate, use TargetMasses
         features = targets.symbolize_boundaries(self.features)
         sym = ["BoundaryResult"]
         return self._symbolize(features, sym, self.segments, self.index, self.costs)
@@ -539,11 +709,12 @@ class BoundaryResult(AbstractAnnotation):
     def empty(cls) -> Self:
         return cls(
             index = np.empty((0,),dtype=int),
+            inner_index = np.empty((0,),dtype=int),
             charge = np.empty((0,),dtype=int),
             features = np.empty((0,4),dtype=int),
             costs = np.empty((0,),dtype=float),
             segments = np.empty((0,),dtype=int),
-            mass= np.empty((0,),dtype=float),
+            mass = np.empty((0,),dtype=float),
         )
 
 @dataclasses.dataclass(slots=True)

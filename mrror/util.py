@@ -5,6 +5,8 @@ import itertools as it
 import numba
 import numpy as np
 
+HYDROGEN_MASS = 1.007
+
 def pairwise_disjoint(
     a: list,
     b: list,
@@ -160,37 +162,40 @@ def merge_compare(
     tolerance: float,
     pivot_point: float,
 ) -> tuple[np.ndarray,np.ndarray]:
-    prev_match = (pivot_point, pivot_point)
+    prev_match = (np.inf,np.inf)
     match_left = []
     match_right = []
     l = 0
     r = 0
     while l < n and r < n:
-        x = left_arr[l]
-        z = right_arr[r]
-        if abs(x - z) <= tolerance:
+        prev_left_val, prev_right_val = prev_match
+        left_val = left_arr[l]
+        right_val = right_arr[r]
+        if abs(left_val - right_val) <= tolerance:
             # hit: count a match, incr indices.
             match_left.append(l)
             match_right.append(r)
-            prev_match = (x, z)
+            prev_match = (left_val, right_val)
             l += 1
             r += 1
-        elif abs(z - prev_match[1]) <= tolerance:
+        elif abs(prev_left_val - right_val) <= tolerance:
             match_left.append(l - 1)
             match_right.append(r)
+            prev_match = (prev_left_val, right_val)
             r += 1
-        elif abs(x - prev_match[0]) <= tolerance:
+        elif abs(left_val - prev_right_val) <= tolerance:
             match_left.append(l)
             match_right.append(r - 1)
+            prev_match = (left_val, prev_right_val)
             l += 1
-        elif x < z:
+        elif left_val < right_val:
             r += 1
-        else: # z < x
+        else:
             l += 1
     #
     return (
-        np.array(match_left),
-        np.array(match_right),
+        np.array(match_left,dtype=np.int16),
+        np.array(match_right,dtype=np.int16),
     )
 
 def _mirror_symmetries(
@@ -219,7 +224,6 @@ def _mirror_symmetries(
         
         deltas = np.abs(right_arr[match_right] - left_arr[match_left])
         # reconstruct deltas
-
         # convert left_arr, right_arr indices to sorted_arr indices.
         match_left = lo - 1 - match_left
         match_right = lo + match_right
@@ -281,7 +285,8 @@ def decharge_peaks(
     n = len(peaks)
     k = len(charges)
     decharged_peaks = charges.reshape(k,1) * peaks.reshape(1,n)
-    decharged_peaks = np.array([(c * peaks) - (c - 1) for c in charges])
+    decharged_peaks = np.array([
+        (c * peaks) - (HYDROGEN_MASS * (c - 1)) for c in charges])
     merged_decharged_peaks, deindexer, charge_table = merge_in_order(decharged_peaks, transformation)
     # construct and re-sort the charge-augmented m/z
 

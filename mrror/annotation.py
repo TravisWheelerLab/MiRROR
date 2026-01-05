@@ -6,12 +6,15 @@ from typing import Self, Any
 from .util import normalize_dict
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMassStateSpace, PairResult, PivotResult, BoundaryResult, find_pairs, find_pivots, find_boundaries 
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMasses, PairResult, PivotResult, BoundaryResult
+from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
+from .fragments.search import find_pairs, find_pivots, find_boundaries 
 from .sequences.suffix_array import SuffixArray
 from .sequences.queries import PeptideMassQueryEngine, all_kmers
 # local
 
 import numpy as np
+from omegaconf.dictconfig import DictConfig
 
 @dataclasses.dataclass(slots=True)
 class AnnotationResult(SerializableDataclass):
@@ -50,125 +53,67 @@ class AnnotationResult(SerializableDataclass):
 
 @dataclasses.dataclass(slots=True)
 class AnnotationParams(SerializableDataclass):
-    residue_space: ResidueStateSpace
-    # residue masses augmented by modifications.
-    dimer_space: ResidueStateSpace
-    # double-residue masses augmented by modifications.
-    trimer_space: ResidueStateSpace
-    # triple-residue masses augmented by modifications.
-    fragment_space: FragmentStateSpace
-    # loss states.
-    boundary_fragment_space: FragmentStateSpace
-    # loss states shifted by the series (a,b,c,x,y,z) offsets.
+    pair_target_masses: TargetMasses
+    # target masses for pairs.
+    # residues augmented by modifications and left and right losses.
+    boundary_target_masses: TargetMasses
+    # target masses for lower boundaries.
+    # residues augmented by modifications and losses, and shifted by b and y series offsets.
+    reflected_boundary_target_masses: TargetMasses
+    # target masses for reflected upper boundaries.
+    # residues augmented by reflected modifications and losses, 
+    # and shifted by b and y series offsets.
+    # TODO - multiresidue targets.
+    charges: np.ndarray
+    # list of (positive) charges expected on fragments. typically [1,], [1,2,], or [1,2,3].
     query_tolerance: float
     # the radius around a query in which hits are collected.
     symmetry_tolerance: float
-    # the max distance between one value and another reflected value such that they are considered symmetric.
+    # the max distance between a value and another reflected value such that they are considered symmetric.
     pivot_score_factor: float
-    # tunes the pivot symmetry score threshold := max score * score factor
+    # tunes the pivot symmetry score threshold := max score * score factor. TODO - this might not work for noisier spectra.
 
     @classmethod
     def from_config(cls,
-        cfg: dict[str,Any],
+        cfg: DictConfig,
         suffix_array: SuffixArray = None,
     ) -> Self:
-        res = cfg['residues']
-        res_mass = np.array(res['masses'])
-        res_sym = np.array(res['symbols'])
-        mod = cfg['modifications']
-        mod_mass = np.array(mod['masses'])
-        mod_sym = np.array(mod['symbols'])
-        mod_appl = [np.array(x) for x in mod['application']]
-        max_num_mods= mod['max_num']
-        mod_nulls = np.array(mod['nulls'])
-        residue_space = ResidueStateSpace(
-            res_mass,
-            res_sym,
-            mod_mass,
-            mod_sym,
-            mod_nulls,
-            mod_appl,
-            max_num_mods,
+        pair_fragment_space = FragmentStateSpace.from_config_to_pairs(cfg)
+        residue_space = ResidueStateSpace.from_config(cfg)
+        pair_targets = construct_pair_target_masses(
+            residue_space,
+            pair_fragment_space,
         )
-        # residue space
+        # target masses for fragments observed as the difference of two consecutive peaks.
 
-        if not(suffix_array is None):
-            engine = PeptideMassQueryEngine(
-                residue_space,
-                suffix_array,
-                5,
-            )
-            dimer_masses, dimers = engine.query_kmers(2)
-            trimer_masses, trimers = engine.query_kmers(3)
-        else:
-            dimer_masses, dimers, _ = all_kmers(residue_space, 2)
-            trimer_masses, trimers, _ = all_kmers(residue_space, 3)
-        dimer_space = MultiResidueStateSpace.from_nonunique_pairs(
-            dimer_masses,
-            dimers,
-            mod_mass,
-            mod_sym,
-            mod_nulls,
-            mod_appl,
-            max_num_mods = max_num_mods * 2,
-            alphabet = res_sym,
+        lower_boundary_fragment_space = FragmentStateSpace.from_config_to_boundaries(cfg)
+        lower_boundary_targets = construct_boundary_target_masses(
+            residue_space,
+            lower_boundary_fragment_space,
         )
-        trimer_space = MultiResidueStateSpace.from_nonunique_pairs(
-            trimer_masses,
-            trimers,
-            mod_mass,
-            mod_sym,
-            mod_nulls,
-            mod_appl,
-            max_num_mods = max_num_mods * 3,
-            alphabet = res_sym,
+        # target masses for low-mz boundaries observed as single peaks.
+
+        reflected_residue_space = ResidueStateSpace.from_config(cfg, reflect=True)
+        reflected_upper_boundary_fragment_space = FragmentSpace.from_config_to_boundaries(cfg, reflect=True)
+        reflected_upper_boundary_targets = construct_boundary_target_masses(
+            reflected_residue_space,
+            reflected_upper_boundary_fragment_space,
         )
-        # dimer and trimer spaces. restricted by a suffix array, if passed.
+        # target masses for high-mz boundaries observed as the reflections of single peaks.
         
-        loss = cfg['losses']
-        loss_mass = np.array(loss['masses'])
-        n_loss = len(loss_mass)
-        loss_sym = np.array(loss['symbols'])
-        loss_nulls = np.array(loss['nulls'])
-        loss_appl = [np.array(x) for x in loss['application']]
-        charges = np.array(cfg['charges'])
-        fragment_space = FragmentStateSpace(
-            loss_mass,
-            loss_sym,
-            loss_nulls,
-            loss_appl,
-            charges,
-        )
-        # fragment space for pair difference masses
-        
-        ser = cfg['series']
-        ser_mass = np.array(ser['masses'])
-        n_ser = len(ser_mass)
-        ser_sym = np.array(ser['symbols'])
-        boundary_mass = (ser_mass.reshape(n_ser,1) + loss_mass.reshape(1, n_loss)).flatten()
-        boundary_sym = (ser_sym.reshape(n_ser,1) + ' ' + loss_sym.reshape(1, n_loss)).flatten()
-        boundary_nulls = [x + (i * n_loss) for x in loss_nulls for i in range(n_ser)]
-        boundary_appl = [np.concat([boundary_nulls, x[1:]]) for x in loss_appl]
-        boundary_fragment_space = FragmentStateSpace(
-            boundary_mass,
-            boundary_sym,
-            boundary_nulls,
-            boundary_appl,
-            charges,
-        )
-        # fragment space for boundary masses
-        
+        # TODO - multiresidue spaces and targets.
+
+        charges = np.array(cfg.charges)
         query_tolerance = cfg['query_tolerance']
         symmetry_tolerance = cfg['symmetry_tolerance']
         pivot_score_factor = cfg['pivot_score_factor']
         # other params
 
         return cls(
-            residue_space,
-            dimer_space,
-            trimer_space,
-            fragment_space,
-            boundary_fragment_space,
+            pair_targets,
+            lower_boundary_targets,
+            reflected_upper_boundary_targets,
+            charges,
             query_tolerance,
             symmetry_tolerance,
             pivot_score_factor,
@@ -176,7 +121,6 @@ class AnnotationParams(SerializableDataclass):
 
 def annotate(
     peaks: Peaks,
-    targets: TargetMassStateSpace,
     params: AnnotationParams,
     verbose: bool = False,
 ) -> AnnotationResult:
@@ -188,7 +132,7 @@ def annotate(
     t = time()
     decharged_peaks = AugmentedPeaks.from_peaks(
         peaks,
-        charges=params.fragment_space.charges,
+        charges=params.charges,
     )
     profile["augment"] = time() - t
     if verbose:
@@ -199,16 +143,27 @@ def annotate(
     pairs = find_pairs(
         peaks = decharged_peaks,
         tolerance = params.query_tolerance,
-        targets = targets,
+        targets = params.pair_target_masses,
     )
     profile["pairs"] = time() - t
     if verbose:
         print(pairs)
-    # peak pairs
+    # find pairs of peaks in the decharged spectrum whose difference matches a target in the pair target masses.
+    
+    t = time()
+    lower_boundaries = find_boundaries(
+        peaks = decharged_peaks,
+        tolerance = params.query_tolerance,
+        targets = params.boundary_target_masses,
+    )
+    profile["lower_boundaries"] = time() - t
+    if verbose:
+        print(lower_boundaries)
+    # find single peaks in the decharged spectrum whose mass matches a target in the boundary target masses.
     
     t = time()
     pivots = find_pivots(
-        peaks = peaks,
+        peaks = decharged_peaks,
         pairs = pairs,
         query_tolerance = params.query_tolerance,
         symmetry_tolerance = params.symmetry_tolerance,
@@ -217,36 +172,27 @@ def annotate(
     profile["pivots"] = time() - t
     if verbose:
         print(pivots)
-    # pivots
-    
-    t = time()
-    lower_boundaries = find_boundaries(
-        peaks = decharged_peaks,
-        tolerance = params.query_tolerance,
-        targets = targets,
-    )
-    profile["lower_boundaries"] = time() - t
-    if verbose:
-        print(lower_boundaries)
-    # low-mz boundaries
+    # using pairs as seeds, find pivots as midpoints of peak quadruplets with mirror symmetry.
     
     t = time()
     reflected_peaks = [AugmentedPeaks.from_peaks(
             peaks,
-            charges=params.fragment_space.charges,
+            charges=params.charges,
             pivot_point=pivot_pt,
         ) for pivot_pt in pivots.cluster_points]
-    ## cluster points correspond to reflections
+    profile["reflection"] = time() - t
+    # create a reflected peak list for each pivot cluster.
+
+    t = time()
     upper_boundaries = [find_boundaries(
-            peaks = refl,
+            peaks = refl_peaks,
             tolerance = params.query_tolerance,
-            targets = targets,
-        ) for refl in reflected_peaks]
-    ## each reflected spectrum has its own set of right boundaries
+            targets = params.reflected_boundary_target_masses,
+        ) for refl_peaks in reflected_peaks]
     profile["upper_boundaries"] = time() - t
     if verbose:
         print(upper_boundaries)
-    # high-mz boundaries
+    # find single peaks in the reflected peak lists whose mass matches a target in the reflected boundary target masses.
     
     if verbose:
         print(json.dumps(profile, indent=4))

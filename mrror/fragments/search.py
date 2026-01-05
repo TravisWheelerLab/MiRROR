@@ -4,7 +4,7 @@ from typing import Iterator, Iterable
 
 from ..spectra.types import Peaks, AugmentedPeaks
 from ..util import bisect_left, bisect_right, mirror_symmetries
-from .types import PairResult, BoundaryResult, PivotResult, TargetMassStateSpace
+from .types import PairResult, BoundaryResult, PivotResult, TargetMasses
 # local
 
 import numpy as np
@@ -98,20 +98,20 @@ def _find_pairs(
 def find_pairs(
     peaks: AugmentedPeaks,
     tolerance: float,
-    targets: TargetMassStateSpace,
+    targets: TargetMasses,
     mode: str = "minimal",
 ) -> PairResult:
     if mode == "minimal":
         results, queries = _find_pairs_minimal(
             peaks.mz,
             tolerance,
-            targets.pair_masses,
+            targets.target_masses,
         )
     elif mode == "full":
         results, queries = _find_pairs(
             peaks.mz,
             tolerance,
-            targets.pair_masses,
+            targets.target_masses,
         )
     else:
         raise ValueError(f"unrecognized pair search mode {mode}")
@@ -121,10 +121,11 @@ def find_pairs(
     loop_mask = global_indices[:,0] != global_indices[:,1]
     # remove loops
     query_masses = queries[loop_mask]
-    features, feature_costs, feature_segments = targets.resolve_pairs(results[loop_mask,2:4], query_masses)
+    features, feature_costs, feature_segments, *_ = targets.get_hit_states(results[loop_mask,2:4], query_masses)
     # expand target hit range to features and calculate costs
     return PairResult(
         indices = global_indices[loop_mask],
+        inner_indices = local_indices[loop_mask],
         charges = peaks.get_augmenting_charges(local_indices[loop_mask]),
         features = features,
         costs = feature_costs,
@@ -177,7 +178,6 @@ def _find_boundaries(
     ]).T
     result_data = result_data[result_mask]
     query_masses = query_masses[result_mask]
-    print("hit masses", query_masses)
     # remove results with no hits
 
     return (
@@ -188,20 +188,21 @@ def _find_boundaries(
 def find_boundaries(
     peaks: AugmentedPeaks,
     tolerance: float,
-    targets: TargetMassStateSpace,
+    targets: TargetMasses,
     k: int = 1,
 ) -> BoundaryResult:
     results, queries = _find_boundaries(
         peaks.mz,
         tolerance,
-        targets.boundary_masses[k - 1]
+        targets.target_masses
     )
     if results.size == 0:
         return BoundaryResult.empty()
         # catch empty results before they crash.
-    features, feature_costs, feature_segments = targets.resolve_boundaries(results[:,1:], queries, k - 1)
+    features, feature_costs, feature_segments, *_ = targets.get_hit_states(results[:,1:], queries)
     return BoundaryResult(
         index = peaks.get_original_indices(results[:,0]),
+        inner_index = results[:,0],
         charge = peaks.get_augmenting_charges(results[:,0]),
         features = features,
         costs = feature_costs,
@@ -242,13 +243,14 @@ def _find_overlap_pivots(
             for j2 in range(i2 + 1, n):
                 mass_j = spectrum[j2] - spectrum[j]
                 dif = abs(mass_i - mass_j)
+                # pivot = sum(spectrum[[i,j,i2,j2]].sum() / 4
                 if dif < tolerance:
                     yield np.array([i,j,i2,j2])
                 elif mass_j > mass_i:
                     break
 
 def _find_pivots(
-    peaks: np.ndarray,
+    peaks: AugmentedPeaks,
     pairs: PairResult,
     query_tolerance: float,
     find_overlap: bool,
@@ -256,13 +258,15 @@ def _find_pivots(
 ) -> Iterator[tuple[float,np.ndarray]]:
     if find_overlap:
         overlap_pivots = _find_overlap_pivots(
-            peaks,
-            pairs.indices, 
+            peaks.mz,
+            pairs.inner_indices, 
             query_tolerance,
         )
-        for indices in overlap_pivots:
+        for augmented_indices in overlap_pivots:
+            mz = peaks.mz[augmented_indices]
+            indices = peaks.get_original_indices(augmented_indices)
             yield (
-                peaks[indices].sum() / 4,
+                mz.sum() / 4,
                 indices,
             )
     if find_virtual:
@@ -285,28 +289,32 @@ def _bin_pivots(
     return np.unique_inverse(np.round(pivot_points, precision))
 
 def _screen_pivots(
-    peaks: np.ndarray, # [float; n]
+    peaks: AugmentedPeaks, # [float; n]
     cluster_points: np.ndarray, # [float; k]
     pivot_cluster_ids: np.ndarray, # [int; p]
     symmetry_tolerance: float,
     score_factor: float,
 ) -> tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray,list[np.ndarray]]:
-    tolerance = min(symmetry_tolerance, (peaks[1:] - peaks[:1]).min() / 2)
+    tolerance = min(symmetry_tolerance, (peaks.mz[1:] - peaks.mz[:1]).min() / 2)
     # calibrate tolerance against the minimum pairwise distance
 
     cluster_symmetries, symmetry_deltas = mirror_symmetries(
-        peaks,
+        peaks.mz,
         cluster_points,
         symmetry_tolerance,
     )
+
     cluster_scores = np.array([sum(1 - deltas) for deltas in symmetry_deltas])
     # calculate scores from the symmetries of each cluster point's reflection.
 
-    clusters_mask = cluster_scores > (cluster_scores.max() * score_factor)
+    cluster_symmetries = [peaks.get_original_indices(x) for x in cluster_symmetries]
+    # fix indices
+
+    score_threshold = cluster_scores.max() * score_factor
+    clusters_mask = cluster_scores > score_threshold
     pivots_mask = clusters_mask[pivot_cluster_ids]
     # mask clusters by their symmetry scores
 
-    # reindex the pivot_cluster_ids
     old_pivot_idx = np.arange(len(pivot_cluster_ids))[pivots_mask]
     cluster_reindexer = np.arange(len(cluster_points))
     cluster_reindexer[clusters_mask] = np.arange(sum(clusters_mask))
@@ -315,6 +323,7 @@ def _screen_pivots(
         old_cluster_id = pivot_cluster_ids[old_pvt_idx]
         new_cluster_id = cluster_reindexer[old_cluster_id]
         new_pivot_cluster_ids[new_pvt_idx] = new_cluster_id.tolist()
+    # reindex the pivot_cluster_ids
 
     return (
         pivots_mask,
@@ -325,7 +334,7 @@ def _screen_pivots(
     )
     
 def find_pivots(
-    peaks: Peaks,
+    peaks: AugmentedPeaks,
     pairs: PairResult,
     query_tolerance: float,
     symmetry_tolerance: float,
@@ -336,9 +345,8 @@ def find_pivots(
 ) -> PivotResult:
     if not(find_overlap or find_virtual):
         raise ValueError("both find_overlap and find_virtual are False. there are no other ways to find pivots.")
-    mz = peaks.mz
     pivot_points, pivot_indices = zip(*_find_pivots(
-        mz,
+        peaks,
         pairs,
         query_tolerance,
         find_overlap,
@@ -353,7 +361,7 @@ def find_pivots(
     # cluster by pivot point
 
     scr_result = _screen_pivots(
-        mz,
+        peaks,
         cluster_points,
         pivot_cluster_ids,
         symmetry_tolerance,

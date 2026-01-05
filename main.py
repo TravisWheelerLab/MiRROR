@@ -107,6 +107,10 @@ def setup(cfg):
     anno_params = AnnotationParams.from_config(cfg.annotation)
     if app_cfg.verbosity > 1:
         print(anno_params)
+    print("residues\n",anno_params.residue_space)
+    print("pair fragments\n",anno_params.fragment_space)
+    print("boundary fragments\n",anno_params.boundary_fragment_space)
+    input()
     # parametizes spectrum annotation, describes the state spaces of fragments and residues, as well as search and filtration parameters.
     
     algn_params = AlignmentParams.from_config(cfg.alignment)
@@ -220,21 +224,21 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
         anno_params.boundary_fragment_space,
     )
 
-    peaks = SimulatedPeaks.from_peptide(cfg['input'],initial_b=spec_cfg.initial_b)
+    peaks = SimulatedPeaks.from_peptide(cfg['input'],mode='complex',initial_b=spec_cfg.initial_b)
 
-    if app_cfg.verbosity > 0:
-        print("peptide\n- ", peaks.peptide)
-        print("peaks\n- ", peaks.mz)
-        print("pivot\n- ", peaks.pivot)
-        print("left boundaries\n- ", peaks.lower_boundaries())
-        print("right boundaries\n- ", peaks.upper_boundaries())
-        print("pairs\n- ", peaks.pairs())
-        print("paths\n- ", peaks.paths())
-        try:
-            true_alignments = peaks.alignments()
-            print("alignments\n- ", true_alignments)
-        except ValueError:
-            print("alignments could not be produced for this spectrum.")
+
+    print("peptide\n- ", peaks.peptide)
+    print("peaks\n- ", peaks.mz)
+    print("pivot\n- ", peaks.pivot)
+    print("left boundaries\n- ", peaks.lower_boundaries())
+    print("right boundaries\n- ", peaks.upper_boundaries())
+    print("pairs\n- ", peaks.pairs())
+    print("paths\n- ", peaks.paths())
+    try:
+        true_alignments = peaks.alignments()
+        print("alignments\n- ", true_alignments)
+    except ValueError:
+        print("alignments could not be produced for this spectrum.")
 
     anno_res = annotate(peaks, targets, anno_params, verbose=app_cfg.verbosity > 3)
     anno_res.save(output_dir / f"{app_cfg.session_name}.anno")
@@ -292,15 +296,19 @@ def test(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, anno_pa
                     except KeyError:
                         z = ('?','?')
                     translated_path.append(z)
-                l_path, r_path = zip(*translated_path)
-                print(f"{tag} {afx_idx} {bnd_idx} {cost} {[str(v[0]) for v in anno_residues]} l={l_path} r={r_path} {term}")
+                if tag == "infix":
+                    print(f"{tag} {afx_idx} {bnd_idx} {cost} {[str(v[0]) for v in anno_residues]}")
+                else:
+                    print(cost, path, anno)
+                    l_path, r_path = zip(*translated_path)
+                    print(f"{tag} {afx_idx} {bnd_idx} {cost} {[str(v[0]) for v in anno_residues]} l={l_path} r={r_path} {term}")
 
     print("called candidates:", sum([len(x) for x in enmr_res.candidates]))
     c = 0
     print("peaks:", peaks, len(peaks))
     for (i, cand_res) in enumerate(enmr_res.candidates):
         n_cand = len(cand_res)
-        print(f"cluster {i} produced {n_cand} candidate{'s' if n_cand != 1 else ''}.")
+        print(f"cluster {i} [{2 * anno_res.pivots.cluster_points[i]}] produced {n_cand} candidate{'s' if n_cand != 1 else ''}.")
         if n_cand > 0:
             abs_offset = np.abs(cand_res.offset)
             min_offset = abs_offset.min()

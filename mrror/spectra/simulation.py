@@ -10,13 +10,15 @@ def y_series_param():
 
 Y_SERIES_PARAM = y_series_param()
 
-def b_series_param(first=False):
+def b_series_param(first=True):
     param = oms.Param()
     param.setValue("add_y_ions", "false")
     param.setValue("add_b_ions", "true")
     param.setValue("add_metainfo", "true")
     if first:
         param.setValue("add_first_prefix_ion", "true")
+    else:
+        print("generating b series without the first prefix ion. this is known to corrupt the values of all b series peaks with losses.")
     return param
 
 B_SERIES_PARAM = b_series_param()
@@ -27,6 +29,7 @@ def default_param():
     param.setValue("add_b_ions", "true")
     param.setValue("add_y_ions", "true")
     param.setValue("add_metainfo", "true")
+    param.setValue("add_first_prefix_ion", "true")
     return param
 
 DEFAULT_PARAM = default_param()
@@ -40,6 +43,7 @@ def complex_param():
     param.setValue("add_all_precursor_charges", "true")
     param.setValue("add_losses", "true")
     param.setValue("add_metainfo", "true")
+    param.setValue("add_first_prefix_ion", "true")
     return param
 
 COMPLEX_PARAM = complex_param()
@@ -87,7 +91,7 @@ def simulate_complex_peaks(peptide: str):
 def simulate_pivot(peptide: str):
     b = list_mz(generate_fragment_spectrum(peptide, B_SERIES_PARAM))
     y = list_mz(generate_fragment_spectrum(peptide, Y_SERIES_PARAM))
-    true_pivot = [*b[0:2],*y[-3:-1]]
+    true_pivot = [*b[0:2],*y[-2:]]
     return np.mean(true_pivot)
 
 def simulate_noise(peaks: np.array) -> np.array:
