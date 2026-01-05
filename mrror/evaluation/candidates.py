@@ -6,7 +6,7 @@ import numpy as np
 
 from ..util import combine_symbols, combine_masses
 from ..spectra.types import Peaks
-from ..fragments.types import TargetMassStateSpace, PairResult, BoundaryResult
+from ..fragments.types import TargetMasses, PairResult, BoundaryResult
 from ..graphs.types import SpectrumGraph, WeightedProductGraph
 from ..graphs.trace import AbstractPathSpace
 
@@ -46,7 +46,7 @@ class CandidateResult:
         l, r = self.seq_segment[i:i+2]
         return self.sequence[l:r]
 
-    def _peak_index_and_charge(
+    def _peak_annotation(
         self,
         path: Iterable[int],
         peaks: Peaks,
@@ -76,7 +76,7 @@ class CandidateResult:
         pair_component: int # 0 or 1
     ) -> tuple[np.ndarray, np.ndarray]:
         prefix_path = path[:pivot_idx][::-1]
-        prefix_peak_idx, prefix_charge = self._peak_index_and_charge(
+        prefix_peak_idx, prefix_charge = self._peak_annotation(
             prefix_path,
             peaks,
             topology,
@@ -88,7 +88,7 @@ class CandidateResult:
         prefix_intensity = peaks.intensity[prefix_peak_idx]
         # flip the first half of the path and recover its data.
         suffix_path = path[pivot_idx:]
-        suffix_peak_idx, suffix_charge = self._peak_index_and_charge(
+        suffix_peak_idx, suffix_charge = self._peak_annotation(
             suffix_path,
             peaks,
             topology,
@@ -204,13 +204,13 @@ class CandidateResult:
 def _retrieve_pivot_annotations(
     pivot_pair_ids: np.ndarray,
     pairs: PairResult,
-    targets: TargetMassStateSpace,
+    targets: TargetMasses,
 ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
     unique_ids, reindexer = np.unique_inverse(pivot_pair_ids)
     # pivot_pair_ids is an (n,2) array. unique_ids is one dimensional. reindexer is an (n,2) array associating each cell of pivot_pair_ids to a cell in unique_ids.
     pair_anno = [pairs.get_annotation(i) for i in unique_ids]
-    symbols = [targets.symbolize_pairs(x) for (_,x) in pair_anno]
-    masses = [targets.weigh_pairs(x) for (_,x) in pair_anno]
+    symbols = [targets.get_state_symbols(x) for (_,x) in pair_anno]
+    masses = [targets.get_state_weights(x) for (_,x) in pair_anno]
     return (
         reindexer,
         pair_anno,
@@ -226,13 +226,13 @@ def generate_candidates(
     suffixes: np.ndarray,
     affix_pairs: np.ndarray,
     pairs: PairResult,
-    targets: TargetMassStateSpace,
+    pair_targets: TargetMasses,
     sep: str = MISMATCH_SEPARATOR,
 ) -> CandidateResult:
     if len(prefixes) == 0 or len(suffixes) == 0 or len(aligned_affixes) == 0 or len(affix_pairs) == 0:
         return CandidateResult.empty()
     pivot_ids = affix_pairs[:,2:]
-    reindexed_pivot_ids, pivot_anno, pivot_symbols, pivot_masses = _retrieve_pivot_annotations(pivot_ids, pairs, targets)
+    reindexed_pivot_ids, pivot_anno, pivot_symbols, pivot_masses = _retrieve_pivot_annotations(pivot_ids, pairs, pair_targets)
     n = len(affix_pairs)
     candidates = []
     for i in range(n):
@@ -266,7 +266,6 @@ def generate_candidates(
         candidate_annotation = prefix_sym[1:][::-1] + [pivot_sym,] + suffix_sym[1:]
         candidate_cost = prefix_cost + pivot_cost + suffix_cost
         # combine affix and pivot data. prefixes need to be reversed. all affixe annotations begin with a null character, due to the pivot sink edge, which must be trimmed.
-        print("ANNO",len(candidate_annotation))
         
         mass_seq = [x[0] for x in candidate_masses]
         observed_mass = np.sum(mass_seq) / 2

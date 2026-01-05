@@ -6,7 +6,7 @@ import numpy as np
 
 from ..util import merge_compare_exact_unique, ravel, unravel, combine_symbols, combine_masses
 from ..sequences.suffix_array import SuffixArray, BisectResult
-from ..fragments import TargetMassStateSpace, BoundaryResult, PairResult
+from ..fragments.types import TargetMasses, BoundaryResult, PairResult
 from ..graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
 from ..graphs.propagate import AbstractNodeCostModel, AbstractEdgeCostModel
 from ..graphs.trace import AbstractPathCostModel
@@ -79,9 +79,7 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
             # (gap cost is added during comparison)
         else:
             idx = topology.graph[curr_node][next_node][self._weight_key]
-            if next_node == topology.pivot_sink:
-                return self._pairs.get_annotation(idx)
-            elif curr_node == topology.boundary_source:
+            if curr_node == topology.boundary_source and next_node != topology.pivot_sink:
                 idx, k = idx
                 return boundaries.get_annotation(idx)
             else:
@@ -99,42 +97,49 @@ class AnnotatedProductEdgeCostModel(AbstractEdgeCostModel):
         feature_weights: np.ndarray = FEATURE_WEIGHT_TENSOR,
         n_features: int = N_FEATURES,
     ) -> ProductEdgeWeight:
-        if lower_anno is None:
+        if lower_anno is None: # LOWER GAP
             return ProductEdgeWeight.from_lower_gap(
                 upper_costs + gap,
                 upper_anno,
             )
-            # LEFT GAP
-        elif upper_anno is None:
+        elif upper_anno is None: # UPPER GAP
             return ProductEdgeWeight.from_upper_gap(
                 lower_costs + gap,
                 lower_anno,
             )
-            # RIGHT GAP
-        else:
-            n_left = lower_costs.size
-            n_right = upper_costs.size
+        else: # MATCH / MISMATCH
+            lmask = lower_anno[:,[1,2]] != -1
+            lower_anno[:,[1,2]][lmask] = 0
+            umask = upper_anno[:,[1,2]] != -1
+            upper_anno[:,[1,2]][umask] = 0
+            # mask losses
+
             lower_anno_tensor = lower_anno.reshape(1,*lower_anno.shape)
             upper_anno_tensor = upper_anno.reshape(upper_anno.shape[0],1,*upper_anno.shape[1:])
             anno_eq = lower_anno_tensor == upper_anno_tensor
-            anno_match_cost = match * (feature_weights * anno_eq).sum(axis=2)
             anno_neq = np.logical_not(anno_eq)
+            # reshape lower annotation into a (1,n,4) tensor. reshape upper annotation into an (n,1,4) tensor. comparing the reshaped tensors compares every element in lower against every element in upper.
+
+            n_left = lower_costs.size
+            n_right = upper_costs.size
+            anno_match_cost = match * (feature_weights * anno_eq).sum(axis=2)
             anno_mismatch_cost = mismatch * (feature_weights * anno_neq).sum(axis=2)
             anno_complexity_cost = lower_costs.reshape(1,n_left) + upper_costs.reshape(n_right,1)
             comparison_costs = anno_complexity_cost + anno_mismatch_cost + anno_match_cost
             comparison_costs = comparison_costs.flatten()
-            # construct the comparison tensors and calculate costs
+            # assign costs.
+
             compared_lower_anno = np.concat([lower_anno] * n_right)
             compared_upper_anno = np.empty((n_right * n_left,n_features),dtype=upper_anno.dtype)
             for i in range(n_left):
                 compared_upper_anno[i::n_left] = upper_anno
             # duplicate annotations. this is a terrible way to compute and store this data.
+
             return ProductEdgeWeight(
                 comparison_costs,
                 compared_lower_anno,
                 compared_upper_anno,
             )
-            # MATCH
 
     def __call__(self, curr_node: int, next_node: int) -> tuple[float,ProductEdgeWeight]:
         lower_curr_node, upper_curr_node = unravel(curr_node, self._upper_order)
@@ -158,13 +163,17 @@ class AnnotatedResiduePathCostModel(AbstractPathCostModel):
         product_graph: WeightedProductGraph,
         lower_graph: SpectrumGraph,
         upper_graph: SpectrumGraph,
-        target_space: TargetMassStateSpace,
+        pair_targets: TargetMasses,
+        boundary_targets: TargetMasses,
+        reflected_boundary_targets: TargetMasses,
         mismatch_separator: str = MISMATCH_SEPARATOR,
         mass_offset_threshold: float = 0.01, # 1% is very permissive. could be much smaller if the input data is high resolution.
     ):
         self._mass_threshold = (2 + mass_offset_threshold) * pivot
         self._graph = product_graph
-        self._targets = target_space 
+        self._pair_targets = pair_targets
+        self._lower_boundary_targets = boundary_targets
+        self._upper_boundary_targets = reflected_boundary_targets
         self._lower_boundary = lower_graph.boundary_source
         self._upper_boundary = upper_graph.boundary_source
         self._sep = mismatch_separator
@@ -176,24 +185,29 @@ class AnnotatedResiduePathCostModel(AbstractPathCostModel):
         boundary: int,
     ) -> tuple[np.ndarray,np.ndarray]:
         if anno is None:
+            # pivot edge or error.
             return (
                 np.array([['',],], dtype=str),
                 np.array([[0.,],], dtype=float),
             )
         elif np.all(anno == -1):
+            # pivot edge or error.
             return (
                 np.full_like(anno, '', dtype=str),
                 np.full_like(anno, 0., dtype=float),
             )
         elif node == boundary:
+            boundary_targets = self._upper_boundary_targets if reflected else self._lower_boundary_targets
+            # annotation from a upper or lower boundary edge.
             return (
-                self._targets.symbolize_boundaries(anno),
-                self._targets.weigh_boundaries(anno),
+                boundary_targets.get_state_symbols(anno),
+                boundary_targets.get_state_weights(anno),
             )
         else:
+            # annotation from a non-boundary edge.
             return (
-                self._targets.symbolize_pairs(anno),
-                self._targets.weigh_pairs(anno),
+                self._pair_targets.get_state_symbols(anno),
+                self._pair_targets.get_state_weights(anno),
             )
 
     def initial_state(
@@ -215,8 +229,18 @@ class AnnotatedResiduePathCostModel(AbstractPathCostModel):
         lower_node, upper_node = self._graph.unravel(next_node)
         edge_annotation = self._graph.edge_weights[curr_node][next_node]
         anno_costs = edge_annotation.costs
-        lower_symbols, lower_masses = self._symbolize_and_weigh_annotation(edge_annotation.lower_annotation, lower_node, self._lower_boundary)
-        upper_symbols, upper_masses = self._symbolize_and_weigh_annotation(edge_annotation.upper_annotation, upper_node, self._upper_boundary)
+        lower_symbols, lower_masses = self._symbolize_and_weigh_annotation(
+            edge_annotation.lower_annotation,
+            lower_node,
+            self._lower_boundary,
+            reflected=False,
+        )
+        upper_symbols, upper_masses = self._symbolize_and_weigh_annotation(
+            edge_annotation.upper_annotation,
+            upper_node,
+            self._upper_boundary,
+            reflected=True,
+        )
         combined_symbols = combine_symbols(lower_symbols, upper_symbols, self._sep)
         combined_mass = combine_masses(lower_masses, upper_masses)
         order = np.argsort(anno_costs)

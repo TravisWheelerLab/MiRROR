@@ -5,7 +5,6 @@ from typing import Self, Any
 
 from .util import ravel
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
-from .fragments import TargetMassStateSpace
 from .graphs.types import SpectrumGraph, PivotGraph, WeightedProductGraph
 from .graphs.propagate import propagate_cost
 
@@ -55,7 +54,6 @@ class AlignmentParams(SerializableDataclass):
 
 def align(
     anno: AnnotationResult,
-    targets: TargetMassStateSpace,
     params: AlignmentParams,
     verbose: bool = False,
 ) -> AlignmentResult:

@@ -32,22 +32,39 @@ class SpectrumGraph:
         return self.graph[i][j][self.weight_key]
 
     @classmethod
+    def empty(cls, weight_key: str = "weight") -> Self:
+        graph = nx.DiGraph()
+        graph.add_nodes_from([0,])
+        return cls(
+            graph = graph,
+            boundaries = np.empty((0,),dtype=int),
+            boundary_source = 1,
+            pivots = np.empty((0,),dtype=int),
+            pivot_sink = 2,
+            weight_key = weight_key,
+        )
+
+    @classmethod
     def from_edges_and_boundaries(
         cls,
         edges: np.ndarray,
         boundaries: np.ndarray,
         pivots: np.ndarray,
         multiresidue_boundaries: list[np.ndarray] = [],
-        weight_key: str = 'weight',
+        weight_key: str = "weight",
     ) -> Self:
         g = nx.DiGraph()
         g.add_weighted_edges_from(edges, weight=weight_key)
         # construct digraph with edges
-        if boundaries.size > 0:
-            boundary_source = max(edges.max(),boundaries.max()) + 1
+        if edges.size > 0:
+            if boundaries.size > 0:
+                boundary_source = max(edges.max(),boundaries.max()) + 1
+            else:
+                boundary_source = edges.max() + 1
+                # handle empty boundaries.
         else:
-            boundary_source = edges.max() + 1
-            # handle empty boundaries.
+            return cls.empty(weight_key = weight_key)
+            # handle empty graphs
         pivot_sink = boundary_source + 1
         # create an artificial source to point to boundaries and likewise a sink to pivots.
         g.add_weighted_edges_from(((boundary_source,x,(w,1)) for (x,w) in boundaries), weight=weight_key)

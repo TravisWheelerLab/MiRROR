@@ -89,14 +89,18 @@ def refine_affixes(
     pfx, inconsistent_pfx = _refine_affixes(reverse_affixes, b_anno, y_anno, sep)
     sfx, inconsistent_sfx = _refine_affixes(forward_affixes, y_anno, b_anno, sep)
     # construct component categories
+
     num_rev = len(reverse_affixes)
     affixes = reverse_affixes + forward_affixes
     # concatenate affixes
+
     sfx[:,0] += num_rev
     inconsistent_sfx[:,0] += num_rev
     # shift suffix indices to match concatenated affixes
+
     ifx = np.concat([inconsistent_pfx, inconsistent_sfx], dtype=int)
     # construct infixes
+
     return (
         affixes,
         pfx,
@@ -121,8 +125,6 @@ def pair_affixes(
     unraveled_pfx_clusters, pfx_clust_id = np.unique(unraveled_pfx_nodes, axis=0, return_inverse=True)
     sfx_clusters, sfx_clust_id = np.unique(sfx_nodes, axis=0, return_inverse=True)
     # cluster initial nodes, effectively grouping paths by the node they start on.
-
-    print(unraveled_pfx_clusters)
 
     pivot_adj = pivot_topology.graph.adj
     for x in pivot_adj:

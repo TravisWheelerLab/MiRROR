@@ -5,7 +5,7 @@ from typing import Self, Any
 
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 
-from .fragments import TargetMassStateSpace
+from .fragments.types import TargetMasses
 from .graphs.dfs import dfs
 from .graphs.trace import AbstractPathSpace, trace
 from .sequences.suffix_array import SuffixArray
@@ -45,7 +45,6 @@ class EnumerationParams(SerializableDataclass):
 def enumerate_candidates(
     anno: AnnotationResult,
     algn: AlignmentResult,
-    targets: TargetMassStateSpace,
     suffix_arrays: tuple[SuffixArray,SuffixArray],
     params: EnumerationParams,
     verbose: bool = False,
@@ -63,7 +62,7 @@ def enumerate_candidates(
 
     # step 1: trace aligned paths through the product topology, then cluster into prefixes, affixes, and suffixes by boundary annotation.
     t = time()
-    b_anno, y_anno = targets.get_series_loss_symbols()
+    b_anno, y_anno = anno_params.boundary_target_masses.get_series_loss_symbols()
     suffix_array, reversed_suffix_array = suffix_arrays
     if suffix_array is None:
         for i in range(n):
@@ -76,7 +75,9 @@ def enumerate_candidates(
                     algn.prod_topology[i],
                     algn.lower_topology[i],
                     algn.upper_topology[i],
-                    targets,
+                    anno_params.pair_target_masses,
+                    anno_params.boundary_target_masses,
+                    anno_params.reflected_boundary_target_masses,
                 ),
             )
             # construct path space of each aligned product topology.
@@ -98,7 +99,9 @@ def enumerate_candidates(
                     algn.prod_topology[i],
                     algn.lower_topology[i],
                     algn.upper_topology[i],
-                    targets,
+                    anno_params.pair_target_masses,
+                    anno_params.boundary_target_masses,
+                    anno_params.reflected_boundary_target_masses,
                 ),
             )
             # trace suffixes through the forward suffix array.
@@ -112,7 +115,9 @@ def enumerate_candidates(
                     algn.prod_topology[i],
                     algn.lower_topology[i],
                     algn.upper_topology[i],
-                    targets,
+                    anno_params.pair_target_masses,
+                    anno_params.boundary_target_masses,
+                    anno_params.reflected_boundary_target_masses,
                 ),
             )
             # trace prefixes through the reversed suffix array.
@@ -162,9 +167,9 @@ def enumerate_candidates(
             suffixes[i],
             affix_pairs[i],
             anno.pairs,
-            targets,
+            anno_params.pair_target_masses,
         )
-        # 
+        # concatenate affix pairs with pivot annotations to product full candidate sequences.
 
         # candidates[i] = rescore_candidates()
         # TODO: score, filter, and re-order the candidates.

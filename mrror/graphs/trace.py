@@ -89,7 +89,7 @@ def _trace(
         if curr_cost < threshold:
             next_path = curr_path + [curr_node,]
             neighbors = list(adj[curr_node])
-            if len(neighbors) == 0:
+            if len(neighbors) == 0 and len(next_path) > 1:
                 yield (curr_cost, curr_cost_state, next_path)
             else:
                 for next_node in neighbors:
