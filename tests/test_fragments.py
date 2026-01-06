@@ -1,40 +1,20 @@
 from sys import argv
 
-import pytest
-
-from mrror.spectra.types import AugmentedPeaks
-
 from mrror.util import HYDROGEN_MASS
-
+from mrror.spectra.types import AugmentedPeaks
 from mrror.fragments.types import TargetMasses, FragmentStateSpace, ResidueStateSpace
 from mrror.fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
 from mrror.fragments.search import find_pairs, find_pivots, find_boundaries
-
 from mrror.evaluation.annotated_peaks import DEFAULT_PARAM, COMPLEX_PARAM, AnnotatedPeaks
 
-from .test_annotated_peaks import TEST_PEPTIDES, _assert_maxmin_tolerance
+from .shared import ANNO_CFG, TEST_PEPTIDES, TEST_PEAKS, AUG_PEAKS, _assert_maxmin_tolerance
 
+
+import pytest
 import numpy as np
 from tabulate import tabulate
 from hydra import compose, initialize
 from omegaconf import OmegaConf
-
-ANNO_CFG = None
-with initialize(version_base=None, config_path="test-params", job_name="test_fragments"):
-    cfg = compose(config_name="config")
-    ANNO_CFG = cfg.annotation
-
-TEST_PEAKS = [
-    AnnotatedPeaks.from_simulation(peptide, param, num_charges)
-    for peptide in TEST_PEPTIDES
-    for param in (DEFAULT_PARAM, COMPLEX_PARAM)
-    for num_charges in (1,3)
-]
-
-AUG_PEAKS = [
-    AugmentedPeaks.from_peaks(x, charges=np.array([1,2,3]))
-    for x in TEST_PEAKS
-]
 
 def test_state_space_constructors():
     print(FragmentStateSpace.trivial())

@@ -4,8 +4,18 @@ import itertools as it
 
 import numba
 import numpy as np
+from hydra import compose, initialize_config_dir
+from omegaconf import OmegaConf
 
 HYDROGEN_MASS = 1.007
+
+def load_config(config_dir, config_name="config"):
+    """Loads a hydra config object from a directory of .yaml files.
+    
+    config_dir: string, an absolute path.
+    config_name: string, the name of the top-level config file without its extension."""
+    with initialize_config_dir(version_base=None, config_dir=config_dir):
+        return compose(config_name=config_name)
 
 def pairwise_disjoint(
     a: list,

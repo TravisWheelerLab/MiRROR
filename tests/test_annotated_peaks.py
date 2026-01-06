@@ -1,59 +1,14 @@
 # uv run ./tests/test_annotated_peaks.py ./data/spectra/Apis-mellifera.mzlib.txt 0.01 True 3
 from sys import argv
 
-import pytest
-
 from mrror.io import read_mzlib
-from mrror.evaluation.annotated_peaks import DEFAULT_PARAM, COMPLEX_PARAM, AnnotatedPeaks
+from mrror.evaluation.annotated_peaks import AnnotatedPeaks
 
+from .shared import TEST_PEPTIDES, DEFAULT_PARAM, COMPLEX_PARAM, _assert_maxmin_tolerance, _assert_positive
+
+import pytest
 import numpy as np
 from tabulate import tabulate
-
-TEST_PEPTIDES = [
-    "PEPTIDE",
-    "NREQSTK",
-    "AEEHANR",
-    "GNAGGLHHHR",
-    "HHVLHHQTVDK",
-    "HHSTIPQK",
-    "FTHQHKPDER",
-    "CEACPKPGTHAHK",
-    "HHTIAHYK",
-    "KPGVHQPQR",
-    "AAHLAAHEAAK",
-    "GHSCYRPR",
-    "HHNIIR",
-    "HLAEHEVK",
-    "HGLTNTASHTR",
-    "INPDNHNEK",
-    "HGATVVNHVK",
-    "HLNGHGSPPATNSSHR",
-    "HASNIHVEK",
-    "ELHVHPK",
-]
-
-def _assert_maxmin_tolerance(queries, targets, tolerance):
-    max_min_err = -np.inf
-    max_min_idx = -1
-    max_min_tgt = -1
-    queries = list(set(queries))
-    target = list(set(targets))
-    for (i,x) in enumerate(queries):
-        min_err = np.inf
-        min_tgt = -1
-        for (j,y) in enumerate(targets):
-            dif = abs(x - y)
-            if dif < min_err:
-                min_err = dif
-                min_tgt = j
-        if min_err > max_min_err:
-            max_min_err = min_err
-            max_min_idx = i
-            max_min_tgt = min_tgt
-    assert max_min_err < tolerance
-
-def _assert_positive(arrs: list[list]):
-    assert np.concat(arrs).min() > 0
 
 def _test_decharged_fragment_masses(peptide, param, tolerance):
     peaks_simple = AnnotatedPeaks.from_simulation(peptide, param, 1)

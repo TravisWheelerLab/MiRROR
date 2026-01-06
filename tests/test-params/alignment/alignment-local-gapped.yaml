@@ -1,8 +1,0 @@
-cost_threshold: 0.
-cost_model:
-  node_match: 0.
-  node_mismatch: 1.
-  edge_match: 0.
-  edge_mismatch: 1.
-  edge_gap: 2.
-weight_key: 'weight'

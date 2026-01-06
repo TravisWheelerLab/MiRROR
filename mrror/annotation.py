@@ -94,7 +94,7 @@ class AnnotationParams(SerializableDataclass):
         # target masses for low-mz boundaries observed as single peaks.
 
         reflected_residue_space = ResidueStateSpace.from_config(cfg, reflect=True)
-        reflected_upper_boundary_fragment_space = FragmentSpace.from_config_to_boundaries(cfg, reflect=True)
+        reflected_upper_boundary_fragment_space = FragmentStateSpace.from_config_to_boundaries(cfg, reflect=True)
         reflected_upper_boundary_targets = construct_boundary_target_masses(
             reflected_residue_space,
             reflected_upper_boundary_fragment_space,
