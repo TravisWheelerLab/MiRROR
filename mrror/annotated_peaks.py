@@ -8,14 +8,14 @@ import mzspeclib as mzlib
 import mzpaf
 from tabulate import tabulate
 
-from ..util import merge_compare_fuzzy_unique, merge_compare_exact_unique
-from ..spectra.types import Peaks
-from ..spectra.simulation import oms, generate_fragment_spectrum, list_mz, list_intensity, list_ion_data, simulate_pivot, DEFAULT_PARAM, COMPLEX_PARAM
-from ..fragments.types import HYDROGEN_MASS, PairResult, PivotResult, BoundaryResult
+from .util import merge_compare, merge_compare_fuzzy_unique, merge_compare_exact_unique, first_match
+from .spectra.types import Peaks
+from .spectra.simulation import oms, generate_fragment_spectrum, list_mz, list_intensity, list_ion_data, simulate_pivot, DEFAULT_PARAM, COMPLEX_PARAM
+from .fragments.types import HYDROGEN_MASS, PairResult, PivotResult, BoundaryResult, FragmentMasses
 
-from ..annotation import AnnotationResult, AnnotationParams
-from ..alignment import AlignmentResult, AlignmentParams
-from ..enumeration import EnumerationResult, EnumerationParams
+from .annotation import AnnotationResult, AnnotationParams
+from .alignment import AlignmentResult, AlignmentParams
+from .enumeration import EnumerationResult, EnumerationParams
 
 class AnnotationType(enum.Enum):
     FRAGMENTS = 0
@@ -165,7 +165,12 @@ class AnnotatedPeaks(Peaks):
         peptide_err = editdistance.eval(self.peptide, other.peptide)
         if mz_tolerance is None:
             mz_tolerance = 1e-10 # if no tolerance is passed, make it large enough to account for floating point epsilons.
-        aln = np.array(list(merge_compare_fuzzy_unique(self.mz, other.mz, mz_tolerance)))
+        aln = np.array(list(merge_compare(self.mz[::-1], other.mz[::-1], mz_tolerance, verbose=True)))
+        aln = (
+            len(self.mz) - aln[0][::-1] - 1,
+            len(other.mz) - aln[1][::-1] - 1,
+        )
+        aln = np.c_[aln[0],aln[1]]
         n_peaks = len(self)
         n_aln = len(aln)
         mz_err = n_peaks - n_aln
@@ -184,8 +189,8 @@ class AnnotatedPeaks(Peaks):
             int_err = self.intensity[self_aln] - other.intensity[other_aln]
             series_err = self.series[self_aln] == other.series[other_aln]
             pos_err = self.position[self_aln] - other.position[other_aln]
-            charge_aln = np.array([next(merge_compare_exact_unique(self.charge[i],other.charge[j]), (-1,-1)) for (i,j) in aln])
-            loss_aln = np.array([next(merge_compare_exact_unique(self.loss[i],other.loss[j]), (-1,-1)) for (i,j) in aln])
+            charge_aln = np.array([first_match(self.charge[i],other.charge[j]) for (i,j) in aln])
+            loss_aln = np.array([first_match(self.loss[i],other.loss[j]) for (i,j) in aln])
         # compare annotations of aligned peaks.
 
         return ComparedAnnotations(
@@ -207,66 +212,86 @@ class AnnotatedPeaks(Peaks):
         """Raises NotImplementedError. AnnotatedPeaks must be constructed from one of its specific constructors, so this generic Peaks constructor is disabled."""
         raise NotImplementedError("AnnotatedPeaks cannot be constructed by the Peaks classmethod from_data. Use an AnnotatedPeaks constructor: from_evaluation, from_simulation, or from_benchmark.")
 
+    @classmethod
+    def from_fragment_masses(
+        cls,
+        fragment_masses: FragmentMasses,
+        anno_cfg: AnnotationParams,
+    ) -> Self:
+        n = len(fragment_masses.mass)
+        charges = [None for _ in range(n)]
+        losses = [None for _ in range(n)]
+        assert len(fragment_masses.mass) == len(np.unique(fragment_masses.mass))
+        for i in range(n):
+            loss_arr = np.concat(fragment_masses.losses[i], dtype=int)
+            target_idx_arr = np.concat(fragment_masses.target_indices[i], dtype=int)
+            losses[i] = np.array([anno_cfg.target_masses[t].right_fragment_space.loss_symbols[l] for (t,l) in zip(target_idx_arr,loss_arr)])
+            charges[i] = np.concat([
+                [c] * len(fragment_masses.losses[i][j]) 
+                for (j, c) in enumerate(fragment_masses.charges[i])
+            ])
+            feature_order = np.argsort(np.concat(fragment_masses.costs[i], dtype=float))
+            losses[i] = losses[i][feature_order]
+            charges[i] = charges[i][feature_order]
+        return cls(
+            anno_type = AnnotationType.FRAGMENTS,
+            peptide = '',
+            pivot = 0.,
+            mz = fragment_masses.mass,
+            intensity = fragment_masses.intensity,
+            series = np.full_like(fragment_masses.mass, '', dtype=str),
+            position = np.zeros_like(fragment_masses.mass, dtype=int),
+            charge = charges,
+            loss = losses,
+            mods = [],
+        )
+
     # TODO
     @classmethod
-    def from_evaluation(cls,
+    def from_candidate(cls,
         peaks: Peaks,
-        annotation: tuple[AnnotationResult,AnnotationParams],
         cluster: int,
-        alignment: tuple[AlignmentResult,AlignmentParams] = None,
-        enumeration: tuple[EnumerationResult,EnumerationParams] = None,
+        annotation: tuple[AnnotationResult,AnnotationParams],
+        alignment: tuple[AlignmentResult,AlignmentParams],
+        enumeration: tuple[EnumerationResult,EnumerationParams],
         candidate: int = None,
     ) -> Self:
-        passed_options = [x is not None for x in [alignment, enumeration, candidate]]
-        any_passed = any(passed_options)
-        all_passed = all(passed_options)
-        if any_passed and not(all_passed):
-            raise ValueError("from_evaluation must be called either with only the annotation arg or with all four args.")
-        else:
-            if all_passed:
-                anno_type = AnnotationType.CANDIDATE
-                candidate_cluster = enumeration[0].candidates[cluster]
-                peptide = candidate_cluster.get_sequence(candidate)
-                mods = [None for _ in peptide]
-                mz, intensity, charge = candidate_cluster.get_peaks(
-                    candidate,
-                    peaks,
-                    annotation[0].pairs,
-                    annotation[0].lower_boundaries,
-                    annotation[0].upper_boundaries[cluster],
-                    alignment[0].prod_topology[cluster],
-                    alignment[0].lower_topology[cluster],
-                    alignment[0].upper_topology[cluster],
-                )
-                mz_ord = np.argsort(mz)
-                mz = mz[mz_ord]
-                intensity = intensity[mz_ord]
-                series = candidate_cluster.get_series(candidate)
-                position = candidate_cluster.get_position(candidate)
-                loss = np.zeros_like(mz)
-            else:
-                anno_type = AnnotationType.FRAGMENTS
-                peptide = ""
-                mz = annotation[0].peaks.mz
-                mods = []
-                intensity = annotation[0].peaks.intensity
-                series = ['' for _ in mz]
-                position = [-1 for _ in mz]
-                charge = annotation[0].get_peak_charges(cluster)
-                loss = annotation[0].get_peak_losses(cluster)
-                # peptide, series, and position cannot be calculated without a peptide. the rest can be derived with less specificity from the AnnotationResult.
-            return cls(
-                anno_type = anno_type,
-                peptide = peptide,
-                pivot = annotation[0].pivots.cluster_points[cluster],
-                mz = mz,
-                intensity = intensity,
-                series = series,
-                position = position,
-                charge = charge,
-                loss = loss,
-                mods = mods,
-            )
+        anno_res, anno_cfg = annotation
+        algn_res, algn_cfg = alignment
+        enmr_res, enmr_cfg = enumeration
+        candidate_cluster = enmr_res.candidates[cluster]
+        peptide = candidate_cluster.get_sequence(candidate)
+        mods = [None for _ in peptide]
+        # TODO mods
+        mz, intensity, charge = candidate_cluster.get_peaks(
+            candidate,
+            peaks,
+            anno_res.pairs,
+            anno_res.lower_boundaries,
+            anno_res.upper_boundaries[cluster],
+            algn_res.prod_topology[cluster],
+            algn_res.lower_topology[cluster],
+            algn_res.upper_topology[cluster],
+        )
+        loss = [np.empty((0,),dtype=str) for _ in mz]
+        # TODO loss
+        mz_ord = np.argsort(mz)
+        mz = mz[mz_ord]
+        intensity = intensity[mz_ord]
+        series = candidate_cluster.get_series(candidate)
+        position = candidate_cluster.get_position(candidate)
+        return cls(
+            anno_type = AnnotationType.CANDIDATE,
+            peptide = peptide,
+            pivot = anno_res.pivots.cluster_points[cluster],
+            mz = mz,
+            intensity = intensity,
+            series = series,
+            position = position,
+            charge = charge,
+            loss = loss,
+            mods = mods,
+        )
 
     @classmethod
     def from_simulation(cls,

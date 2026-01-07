@@ -18,7 +18,6 @@ import numpy as np
 
 @dataclasses.dataclass(slots=True)
 class AlignmentResult(SerializableDataclass):
-    fragment_masses: np.ndarray
     symmetries: list[np.ndarray]
     prod_topology: list[WeightedProductGraph]
     lower_topology: list[SpectrumGraph]
@@ -60,12 +59,9 @@ def align(
     profile = {}
 
     t = time()
-    fragment_masses, symmetries, lower_topology, upper_topology, pivot_topology = construct_spectrum_topology(
-        anno.peaks,
-        anno.pairs,
-        anno.lower_boundaries,
+    symmetries, lower_topology, upper_topology, pivot_topology = construct_spectrum_topology(
+        anno.fragment_masses,
         anno.pivots,
-        anno.upper_boundaries,
         anno.tolerance,
         params.weight_key,
     )
@@ -104,7 +100,6 @@ def align(
     if verbose:
        print(json.dumps(profile, indent=4))
     return AlignmentResult(
-        fragment_masses,
         symmetries,
         prod_topology,
         lower_topology,

@@ -64,6 +64,19 @@ def unravel(
     )
 
 @numba.jit(nopython=True)
+def first_match(
+    left_arr: Iterable,
+    right_arr: Iterable,
+) -> tuple[int,int]:
+    n = len(left_arr)
+    m = len(right_arr)
+    for i in range(n):
+        for j in range(m):
+            if left_arr[i] == right_arr[j]:
+                return (i,j)
+    return (-1, -1)
+
+@numba.jit(nopython=True)
 def merge_compare_exact_unique(
     left_arr: Iterable,
     right_arr: Iterable,
@@ -168,16 +181,17 @@ def bisect_right(
 def merge_compare(
     left_arr: np.ndarray,
     right_arr: np.ndarray,
-    n: int,
     tolerance: float,
-    pivot_point: float,
+    verbose = False,
 ) -> tuple[np.ndarray,np.ndarray]:
     prev_match = (np.inf,np.inf)
     match_left = []
     match_right = []
     l = 0
     r = 0
-    while l < n and r < n:
+    n = len(left_arr)
+    m = len(right_arr)
+    while l < n and r < m:
         prev_left_val, prev_right_val = prev_match
         left_val = left_arr[l]
         right_val = right_arr[r]
@@ -223,13 +237,11 @@ def _mirror_symmetries(
         right_arr = (2 * pivot_point) - sorted_arr[hi:]
         # right_arr is the reflection of everything above the pivot.
         
-        n = min(len(left_arr), len(right_arr))
         match_left, match_right = merge_compare(
             left_arr,
             right_arr,
-            n,
             tolerance,
-            pivot_point)
+        )
         # find the symmetries as matched pairs in the left and right arrays.
         
         deltas = np.abs(right_arr[match_right] - left_arr[match_left])

@@ -2,7 +2,7 @@
 from sys import argv
 
 from mrror.io import read_mzlib
-from mrror.evaluation.annotated_peaks import AnnotatedPeaks
+from mrror.annotated_peaks import AnnotatedPeaks
 
 from .shared import TEST_PEPTIDES, DEFAULT_PARAM, COMPLEX_PARAM, _assert_maxmin_tolerance, _assert_positive
 

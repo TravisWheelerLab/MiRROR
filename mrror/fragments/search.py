@@ -99,6 +99,7 @@ def find_pairs(
     peaks: AugmentedPeaks,
     tolerance: float,
     targets: TargetMasses,
+    targets_index: int,
     mode: str = "minimal",
 ) -> PairResult:
     if mode == "minimal":
@@ -123,6 +124,8 @@ def find_pairs(
     query_masses = queries[loop_mask]
     features, feature_costs, feature_segments, *_ = targets.get_hit_states(results[loop_mask,2:4], query_masses)
     # expand target hit range to features and calculate costs
+    features = np.c_[features, np.full(len(features), targets_index)]
+    # add targets index to feature array
     return PairResult(
         indices = global_indices[loop_mask],
         inner_indices = local_indices[loop_mask],
@@ -189,6 +192,7 @@ def find_boundaries(
     peaks: AugmentedPeaks,
     tolerance: float,
     targets: TargetMasses,
+    targets_index: int,
     k: int = 1,
 ) -> BoundaryResult:
     results, queries = _find_boundaries(
@@ -200,6 +204,8 @@ def find_boundaries(
         return BoundaryResult.empty()
         # catch empty results before they crash.
     features, feature_costs, feature_segments, *_ = targets.get_hit_states(results[:,1:], queries)
+    features = np.c_[features, np.full(len(features), targets_index)]
+    # add targets index to feature array
     return BoundaryResult(
         index = peaks.get_original_indices(results[:,0]),
         inner_index = results[:,0],

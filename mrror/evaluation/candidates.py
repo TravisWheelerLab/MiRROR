@@ -173,7 +173,6 @@ class CandidateResult:
         candidates: list[tuple[float,str,np.ndarray,float,float]],
     ):
         masses, paths, path_pivots, sequences, annotations, offsets, costs = [np.array(x,dtype=object) for x in zip(*candidates)]
-        print("ANNOTATIONS", len(annotations))
         order = np.argsort(costs)
         return cls(
             mass = masses[order],

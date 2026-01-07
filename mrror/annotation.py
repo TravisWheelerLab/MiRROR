@@ -6,8 +6,8 @@ from typing import Self, Any
 from .util import normalize_dict
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMasses, PairResult, PivotResult, BoundaryResult
-from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMasses, PairResult, PivotResult, BoundaryResult, FragmentMasses
+from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, construct_unique_fragment_masses
 from .fragments.search import find_pairs, find_pivots, find_boundaries 
 from .sequences.suffix_array import SuffixArray
 from .sequences.queries import PeptideMassQueryEngine, all_kmers
@@ -23,6 +23,7 @@ class AnnotationResult(SerializableDataclass):
     pivots: PivotResult
     lower_boundaries: BoundaryResult
     upper_boundaries: list[BoundaryResult]
+    fragment_masses: FragmentMasses
     tolerance: float
     
     _profile: dict[str,float] = None
@@ -37,6 +38,7 @@ class AnnotationResult(SerializableDataclass):
         pivots: PivotResult,
         lower_boundaries: BoundaryResult,
         upper_boundaries: list[BoundaryResult],
+        fragment_masses: FragmentMasses,
         tolerance: float,
         profile: dict[str,float],
     ) -> Self:
@@ -47,23 +49,26 @@ class AnnotationResult(SerializableDataclass):
             pivots = pivots,
             lower_boundaries = lower_boundaries,
             upper_boundaries = upper_boundaries,
+            fragment_masses = fragment_masses,
             tolerance = tolerance,
             _profile = profile,
         )
 
 @dataclasses.dataclass(slots=True)
 class AnnotationParams(SerializableDataclass):
-    pair_target_masses: TargetMasses
-    # target masses for pairs.
-    # residues augmented by modifications and left and right losses.
-    boundary_target_masses: TargetMasses
-    # target masses for lower boundaries.
-    # residues augmented by modifications and losses, and shifted by b and y series offsets.
-    reflected_boundary_target_masses: TargetMasses
-    # target masses for reflected upper boundaries.
-    # residues augmented by reflected modifications and losses, 
-    # and shifted by b and y series offsets.
-    # TODO - multiresidue targets.
+    target_masses: tuple[TargetMasses,TargetMasses,TargetMasses]
+    max_k: int
+    # pair_target_masses: TargetMasses
+    # # target masses for pairs.
+    # # residues augmented by modifications and left and right losses.
+    # boundary_target_masses: TargetMasses
+    # # target masses for lower boundaries.
+    # # residues augmented by modifications and losses, and shifted by b and y series offsets.
+    # reflected_boundary_target_masses: TargetMasses
+    # # target masses for reflected upper boundaries.
+    # # residues augmented by reflected modifications and losses, 
+    # # and shifted by b and y series offsets.
+    # # TODO - multiresidue targets.
     charges: np.ndarray
     # list of (positive) charges expected on fragments. typically [1,], [1,2,], or [1,2,3].
     query_tolerance: float
@@ -72,6 +77,24 @@ class AnnotationParams(SerializableDataclass):
     # the max distance between a value and another reflected value such that they are considered symmetric.
     pivot_score_factor: float
     # tunes the pivot symmetry score threshold := max score * score factor. TODO - this might not work for noisier spectra.
+
+    def _targets(self, i: int, k: int, stride=3) -> tuple[TargetMasses,int]:
+        if k > self.max_k:
+            raise ValueError(f"residue length {k} exceeds the maximum {self.max_k}.")
+        index = i + ((k - 1) * stride)
+        return (
+            self.target_masses[index],
+            index,
+        )
+
+    def pair_targets(self, k=1) -> tuple[TargetMasses,int]:
+        return self._targets(0, k)
+
+    def boundary_targets(self, k=1) -> tuple[TargetMasses,int]:
+        return self._targets(1, k)
+
+    def reflected_boundary_targets(self, k=1) -> tuple[TargetMasses,int]:
+        return self._targets(2, k)
 
     @classmethod
     def from_config(cls,
@@ -100,23 +123,22 @@ class AnnotationParams(SerializableDataclass):
             reflected_upper_boundary_fragment_space,
         )
         # target masses for high-mz boundaries observed as the reflections of single peaks.
-        
+
         # TODO - multiresidue spaces and targets.
 
-        charges = np.array(cfg.charges)
-        query_tolerance = cfg['query_tolerance']
-        symmetry_tolerance = cfg['symmetry_tolerance']
-        pivot_score_factor = cfg['pivot_score_factor']
-        # other params
-
         return cls(
-            pair_targets,
-            lower_boundary_targets,
-            reflected_upper_boundary_targets,
-            charges,
-            query_tolerance,
-            symmetry_tolerance,
-            pivot_score_factor,
+            target_masses = (
+                pair_targets,
+                lower_boundary_targets,
+                reflected_upper_boundary_targets,
+                # k=2 pair, lb, ub...
+                # k=3 pair, lb, ub...
+            ),
+            max_k = 1,
+            charges = np.array(cfg.charges),
+            query_tolerance = cfg.query_tolerance,
+            symmetry_tolerance = cfg.symmetry_tolerance,
+            pivot_score_factor = cfg.pivot_score_factor,
         )
 
 def annotate(
@@ -140,10 +162,12 @@ def annotate(
     # construct augmented mz and target masses
     
     t = time()
+    pair_targets, pair_index = params.pair_targets()
     pairs = find_pairs(
         peaks = decharged_peaks,
         tolerance = params.query_tolerance,
-        targets = params.pair_target_masses,
+        targets = pair_targets,
+        targets_index = pair_index,
     )
     profile["pairs"] = time() - t
     if verbose:
@@ -151,10 +175,12 @@ def annotate(
     # find pairs of peaks in the decharged spectrum whose difference matches a target in the pair target masses.
     
     t = time()
+    lb_targets, lb_index = params.boundary_targets()
     lower_boundaries = find_boundaries(
         peaks = decharged_peaks,
         tolerance = params.query_tolerance,
-        targets = params.boundary_target_masses,
+        targets = lb_targets,
+        targets_index = lb_index,
     )
     profile["lower_boundaries"] = time() - t
     if verbose:
@@ -184,15 +210,28 @@ def annotate(
     # create a reflected peak list for each pivot cluster.
 
     t = time()
+    ub_targets, ub_index = params.reflected_boundary_targets()
     upper_boundaries = [find_boundaries(
             peaks = refl_peaks,
             tolerance = params.query_tolerance,
-            targets = params.reflected_boundary_target_masses,
+            targets = ub_targets,
+            targets_index = ub_index,
         ) for refl_peaks in reflected_peaks]
     profile["upper_boundaries"] = time() - t
     if verbose:
         print(upper_boundaries)
     # find single peaks in the reflected peak lists whose mass matches a target in the reflected boundary target masses.
+
+    t = time()
+    fragment_masses = construct_unique_fragment_masses(
+        peaks,
+        pairs,
+        pivots,
+        lower_boundaries,
+        upper_boundaries,
+    )
+    profile["reindexing"] = time() - t
+    # collect annotated fragments into a list of unique masses with aggregate properties.
     
     if verbose:
         print(json.dumps(profile, indent=4))
@@ -202,6 +241,7 @@ def annotate(
         pivots,
         lower_boundaries,
         upper_boundaries,
+        fragment_masses,
         params.query_tolerance,
         profile,
     )

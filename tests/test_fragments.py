@@ -5,7 +5,7 @@ from mrror.spectra.types import AugmentedPeaks
 from mrror.fragments.types import TargetMasses, FragmentStateSpace, ResidueStateSpace
 from mrror.fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
 from mrror.fragments.search import find_pairs, find_pivots, find_boundaries
-from mrror.evaluation.annotated_peaks import DEFAULT_PARAM, COMPLEX_PARAM, AnnotatedPeaks
+from mrror.annotated_peaks import DEFAULT_PARAM, COMPLEX_PARAM, AnnotatedPeaks
 
 from .shared import ANNO_CFG, TEST_PEPTIDES, TEST_PEAKS, AUG_PEAKS, _assert_maxmin_tolerance
 
@@ -91,7 +91,7 @@ def test_search_pairs():
         print(anno_peaks.tabulate())
         print(aug_peaks)
         true_pairs = [(x,y) for (x,y) in anno_peaks.pairs()]
-        res = find_pairs(aug_peaks, tolerance, targets)
+        res = find_pairs(aug_peaks, tolerance, targets, -1)
         observed_pairs = [(x,y) for (x,y) in res.indices.tolist()]
         missed_pairs = list(set(true_pairs).difference(observed_pairs))
         print("missed pairs",len(missed_pairs),missed_pairs)
@@ -110,7 +110,7 @@ def test_search_pivots():
     for (anno_peaks, aug_peaks) in zip(TEST_PEAKS, AUG_PEAKS):
         print(anno_peaks.tabulate())
         print("true pivot",anno_peaks.pivot)
-        pairs = find_pairs(aug_peaks, tolerance, targets)
+        pairs = find_pairs(aug_peaks, tolerance, targets, -1)
         pivots = find_pivots(aug_peaks, pairs, tolerance, sym_tolerance, score_factor)
         print(pivots.cluster_points)
         assert any(abs(x - anno_peaks.pivot) < tolerance for x in pivots.cluster_points)
@@ -127,7 +127,7 @@ def test_search_boundaries_lower():
         print(anno_peaks.tabulate())
         print("true boundaries",true_boundaries)
 
-        res = find_boundaries(aug_peaks, tolerance, targets)
+        res = find_boundaries(aug_peaks, tolerance, targets, -1)
         observed_boundaries = res.index.tolist()
         print("observed boundaries", observed_boundaries)
 
@@ -156,7 +156,7 @@ def test_search_boundaries_upper_reflected():
             charges=np.array([1,2,3]),
             pivot_point=anno_peaks.pivot,
         )
-        res = find_boundaries(aug_peaks, tolerance, targets)
+        res = find_boundaries(aug_peaks, tolerance, targets, -1)
         observed_boundaries = sorted(res.index.tolist())
         print("observed boundaries", observed_boundaries)
 
