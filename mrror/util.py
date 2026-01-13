@@ -9,6 +9,19 @@ from omegaconf import OmegaConf
 
 HYDROGEN_MASS = 1.007
 
+def fuzzy_unique(x: np.ndarray, tolerance: float) -> tuple[np.ndarray,np.ndarray]:
+    unique_scaled_x, idx = np.unique_inverse(x / tolerance)
+    return (
+        unique_scaled_x * tolerance,
+        idx
+    )
+
+def listsum(x):
+    """Wrapper function to call sum on lists. Equivalently:
+    
+            sum(x, [])"""
+    return sum(x,[])
+
 def load_config(config_dir, config_name="config"):
     """Loads a hydra config object from a directory of .yaml files.
     

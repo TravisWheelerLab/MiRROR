@@ -1,10 +1,11 @@
 from mrror.annotated_peaks import DEFAULT_PARAM, COMPLEX_PARAM, AnnotatedPeaks
-from mrror.spectra.types import AugmentedPeaks
+from mrror.spectra.types import AugmentedPeaks, SimulationLabeledPeaks
 from mrror.util import load_config
 
 import numpy as np
 
 TEST_PEPTIDES = [
+    "TEST",
     "PEPTIDE",
     "NREQSTK",
     "AEEHANR",
@@ -34,7 +35,7 @@ CFG = load_config(CONFIG_DIR, CONFIG_NAME)
 ANNO_CFG = CFG.annotation
 
 TEST_PEAKS = [
-    AnnotatedPeaks.from_simulation(peptide, param, num_charges)
+    SimulationLabeledPeaks.from_oms(peptide, param, num_charges)
     for peptide in TEST_PEPTIDES
     for param in (DEFAULT_PARAM, COMPLEX_PARAM)
     for num_charges in (1,3)

@@ -4,7 +4,7 @@ from typing import Self
 
 from ..util import HYDROGEN_MASS
 from ..spectra.types import Peaks
-from .types import TargetMasses, ResidueStateSpace, FragmentStateSpace, PairResult, PivotResult, BoundaryResult, FragmentMasses
+from .types import TargetMasses, ResidueStateSpace, FragmentStateSpace, PairResult, PivotResult, BoundaryResult
 
 import numpy as np
 
@@ -180,6 +180,8 @@ def _reindex_fragment_masses(
         for k in range(2)
     ]
 
+    print("pair charges",pair_charges)
+
     # pair_features = [pairs.features[i:j] for (i,j) in it.pairwise(pairs.segments)]
     
     lb_indices = lower_boundaries.index
@@ -188,6 +190,8 @@ def _reindex_fragment_masses(
     lb_mods = [lower_boundaries.features[i:j,3] for (i,j) in it.pairwise(lower_boundaries.segments)]
     lb_target_indices = [lower_boundaries.features[i:j,4] for (i,j) in it.pairwise(lower_boundaries.segments)]
     lb_costs = [lower_boundaries.costs[i:j] for (i,j) in it.pairwise(lower_boundaries.segments)]
+
+    print("lb charges", lb_charges)
 
     upper_boundaries_indices = [ub.index for ub in upper_boundaries]
     upper_boundaries_charges = [ub.charge for ub in upper_boundaries]
@@ -210,6 +214,8 @@ def _reindex_fragment_masses(
     ub_mods = sum(upper_boundaries_mods,[])
     ub_target_indices = sum(upper_boundaries_target_indices,[])
     ub_costs = sum(upper_boundaries_costs,[])
+
+    print("ub charges", ub_charges)
 
     pivot_structures = pivots.pivot_indices
     n_overlap_pivots = next((i for (i,v) in enumerate(pivot_structures) if v is None), len(pivot_structures))
@@ -267,6 +273,8 @@ def _reindex_fragment_masses(
 
     annotated_masses = (mz[concat_indices] * concat_charges) - (HYDROGEN_MASS * (concat_charges - 1))
     fragment_masses, reidx_concat_indices = np.unique_inverse(annotated_masses)
+    print("reidx", reidx_concat_indices)
+    assert len(reidx_concat_indices) == len(concat_costs)
     # get unique masses and new indices into unique masses.
     
     annotated_intensities = intensity[concat_indices]
@@ -321,7 +329,8 @@ def construct_unique_fragment_masses(
     pivots: PivotResult,
     lower_boundaries: BoundaryResult,
     upper_boundaries: list[BoundaryResult],
-) -> FragmentMasses:
+# ) -> FragmentMasses:
+):
     mass, intensity, charges, losses, mods, target_indices, costs, pair_idx, pivot_idx, sym_idx, lower_bound_idx, upper_bound_idx = _reindex_fragment_masses(
         peaks.mz,
         peaks.intensity,
@@ -330,17 +339,18 @@ def construct_unique_fragment_masses(
         lower_boundaries,
         upper_boundaries
     )
-    return FragmentMasses(
-        mass = mass,
-        intensity = intensity,
-        charges = charges,
-        losses = losses,
-        modifications = mods,
-        target_indices = target_indices,
-        costs = costs,
-        pairs = pair_idx,
-        pivots = pivot_idx,
-        symmetries = sym_idx,
-        lower_boundaries = lower_bound_idx,
-        upper_boundaries = upper_bound_idx,
-    )
+    return ()
+    # return FragmentMasses(
+        # mass = mass,
+        # intensity = intensity,
+        # charges = charges,
+        # losses = losses,
+        # modifications = mods,
+        # target_indices = target_indices,
+        # costs = costs,
+        # pairs = pair_idx,
+        # pivots = pivot_idx,
+        # symmetries = sym_idx,
+        # lower_boundaries = lower_bound_idx,
+        # upper_boundaries = upper_bound_idx,
+    # )

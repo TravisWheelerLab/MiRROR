@@ -1,6 +1,8 @@
 import itertools as it
 
-from ..fragments.types import PivotResult, FragmentMasses
+from .labeled_peaks import FragmentLabels
+
+from ..fragments.types import PivotResult
 from ..graphs.types import SpectrumGraph, PivotGraph
 
 import numpy as np
@@ -93,7 +95,7 @@ def _construct_spectrum_graphs(
     )
 
 def construct_spectrum_topology(
-    fragment_masses: FragmentMasses,
+    fragment_labels: FragmentLabels,
     pivots: PivotResult,
     tolerance: float,
     weight_key: str = float,
@@ -105,10 +107,10 @@ def construct_spectrum_topology(
         list[PivotGraph],
 ]]:
     left_adj, right_adj, pivot_adj = _construct_spectrum_graphs(
-        fragment_masses.mass,
-        fragment_masses.symmetries,
-        fragment_masses.lower_boundaries,
-        fragment_masses.upper_boundaries,
+        fragment_labels.mass,
+        fragment_labels.symmetries,
+        fragment_labels.lower_boundaries,
+        fragment_labels.upper_boundaries,
         pivots.cluster_points,
         tolerance,
         weight_key,
@@ -119,7 +121,7 @@ def construct_spectrum_topology(
             s, 
             [np.array([l.boundary_source, r.boundary_source]),],
             [np.array([l.pivot_sink, r.pivot_sink]),],
-        ]) for (s,l,r) in zip(fragment_masses.symmetries,left_adj,right_adj)
+        ]) for (s,l,r) in zip(fragment_labels.symmetries,left_adj,right_adj)
     ]
     # amend symmetries with source and sink nodes in each spectrum graph. these nodes do not correspond to peaks, but are defined as symmetric here to simplify the propagation cost model.
     

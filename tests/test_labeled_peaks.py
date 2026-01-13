@@ -2,7 +2,7 @@
 from sys import argv
 
 from mrror.io import read_mzlib
-from mrror.annotated_peaks import AnnotatedPeaks
+from mrror.spectra.types import SimulationLabeledPeaks
 
 from .shared import TEST_PEPTIDES, DEFAULT_PARAM, COMPLEX_PARAM, _assert_maxmin_tolerance, _assert_positive
 
@@ -11,8 +11,8 @@ import numpy as np
 from tabulate import tabulate
 
 def _test_decharged_fragment_masses(peptide, param, tolerance):
-    peaks_simple = AnnotatedPeaks.from_simulation(peptide, param, 1)
-    peaks_charged = AnnotatedPeaks.from_simulation(peptide, param, 3)
+    peaks_simple = SimulationLabeledPeaks.from_oms(peptide, param, 1)
+    peaks_charged = SimulationLabeledPeaks.from_oms(peptide, param, 3)
     pair_masses = peaks_simple.pair_masses()
     decharged_pair_masses = peaks_charged.decharged_pair_masses()
     _assert_maxmin_tolerance(decharged_pair_masses, pair_masses, tolerance)
@@ -74,10 +74,10 @@ def main(path_to_dataset, comp_tolerance, sim_losses, sim_charges, precision = 2
     
         c += 1
         
-        bench_peaks = AnnotatedPeaks.from_benchmark(dataset, record)
+        bench_peaks = SimulationLabeledPeaks.from_benchmark(dataset, record)
         # retrieve benchmark data.
     
-        sim_peaks = AnnotatedPeaks.from_simulation(bench_peaks.peptide, sim_param, sim_charges)
+        sim_peaks = SimulationLabeledPeaks.from_oms(bench_peaks.peptide, sim_param, sim_charges)
         # simulate from peptide.
     
         comp_tolerance = 0.01

@@ -456,30 +456,3 @@ class PivotResult:
 
     def __len__(self) -> int:
         return len(self.cluster_points)
-
-@dataclasses.dataclass(slots=True)
-class FragmentMasses:
-    mass: np.ndarray 
-    # [float; n]
-    intensity: np.ndarray 
-    # [float; n]
-    charges: list[np.ndarray]
-    # [[int; _]; n]
-    losses: list[np.ndarray]
-    # [[int; _]; n]
-    modifications: list[np.ndarray]
-    # [[int; _]; n]
-    target_indices: list[np.ndarray]
-    # [[int; _]; n]
-    costs: list[np.ndarray]
-    # [[float; _]; n]
-    pairs: np.ndarray 
-    # [[int; 2]; d]
-    pivots: list[np.ndarray] 
-    # [[int; 4]; _]; p]
-    symmetries: list[np.ndarray] 
-    # [[[int; 2]; _]; p]
-    lower_boundaries: np.ndarray 
-    # [int; l]
-    upper_boundaries: list[np.ndarray] 
-    # [[int; _]; p]

@@ -6,11 +6,12 @@ from typing import Self, Any
 from .util import normalize_dict
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMasses, PairResult, PivotResult, BoundaryResult, FragmentMasses
-from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, construct_unique_fragment_masses
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMasses, PairResult, PivotResult, BoundaryResult
+from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
 from .fragments.search import find_pairs, find_pivots, find_boundaries 
 from .sequences.suffix_array import SuffixArray
 from .sequences.queries import PeptideMassQueryEngine, all_kmers
+from .evaluation.labeled_peaks import FragmentLabels
 # local
 
 import numpy as np
@@ -23,7 +24,7 @@ class AnnotationResult(SerializableDataclass):
     pivots: PivotResult
     lower_boundaries: BoundaryResult
     upper_boundaries: list[BoundaryResult]
-    fragment_masses: FragmentMasses
+    fragment_labels: FragmentLabels
     tolerance: float
     
     _profile: dict[str,float] = None
@@ -38,7 +39,7 @@ class AnnotationResult(SerializableDataclass):
         pivots: PivotResult,
         lower_boundaries: BoundaryResult,
         upper_boundaries: list[BoundaryResult],
-        fragment_masses: FragmentMasses,
+        fragment_labels: FragmentLabels,
         tolerance: float,
         profile: dict[str,float],
     ) -> Self:
@@ -49,7 +50,7 @@ class AnnotationResult(SerializableDataclass):
             pivots = pivots,
             lower_boundaries = lower_boundaries,
             upper_boundaries = upper_boundaries,
-            fragment_masses = fragment_masses,
+            fragment_labels = fragment_labels,
             tolerance = tolerance,
             _profile = profile,
         )
@@ -156,6 +157,9 @@ def annotate(
         peaks,
         charges=params.charges,
     )
+    print("decharged peaks")
+    import pprint
+    pprint.pprint(decharged_peaks)
     profile["augment"] = time() - t
     if verbose:
         print(decharged_peaks)
@@ -223,14 +227,14 @@ def annotate(
     # find single peaks in the reflected peak lists whose mass matches a target in the reflected boundary target masses.
 
     t = time()
-    fragment_masses = construct_unique_fragment_masses(
+    fragment_labels = FragmentLabels.from_results(
         peaks,
-        pairs,
+        [pairs,],                           # these singletons will have more elts when multiresidue target masses are complete.
+        [lower_boundaries,],                # these singletons will have more elts when multiresidue target masses are complete.
+        [[x,] for x in upper_boundaries],   # these singletons will have more elts when multiresidue target masses are complete.
         pivots,
-        lower_boundaries,
-        upper_boundaries,
     )
-    profile["reindexing"] = time() - t
+    profile["labeling"] = time() - t
     # collect annotated fragments into a list of unique masses with aggregate properties.
     
     if verbose:
@@ -241,7 +245,7 @@ def annotate(
         pivots,
         lower_boundaries,
         upper_boundaries,
-        fragment_masses,
+        fragment_labels,
         params.query_tolerance,
         profile,
     )
