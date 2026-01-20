@@ -1,4 +1,4 @@
-from mrror.annotated_peaks import DEFAULT_PARAM, COMPLEX_PARAM, AnnotatedPeaks
+from mrror.spectra.simulation import DEFAULT_PARAM, COMPLEX_PARAM
 from mrror.spectra.types import AugmentedPeaks, SimulationLabeledPeaks
 from mrror.util import load_config
 

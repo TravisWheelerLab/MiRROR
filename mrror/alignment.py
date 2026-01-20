@@ -8,7 +8,6 @@ from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclas
 from .graphs.types import SpectrumGraph, PivotGraph, WeightedProductGraph
 from .graphs.propagate import propagate_cost
 
-from .evaluation.spectrum_topology import construct_spectrum_topology
 from .evaluation.costmodels import MatchedNodeCostModel, AnnotatedProductEdgeCostModel
 
 from .annotation import AnnotationResult, AnnotationParams
@@ -18,11 +17,7 @@ import numpy as np
 
 @dataclasses.dataclass(slots=True)
 class AlignmentResult(SerializableDataclass):
-    symmetries: list[np.ndarray]
     prod_topology: list[WeightedProductGraph]
-    lower_topology: list[SpectrumGraph]
-    upper_topology: list[SpectrumGraph]
-    pivot_topology: list[PivotGraph]
     _profile: dict[str, float]
 
     def __len__(self) -> int:
@@ -59,40 +54,34 @@ def align(
     profile = {}
 
     t = time()
-    symmetries, lower_topology, upper_topology, pivot_topology = construct_spectrum_topology(
-        anno.fragment_masses,
-        anno.pivots,
-        anno.tolerance,
-        params.weight_key,
-    )
-    profile["construct"] = time() - t
-    if verbose:
-        pass
-
-    t = time()
-    prod_topology = [propagate_cost(
-            l,
-            l.sources(),
-            u,
-            u.sources(),
+    n = len(anno)
+    prod_topology = [None for _ in range(n)]
+    for i in range(n):
+        node_costmodel = MatchedNodeCostModel(
+            (ravel(i, j, u.order()) for (i,j) in anno.symmetric_nodes[i]),
+            params.node_match_cost,
+            params.node_mismatch_cost,
+        )
+        edge_costmodel = AnnotatedProductEdgeCostModel(
+            anno.lower_topology[i],
+            anno.upper_topology[i],
+            params.weight_key,
+            anno.pairs,
+            anno.lower_boundaries,
+            anno.right_boundaries[i],
+            params.edge_match_cost,
+            params.edge_mismatch_cost,
+            params.edge_gap_cost,
+        )
+        prod_topology[i] = propagate_cost(
+            anno.lower_topology[i],
+            anno.lower_topology[i].sources(),
+            anno.upper_topology[i],
+            anno.upper_topology[i].sources(),
             params.cost_threshold,
-            MatchedNodeCostModel(
-                (ravel(i, j, u.order()) for (i,j) in sym),
-                params.node_match_cost,
-                params.node_mismatch_cost,
-            ),
-            AnnotatedProductEdgeCostModel(
-                l,
-                u,
-                params.weight_key,
-                anno.pairs,
-                anno.lower_boundaries,
-                rb,
-                params.edge_match_cost,
-                params.edge_mismatch_cost,
-                params.edge_gap_cost,
-            ),
-        ) for (l,u,sym,rb) in zip(lower_topology,upper_topology,symmetries,anno.upper_boundaries)]
+            node_costmodel,
+            edge_costmodel,
+        )
     profile["propagate"] = time() - t
     if verbose:
         pass
@@ -100,10 +89,6 @@ def align(
     if verbose:
        print(json.dumps(profile, indent=4))
     return AlignmentResult(
-        symmetries,
         prod_topology,
-        lower_topology,
-        upper_topology,
-        pivot_topology,
         profile,
     )

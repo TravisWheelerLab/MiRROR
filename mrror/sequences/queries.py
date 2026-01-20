@@ -7,6 +7,29 @@ from ..fragments.types import ResidueStateSpace
 
 import numpy as np
 
+def generate_unordered_combinations(
+    residues: np.ndarray,       # [str; n]
+    length: int,            
+    suffix_array: SuffixArray,
+) -> list[np.ndarray]:          # [[int; k]; _]
+    indices = np.arange(residues.size)
+    ordered_tuples = it.product(indices, repeat=length)
+    comb = set()
+    # setup.
+
+    ordered_residues = [''.join(residues[list[x]]) for x in ordered_tuples]
+    occurrences = suffix_array.count(ordered_tuples)
+    # filter by suffix array.
+    # TODO: replace w call to mass query engine.
+
+    for (tup, count) in zip(ordered_tuples, occurrences):
+        if count > 0:
+            key = tuple(sorted(tup))
+            comb.add(key)
+    # project ordered tuples onto unordered combinations.
+
+    return [np.array(x) for x in comb]
+
 def _all_kmers(
     k: int,
     masses: np.ndarray,

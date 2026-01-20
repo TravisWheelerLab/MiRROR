@@ -49,7 +49,9 @@ class FragmentLabels:
 		return [
 			self.unique_mass_index[i:j][segments[0]:segments[1]]
 			for ((i,j), segments) in zip(
-			    self.pivot_interchunk_segments, self.pivot_intrachunk_segments)
+			    it.pairwise(self.pivot_interchunk_segments),
+			    self.pivot_intrachunk_segments
+			)
 		]
 
 	def reindex_pivots(
@@ -58,7 +60,9 @@ class FragmentLabels:
 		return [
 			self.unique_mass_index[i:j][segments[1]:segments[2]].reshape((-1,4))
 			for ((i,j), segments) in zip(
-			    self.pivot_interchunk_segments, self.pivot_intrachunk_segments)
+			    it.pairwise(self.pivot_interchunk_segments),
+			    self.pivot_intrachunk_segments
+			)
 		]
 
 	def reindex_symmetries(
@@ -67,7 +71,9 @@ class FragmentLabels:
 		return [
 			self.unique_mass_index[i:j][segments[2]:segments[3]].reshape((-1,2))
 			for ((i,j), segments) in zip(
-			    self.pivot_interchunk_segments, self.pivot_intrachunk_segments)
+			    it.pairwise(self.pivot_interchunk_segments),
+			    self.pivot_intrachunk_segments
+			)
 		]
 
 	@classmethod

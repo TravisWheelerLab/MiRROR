@@ -5,9 +5,8 @@ from mrror.spectra.types import AugmentedPeaks
 from mrror.fragments.types import TargetMasses, FragmentStateSpace, ResidueStateSpace
 from mrror.fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
 from mrror.fragments.search import find_pairs, find_pivots, find_boundaries
-from mrror.annotated_peaks import DEFAULT_PARAM, COMPLEX_PARAM, AnnotatedPeaks
 
-from .shared import ANNO_CFG, TEST_PEPTIDES, TEST_PEAKS, AUG_PEAKS, _assert_maxmin_tolerance
+from .shared import ANNO_CFG, TEST_PEPTIDES, TEST_PEAKS, AUG_PEAKS, DEFAULT_PARAM, COMPLEX_PARAM, _assert_maxmin_tolerance
 
 
 import pytest

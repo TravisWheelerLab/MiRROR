@@ -143,6 +143,43 @@ class ResidueStateSpace:
         )
 
 @dataclasses.dataclass(slots=True)
+class MultiFragmentStateSpace(FragmentStateSpace):
+    pass
+
+@dataclasses.dataclass(slots=True)
+class MultiResidueStateSpace(ResidueStateSpace):
+
+    @classmethod
+    def from_config(
+        cls,
+        cfg: DictConfig,
+        clustered_combinations: list[list[np.ndarray]],
+        reflect=False,
+    ) -> Self:
+        appl_mods = cfg.mod.application # TODO: for maximum generality, get this from a constructed single-residue state space instead.
+        multi_appl_mods = [[] for _ in range(n)]
+        for i in range(n): # for each unique mass.
+            for idx in index_clusters[i]: # each residue combination with that mass.
+                mods = [appl_mods[j] for j in idx]
+                k = len(idx)
+                for c in range(k): # modifying c of k residues.
+                    for batch in it.combinations(mods, c):
+                        mod_comb = [tuple(sorted(x)) for x in it.product(*batch)]
+                        multi_appl_mods[i].extend(mod_comb)
+                        # every way to apply mods to c of k residues.
+        # combine augments.
+
+        multi_appl_mods_offsets = np.cumsum([0,] + [len(x) for x in multi_appl_mods])
+        multi_appl_mods_flat = np.concat(multi_appl_mods)
+        # flatten.
+
+        # make unique.
+
+        # reconstruct
+
+        # retrieve masses for mods, symbols for aminos and mods.
+
+@dataclasses.dataclass(slots=True)
 class MultiResidueStateSpace(ResidueStateSpace):
     amino_masses: np.ndarray
     # [float; k]

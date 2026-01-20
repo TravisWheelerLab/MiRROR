@@ -146,8 +146,9 @@ class SuffixArray:
     ) -> list[BisectResult]:
         """Given an iterable of character queries ( := single-element strings,) and an optional prefix result, count the occurrences of the query strings. If a prefix result is passed, search is restricted to the range of the prefix. Unlike count, this function returns its result type, BisectResult. The occurrence quantities can be accessed via the `count` field of the BisectResult object."""
         if not(all(len(x) == 1 for x in queries)):
-            raise ValueError("The `queries` arg contained a non-char str type! Every item in queries")
+            raise ValueError("The `queries` arg contained a non-char str type! All queries must be length one strings.")
         try:
+            # is this really faster than 'isinstance'?
             pfx_iter = iter(prefix)
             results = (
                 self._suffix_array.bisect(BisectOptions(
