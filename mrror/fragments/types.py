@@ -2,7 +2,7 @@ import dataclasses, abc
 from typing import Self, Iterator
 import itertools as it
 
-from ..util import HYDROGEN_MASS
+from ..util import HYDROGEN_MASS, mesh_ravel
 
 import numpy as np
 from omegaconf.dictconfig import DictConfig
@@ -21,6 +21,9 @@ class FragmentStateSpace:
 
     def n_losses(self, amino_id: int) -> int:
         return len(self.applicable_losses[amino_id])
+
+    def n_total_losses(self) -> int:
+        return len(self.loss_masses)
 
     def get_losses(self, amino_id: int) -> list[int]:
         return self.applicable_losses[amino_id]
@@ -117,6 +120,9 @@ class ResidueStateSpace:
     def n_aminos(self) -> int:
         return len(self.amino_masses)
 
+    def n_total_modifications(self) -> int:
+        return len(self.modification_masses)
+
     def n_modifications(self, amino_id: int) -> int:
         return len(self.applicable_modifications[amino_id])
 
@@ -143,122 +149,8 @@ class ResidueStateSpace:
         )
 
 @dataclasses.dataclass(slots=True)
-class MultiFragmentStateSpace(FragmentStateSpace):
-    pass
-
-@dataclasses.dataclass(slots=True)
-class MultiResidueStateSpace(ResidueStateSpace):
-
-    @classmethod
-    def from_config(
-        cls,
-        cfg: DictConfig,
-        clustered_combinations: list[list[np.ndarray]],
-        reflect=False,
-    ) -> Self:
-        appl_mods = cfg.mod.application # TODO: for maximum generality, get this from a constructed single-residue state space instead.
-        multi_appl_mods = [[] for _ in range(n)]
-        for i in range(n): # for each unique mass.
-            for idx in index_clusters[i]: # each residue combination with that mass.
-                mods = [appl_mods[j] for j in idx]
-                k = len(idx)
-                for c in range(k): # modifying c of k residues.
-                    for batch in it.combinations(mods, c):
-                        mod_comb = [tuple(sorted(x)) for x in it.product(*batch)]
-                        multi_appl_mods[i].extend(mod_comb)
-                        # every way to apply mods to c of k residues.
-        # combine augments.
-
-        multi_appl_mods_offsets = np.cumsum([0,] + [len(x) for x in multi_appl_mods])
-        multi_appl_mods_flat = np.concat(multi_appl_mods)
-        # flatten.
-
-        # make unique.
-
-        # reconstruct
-
-        # retrieve masses for mods, symbols for aminos and mods.
-
-@dataclasses.dataclass(slots=True)
-class MultiResidueStateSpace(ResidueStateSpace):
-    amino_masses: np.ndarray
-    # [float; k]
-    amino_symbols: list[np.ndarray]
-    # [[str; _]; k]
-    amino_clusters: list[list[np.ndarray]]
-    # [[int; _]; k]
-    modification_masses: np.ndarray
-    # [float; k]
-    modification_symbols: np.ndarray
-    # [str; k]
-    modification_null_indices: np.ndarray
-    # [int; k]
-    applicable_modifications: list[np.ndarray] 
-    # [[int; _]; k]
-    # amino_idx -> {modification_idx applicable to amino}.
-    max_num_modifications: int
-    # restricts the number of modifications that can be applied to a residue.
-
-    @classmethod
-    def from_nonunique_pairs(
-        cls,
-        masses: np.ndarray,
-        words: np.ndarray,
-        mod_masses: np.ndarray,
-        mod_symbols: np.ndarray,
-        mod_nulls: np.ndarray,
-        applicable_mods: list[np.ndarray],
-        max_num_mods: int,
-        alphabet: np.ndarray,
-    ) -> Self:
-        unique_masses, reindexer = np.unique_inverse(masses)
-        n_masses = len(unique_masses)
-        # construct mass clusters
-
-        clustered_words = [[] for _ in range(n_masses)]
-        for (idx, word) in enumerate(words):
-            clustered_words[reindexer[idx]].append(word)
-        clustered_words = [np.array(x) for x in clustered_words]
-        # group words by mass clusters
-
-        amino_ids = np.arange(len(alphabet))
-        alphabet = np.array(alphabet)
-        alphabet_order = np.argsort(alphabet)
-        sorted_alphabet = np.array(alphabet)[alphabet_order]
-        sorted_amino_ids = amino_ids[alphabet_order]
-        clustered_ids = [[] for _ in range(n_masses)]
-        for i in range(n_masses):
-            id_cluster = set()
-            for word in clustered_words[i]:
-                word_amino_ids = sorted(np.searchsorted(sorted_alphabet, np.array(list(word))))
-                word_amino_ids = sorted_amino_ids[word_amino_ids]
-                id_cluster.add(tuple(word_amino_ids))
-            clustered_ids[i] = [np.array(list(x)) for x in id_cluster]
-        # group amino ids by mass clusters
-
-        return cls(
-            amino_masses = unique_masses,
-            amino_symbols = clustered_words,
-            amino_clusters = clustered_ids,
-            modification_masses = mod_masses,
-            modification_symbols = mod_symbols,
-            modification_null_indices = mod_nulls,
-            applicable_modifications = applicable_mods,
-            max_num_modifications = max_num_mods,
-        )
-
-    def n_aminos(self) -> int:
-        return len(self.amino_masses)
-
-    def n_modifications(self, amino_id: int) -> int:
-        return len(self.applicable_modifications[amino_id])
-
-    def get_modifications(self, amino_id: int) -> list[float]:
-        selected_mod = self.applicable_modifications[amino_id]
-        return self.modification_masses[self.applicable_modifications[amino_id]]
-
-@dataclasses.dataclass(slots=True)
 class TargetMasses(abc.ABC):
+    """A collection of masses (and underlying annotations) spanned by a given triplet of a residue space, a left fragment space, and a right fragment space. A classmethod constructor is deliberately not implemented; use the fragments.masses.construct_*_target_masses functions instead."""
     target_masses: np.ndarray                   # [float; n]
     target_states: np.ndarray                   # [[int; 4]; n]
     null_states: list[np.ndarray]               # [[int; _]; 3]
@@ -332,6 +224,12 @@ class TargetMasses(abc.ABC):
             ])
         # NOTE, in case this breaks - the return was a 'np.vstack' call but that seemed unnecessary.
 
+@dataclasses.dataclass(slots=True)
+class MultiResidueTargetMasses(TargetMasses):
+    """A TargetMasses object with the additional num_residues field.
+    Like TargetMasses, a classmethod constructor is deliberately not provided in lieu of fragments.masses.combine_target_masses."""
+    num_residues: int
+    
 @dataclasses.dataclass(slots=True)
 class AbstractAnnotation(abc.ABC):
 

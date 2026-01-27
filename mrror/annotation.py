@@ -6,7 +6,7 @@ from typing import Self, Any
 from .util import normalize_dict
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, MultiResidueStateSpace, TargetMasses, PairResult, PivotResult, BoundaryResult
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, PivotResult, BoundaryResult
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
 from .fragments.search import find_pairs, find_pivots, find_boundaries 
 from .sequences.suffix_array import SuffixArray
@@ -130,74 +130,27 @@ class AnnotationParams(SerializableDataclass):
         # target masses for high-mz boundaries observed as the reflections of single peaks.
 
         max_k = cfg.max_k
-        multiresidue_pair_targets = [None for _ in range(max_k - 1)]
-        multiresidue_lower_boundary_targets = [None for _ in range(max_k - 1)]
-        multiresidue_reflected_upper_boundary_targets = [None for _ in range(max_k - 1)]
-        if max_k > 1 and not(suffix_array is None):
-            for i in range(max_k - 1):
-                k = i + 2
-                unordered_combinations = generate_unordered_combinations(
-                    np.array(cfg.res.symbols),
-                    k,
-                    suffix_array,
-                )
-                clustered_combinations = cluster_combinations_by_mass(
-                    unordered_combinations,
-                    np.array(cfg.res.masses),
-                )
-                # sample k-mers from suffix array and cluster by mass.
-                
-                multi_residue_space = MultiResidueStateSpace.from_config(
-                    cfg,
-                    clustered_combinations,
-                )
-                pair_multi_fragment_space = MultiFragmentStateSpace.from_config_to_pairs(
-                    cfg,
-                    clustered_combinations,
-                )
-                multiresidue_pair_targets[i] = construct_pair_target_masses(
-                    k,
-                    multi_residue_space,
-                    pair_multi_fragment_space,
-                )
-                # multi residue pair targets.
-                
-                lower_boundary_multi_fragment_space = MultiFragmentStateSpace.from_config_to_boundaries(
-                    cfg,
-                    clustered_combinations,
-                )
-                multiresidue_lower_boundary_targets[i] = construct_lower_boundary_target_masses(
-                    k,
-                    multi_residue_space,
-                    lower_boundary_multi_fragment_space,
-                )
-                # multi residue lower boundary targets.
-
-                reflected_multi_residue_space = MultiResidueStateSpace.from_config(
-                    cfg,
-                    clustered_combinations,
-                    reflect=True,
-                )
-                reflected_upper_boundary_multi_fragment_space = MultiFragmentStateSpace.from_config_to_boundaries(
-                    cfg,
-                    clustered_combinations,
-                    reflect=True,
-                )
-                multiresidue_reflected_upper_boundary_targets[i] = construct_reflected_upper_boundary_target_masses(
-                    k,
-                    reflected_multi_residue_space,
-                    reflected_upper_boundary_multi_fragment_space,
-                )
-                # multi residue upper boundary targets.
+        multi_pair_targets = [None for _ in range(max_k - 1)]
+        multi_lower_boundary_targets = [None for _ in range(max_k - 1)]
+        multi_reflected_upper_boundary_targets = [None for _ in range(max_k - 1)]
+        if not(suffix_array) is None and max_k > 1:
+            for k in range(2, max_k + 1):
+                operand = [pair_targets,] * (k - 1)
+                multi_pair_targets[k - 2] = combine_target_masses(
+                    [pair_targets,] + operand)
+                multi_lower_boundary_targets[k - 2] = combine_target_masses(
+                    [boundary_targets,] + operand)
+                multi_reflected_upper_boundary_targets[k - 2] = combine_target_masses(
+                    [reflected_upper_boundary_targets,] + operand)
 
         return cls(
             target_masses = [
                 pair_targets,
-                *multiresidue_pair_targets,
+                *multi_pair_targets,
                 lower_boundary_targets,
-                *multiresidue_lower_boundary_targets,
+                *multi_lower_boundary_targets,
                 reflected_upper_boundary_targets,
-                *multiresidue_reflected_upper_boundary_targets,
+                *multi_reflected_upper_boundary_targets,
             ],
             max_k = max_k,
             charges = np.array(cfg.charges),

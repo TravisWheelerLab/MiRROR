@@ -446,12 +446,15 @@ class AbstractLabeledPeaks(Peaks):
             self._boundary('y','right'),
         ])
 
-    def pairs(self) -> list[tuple[int,int]]:
+    def pairs(
+        self,
+        k: int = 1,
+    ) -> list[tuple[int,int]]:
         return [
             (i, j) 
             for i in range(len(self)) 
             for j in range(len(self)) 
-            if self.series[i] == self.series[j] and self.position[i] + 1 == self.position[j]
+            if self.series[i] == self.series[j] and self.position[i] + k == self.position[j]
         ]
 
     def lower_boundary_masses(self) -> list[float]:
@@ -460,10 +463,13 @@ class AbstractLabeledPeaks(Peaks):
     def upper_boundary_masses(self) -> list[float]:
         return self.mz[self.upper_boundaries()]
    
-    def pair_masses(self) -> list[float]:
+    def pair_masses(
+        self,
+        k: int = 1,
+    ) -> list[float]:
         return [
             self.mz[j] - self.mz[i] 
-            for (i, j) in self.pairs()
+            for (i, j) in self.pairs(k)
         ]
 
     def decharged_mass(self, i: int) -> float:
@@ -476,13 +482,16 @@ class AbstractLabeledPeaks(Peaks):
     def decharged_upper_boundary_masses(self) -> list[float]:
         return [self.decharged_mass(x) for x in self.upper_boundaries()]
    
-    def decharged_pair_masses(self) -> list[float]:
+    def decharged_pair_masses(
+        self,
+        k: int = 1,
+    ) -> list[float]:
         return [
             self.decharged_mass(j) - self.decharged_mass(i) 
-            for (i, j) in self.pairs()
+            for (i, j) in self.pairs(k)
         ]
 
-    def tabulate(self, precision = 2) -> str:
+    def tabulate(self, precision = 4) -> str:
         headers = ["pos","ser","m/z","charge","mass","loss","int"]
         table = sorted(zip(
             self.position.tolist(),

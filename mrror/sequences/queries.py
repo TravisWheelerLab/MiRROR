@@ -13,15 +13,15 @@ def generate_unordered_combinations(
     suffix_array: SuffixArray,
 ) -> list[np.ndarray]:          # [[int; k]; _]
     indices = np.arange(residues.size)
-    ordered_tuples = it.product(indices, repeat=length)
-    comb = set()
+    ordered_tuples = list(it.product(indices, repeat=length))
     # setup.
 
-    ordered_residues = [''.join(residues[list[x]]) for x in ordered_tuples]
+    ordered_residues = [''.join(residues[list(x)]) for x in ordered_tuples]
     occurrences = suffix_array.count(ordered_tuples)
     # filter by suffix array.
     # TODO: replace w call to mass query engine.
 
+    comb = set()
     for (tup, count) in zip(ordered_tuples, occurrences):
         if count > 0:
             key = tuple(sorted(tup))

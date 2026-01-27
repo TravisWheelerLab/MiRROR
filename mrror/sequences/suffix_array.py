@@ -166,3 +166,54 @@ class SuffixArray:
                 low_memory = self.query_low_memory,
                 prefix_result = prefix,
             ))
+
+class TrivialSuffixArray(SuffixArray):
+    """The suffix array trivially containing every sequence. TrivialSuffixArray is a singleton. Cannot be written to or read from a file. Cannot list suffixes. Returns count = 1 for any query. This class is intended for parametizing sequences.queries.generate_unordered_combinations to sample from the free alphabet."""
+    instance = None
+
+    def __init__(self):
+        pass
+
+    def __new__(cls):
+        if cls.instance is None:
+            cls.instance = super().__new__(cls)
+        return cls.instance
+
+    @classmethod
+    def write(cls, *args, **kwargs):
+        raise NotImplementedError("TrivialSuffixArray cannot be written to a file. This object does not contain any data.")
+
+    @classmethod
+    def read(cls, *args, **kwargs):
+        raise NotImplementedError("TrivialSuffixArray cannot be read from a file. To construct a TrivialSuffixArray, call it without any arguments.")
+
+    @classmethod
+    def create(cls, *args, **kwargs):
+        raise NotImplementedError("TrivialSuffixArray cannot be created. To construct a TrivialSuffixArray, call it without any arguments.")
+
+    def list_suffixes(self, *args, **kwargs):
+        raise NotImplementedError("TrivialSuffixArray does not contain any suffixes.")
+
+    def list_bisect(self,
+        results: Iterable[BisectResult],
+    ) -> list[str]:
+        raise NotImplementedError("TrivialSuffixArray does not contain any suffixes.")
+    
+    def count(self, 
+        queries: Iterable[str],
+    ) -> list[int]:
+        """Return a list of 1s in the same shape as the argument."""
+        return [1 for _ in queries]
+    
+    def bisect(self, 
+        queries: Iterable[str], 
+        prefix: Union[BisectResult,list[BisectResult]] = None,
+    ) -> list[BisectResult]:
+        """Return a list of 1s in the same shape as the argument."""
+        if not(all(len(x) == 1 for x in queries)):
+            raise ValueError("The `queries` arg contained a non-char str type! All queries must be length one strings.")
+        try:
+            pfx_iter = iter(prefix)
+            return [1 for _ in pfx_iter for __ in queries]
+        except TypeError:
+            return [1 for _ in queries]

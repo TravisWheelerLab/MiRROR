@@ -1,10 +1,10 @@
 import dataclasses
 import itertools as it
-from typing import Self
+from typing import Self, Iterable
 
-from ..util import HYDROGEN_MASS
+from ..util import HYDROGEN_MASS, mesh_sum, mesh_join, mesh_ravel
 from ..spectra.types import Peaks
-from .types import TargetMasses, ResidueStateSpace, FragmentStateSpace, PairResult, PivotResult, BoundaryResult
+from .types import TargetMasses, MultiResidueTargetMasses, ResidueStateSpace, FragmentStateSpace, PairResult, PivotResult, BoundaryResult
 
 import numpy as np
 
@@ -85,19 +85,15 @@ def _construct_target_masses(
     right_fragment_space,
 ) -> TargetMasses:
     """Given augmented target masses and the state spaces used to create them, prepare the data and construct the final TargetMass object."""
-    left_null_losses = left_fragment_space.loss_null_indices
-    right_null_losses = right_fragment_space.loss_null_indices
-    null_mods = residue_space.modification_null_indices
-    null_indices = [left_null_losses, right_null_losses, null_mods]
-    # collect loss and modification states corresponding to null / no augmentation.
-
     sort_key = np.argsort(target_masses)
-    # sort by mass.
-
     return TargetMasses(
         target_masses = target_masses[sort_key],
         target_states = target_states[sort_key],
-        null_states = null_indices,
+        null_states = [
+            left_fragment_space.loss_null_indices,
+            right_fragment_space.loss_null_indices,
+            residue_space.modification_null_indices,
+        ],
         residue_space = residue_space,
         left_fragment_space = left_fragment_space,
         right_fragment_space = right_fragment_space,
@@ -107,7 +103,7 @@ def construct_pair_target_masses(
     residue_space: ResidueStateSpace,
     fragment_space: FragmentStateSpace,
 ) -> TargetMasses:
-    """Construct a TargetMasses object for detecting pair fragment."""
+    """Construct a TargetMasses object for detecting pair fragments."""
     target_masses, target_states = augment_pair_masses(
         fragment_space,
         fragment_space,
@@ -152,3 +148,95 @@ def cluster_combinations_by_mass(
     for (old_idx, new_idx) in enumerate(reindex):
         clustered_combinations[new_idx].append(combinations[old_idx])
     return clustered_combinations
+
+def _combine_applicability(
+    application_arrs: Iterable[list[np.ndarray]],
+    dims: tuple,
+) -> list[np.ndarray]:
+    return [
+        mesh_ravel(
+            x,
+            dims,
+        )
+        for x in it.product(*application_arrs)
+    ]
+
+def _combine_fragment_spaces(
+    spaces: list[FragmentStateSpace],
+) -> FragmentStateSpace:
+    combined_n_losses = tuple([x.n_total_losses() for x in spaces])
+    return FragmentStateSpace(
+        loss_masses = mesh_sum([x.loss_masses for x in spaces]),
+        loss_symbols = mesh_join([x.loss_symbols for x in spaces]),
+        loss_null_indices = mesh_ravel(
+            [x.loss_null_indices for x in spaces],
+            combined_n_losses,
+        ),
+        applicable_losses = _combine_applicability(
+            [x.applicable_losses for x in spaces],
+            combined_n_losses,
+        ),
+    )
+
+def _combine_residue_spaces(
+    spaces: list[ResidueStateSpace],
+) -> ResidueStateSpace:
+    combined_n_modifications = tuple([x.n_total_modifications() for x in spaces])
+    return ResidueStateSpace(
+        amino_masses = mesh_sum([x.amino_masses for x in spaces]),
+        amino_symbols = mesh_join([x.amino_symbols for x in spaces]),
+        modification_masses = mesh_sum([x.modification_masses for x in spaces]),
+        modification_symbols = mesh_join([x.modification_symbols for x in spaces]),
+        modification_null_indices = mesh_ravel(
+            [x.modification_null_indices for x in spaces],
+            combined_n_modifications,
+        ),
+        applicable_modifications = _combine_applicability(
+            [x.applicable_modifications for x in spaces],
+            combined_n_modifications,
+        ),
+        max_num_modifications = sum([x.max_num_modifications for x in spaces]),
+    )
+
+def combine_target_masses(
+    targets: list[TargetMasses],
+) -> MultiResidueTargetMasses:
+    """Takes the product of a list of target masses. Every mass in the product is the sum of one mass from each operand. For example, the combination of target masses [1.0, 2.0] and [0.3, 0.7] is [1.3, 1.7, 2.3, 2.7]. Duplicate masses are not clustered in order to preserve unique annotations. For example, combining [1.0, 1.5] and [0.2, 0.7] will produce [1.2, 1.7, 1.7, 2.2], wherein each distinct 1.7 corresponds to different annotated properties.
+    
+    The underlying spaces are combined in a similar way to facilitate state and symbol retrieval using the same TargetMasses interface."""
+    combined_residue_space = _combine_residue_spaces([
+        x.residue_space for x in targets])
+    combined_left_fragment_space = _combine_fragment_spaces([
+        x.left_fragment_space for x in targets])
+    combined_right_fragment_space = _combine_fragment_spaces([
+        x.right_fragment_space for x in targets])
+    return MultiResidueTargetMasses(
+        target_masses = mesh_sum([x.target_masses for x in targets]),
+        target_states = np.c_[ # form a 2d array by stacking columns
+            mesh_ravel( # combined amino states
+                [x.target_states[:,0] for x in targets],
+                tuple([x.residue_space.n_aminos() for x in targets]),
+            ),
+            mesh_ravel( # combined left loss states
+                [x.target_states[:,1] for x in targets],
+                tuple([x.left_fragment_space.n_total_losses() for x in targets]),
+            ),
+            mesh_ravel( # combined right loss states
+                [x.target_states[:,2] for x in targets],
+                tuple([x.right_fragment_space.n_total_losses() for x in targets]),
+            ),
+            mesh_ravel( # combined modification states
+                [x.target_states[:,3] for x in targets],
+                tuple([x.residue_space.n_total_modifications() for x in targets]),
+            ),
+        ],
+        null_states = [
+            combined_left_fragment_space.loss_null_indices,
+            combined_right_fragment_space.loss_null_indices,
+            combined_residue_space.modification_null_indices,
+        ],
+        residue_space = combined_residue_space,
+        left_fragment_space = combined_left_fragment_space,
+        right_fragment_space = combined_right_fragment_space,
+        num_residues = len(targets),
+    )

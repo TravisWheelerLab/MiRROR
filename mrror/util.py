@@ -9,6 +9,36 @@ from omegaconf import OmegaConf
 
 HYDROGEN_MASS = 1.007
 
+MESHGRID_INDEXING = 'ij'
+
+def meshgrid(*args, **kwargs) -> tuple:
+    """A wrapper around np.meshgrid with the indexing kwarg fixed to the constant MESHGRID_INDEXING. Accordingly, passing 'indexing=...' will throw an exception. This function is provided for the sake of synchronized indexing between meshgrid and it.product."""
+    return np.meshgrid(*args, **kwargs, indexing=MESHGRID_INDEXING)
+
+def mesh_ravel(
+    arrs: Iterable[np.ndarray],
+    dims: tuple,
+) -> np.ndarray:
+    return np.ravel_multi_index(
+        meshgrid(*arrs),
+        dims,
+    ).flatten()
+
+def mesh_join(
+    arrs: Iterable[np.ndarray],
+    axis: int = 0,
+) -> np.ndarray:
+    return np.array(' '.join(x) for x in it.product(*arrs))
+
+def mesh_sum(
+    arrs: Iterable[np.ndarray],
+    axis: int = 0,
+) -> np.ndarray:
+    return np.sum(
+        meshgrid(*arrs),
+        axis=axis,
+    ).flatten()
+
 def fuzzy_unique(x: np.ndarray, tolerance: float) -> tuple[np.ndarray,np.ndarray]:
     unique_scaled_x, idx = np.unique_inverse(x / tolerance)
     return (
