@@ -414,36 +414,44 @@ class AbstractLabeledPeaks(Peaks):
 
     def __post_init__(self):
         peak_data = [self.mz, self.intensity, self.series, self.position, self.charge, self.loss]
-        print("peak_data")
-        for x in peak_data:
-            print(f"\t{x}")
         arr_lengths = [len(x) for x in peak_data]
         assert len(set(arr_lengths)) == 1 
         # all have the same length
 
-    def _boundary(self, series, side):
+    def _boundary(
+        self,
+        series,
+        side,
+        k: int = None,
+    ):
         mask = self.series == series
         idx = np.arange(len(self))[mask]
         pos = self.position[mask]
         idx_mask = np.empty((0,),dtype=bool)
         if side=='left':
-            idx_mask = pos == pos.min()
+            idx_mask = (pos == pos.min()) if (k is None) else (pos == k)
         elif side=='right':
-            idx_mask = pos == pos.max()
+            idx_mask = (pos == pos.max()) if (k is None) else (pos == len(self.peptide) - k)
         else:
             raise ValueError(f"unrecognized side \"{side}\". try \"left\" or \"right\".")
         return idx[idx_mask]
 
-    def lower_boundaries(self) -> list[int]:
+    def lower_boundaries(
+        self,
+        k: int = None,
+    ) -> list[int]:
         return np.concat([
-            self._boundary('b','left'),
-            self._boundary('y','left'),
+            self._boundary('b','left', k),
+            self._boundary('y','left', k),
         ])
     
-    def upper_boundaries(self) -> tuple[list[int],list[int]]:
+    def upper_boundaries(
+        self,
+        k: int = None,
+    ) -> tuple[list[int],list[int]]:
         return np.concat([
-            self._boundary('b','right'),
-            self._boundary('y','right'),
+            self._boundary('b','right', k),
+            self._boundary('y','right', k),
         ])
 
     def pairs(
@@ -502,7 +510,7 @@ class AbstractLabeledPeaks(Peaks):
             [x[0].item() for x in self.loss],
             self.intensity.round(precision).tolist(),
         ), key=lambda x: x)
-        return self.peptide + '\n' + tabulate(table, headers=headers)
+        return f"peptide={self.peptide}\n" + tabulate(table, headers=headers)
 
     def tabulate_pair_indices(self, idx, precision=4) -> str:
         headers = ["idx","pos","series","m/z","mass","mass dif","charge","loss","residue"]

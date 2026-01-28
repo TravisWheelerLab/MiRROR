@@ -97,13 +97,13 @@ def test_multiresidue_target_masses():
             [reflected_boundary_targets,] + operand) # does this need to be a reflected pair target space? hm
         # construct multi-residue target spaces
 
-        tolerance = 0.015 * k
+        # tolerance = 0.015 * k
         for peaks in TEST_PEAKS:
             print(peaks.tabulate())
             _assert_maxmin_tolerance(
                 peaks.decharged_pair_masses(),
                 pair_targets.target_masses,
-                tolerance,
+                pair_tolerance,
             )
             _assert_maxmin_tolerance(
                 peaks.decharged_lower_boundary_masses(),
@@ -151,17 +151,98 @@ def test_search():
         assert len(missed_boundaries) == 0
         # boundary search
 
-        true_boundaries = sorted(anno_peaks.upper_boundaries().tolist())
+        true_boundaries = anno_peaks.upper_boundaries().tolist()
         aug_peaks = AugmentedPeaks.from_peaks(
             anno_peaks,
             charges=np.array([1,2,3]),
             pivot_point=anno_peaks.pivot,
         )
         res = find_boundaries(aug_peaks, reflected_boundary_tolerance, reflected_boundary_targets, -1)
-        observed_boundaries = sorted(res.index.tolist())
+        observed_boundaries = res.index.tolist()
         missed_boundaries = list(set(true_boundaries).difference(observed_boundaries))
         assert len(missed_boundaries) == 0
         # reflected boundary search
+
+def test_multiresidue_search():
+    residue_space = ResidueStateSpace.from_config(
+        ANNO_CFG)
+    fragment_space = FragmentStateSpace.from_config_to_pairs(
+        ANNO_CFG)
+    boundary_fragment_space = FragmentStateSpace.from_config_to_boundaries(
+        ANNO_CFG)
+    reflected_residue_space = ResidueStateSpace.from_config(
+        ANNO_CFG, reflect=True)
+    reflected_boundary_fragment_space = FragmentStateSpace.from_config_to_boundaries(
+        ANNO_CFG, reflect=True)
+    pair_targets = construct_pair_target_masses(residue_space, fragment_space)
+    boundary_targets = construct_boundary_target_masses(residue_space, boundary_fragment_space)
+    reflected_boundary_targets = construct_boundary_target_masses(reflected_residue_space, reflected_boundary_fragment_space)
+    pair_tolerance = 0.01
+    boundary_tolerance = 0.01
+    reflected_boundary_tolerance = 0.015
+
+    for k in range(2, 3 + 1):
+        operand = [pair_targets,] * (k - 1)
+        multi_pair_targets = combine_target_masses(
+            [pair_targets,] + operand)
+        multi_boundary_targets = combine_target_masses(
+            [boundary_targets,] + operand)
+        multi_reflected_boundary_targets = combine_target_masses(
+            [reflected_boundary_targets,] + operand) # does this need to be a reflected pair target space? hm
+        # construct multi-residue target spaces
+        pair_tolerance = 0.01
+        boundary_tolerance = 0.01
+        reflected_boundary_tolerance = 0.015
+    
+        for (anno_peaks, aug_peaks) in zip(TEST_PEAKS, AUG_PEAKS):
+            print(anno_peaks.tabulate())
+
+            res = find_pairs(
+                aug_peaks,
+                pair_tolerance,
+                multi_pair_targets,
+                -1,
+            )
+            observed_pairs = [(x,y) for (x,y) in res.indices.tolist()]
+            true_pairs = [(x,y) for (x,y) in anno_peaks.pairs(k)]
+            missed_pairs = list(set(true_pairs).difference(observed_pairs))
+            print("observed pairs",observed_pairs)
+            print("true pairs",true_pairs)
+            assert len(missed_pairs) == 0
+            # peak search
+    
+            res = find_boundaries(
+                aug_peaks,
+                boundary_tolerance,
+                multi_boundary_targets,
+                -1,
+            )
+            observed_boundaries = res.index.tolist()
+            true_boundaries = anno_peaks.lower_boundaries(k).tolist()
+            missed_boundaries = list(set(true_boundaries).difference(observed_boundaries))
+            print("observed boundaries",observed_boundaries)
+            print("true boundaries",true_boundaries)
+            assert len(missed_boundaries) == 0
+            # boundary search
+    
+            aug_peaks = AugmentedPeaks.from_peaks(
+                anno_peaks,
+                charges=np.array([1,2,3]),
+                pivot_point=anno_peaks.pivot,
+            )
+            res = find_boundaries(
+                aug_peaks,
+                reflected_boundary_tolerance,
+                multi_reflected_boundary_targets,
+                -1,
+            )
+            observed_boundaries = res.index.tolist()
+            true_boundaries = anno_peaks.upper_boundaries(k).tolist()
+            missed_boundaries = list(set(true_boundaries).difference(observed_boundaries))
+            print("observed boundaries",observed_boundaries)
+            print("true boundaries",true_boundaries)
+            assert len(missed_boundaries) == 0
+            # reflected boundary search
 
 def test_search_pivots():
     residue_space = ResidueStateSpace.from_config(
