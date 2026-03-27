@@ -1,4 +1,5 @@
 from sys import argv
+from time import time
 
 from mrror.util import HYDROGEN_MASS
 from mrror.spectra.types import AugmentedPeaks
@@ -11,6 +12,7 @@ from mrror.sequences.queries import generate_unordered_combinations
 from .shared import ANNO_CFG, TEST_PEPTIDES, TEST_PEAKS, AUG_PEAKS, DEFAULT_PARAM, COMPLEX_PARAM, _assert_maxmin_tolerance
 
 import pytest
+import tqdm
 import numpy as np
 from tabulate import tabulate
 from hydra import compose, initialize
@@ -181,7 +183,10 @@ def test_multiresidue_search():
     boundary_tolerance = 0.01
     reflected_boundary_tolerance = 0.015
 
+    t_init = time()
     for k in range(2, 3 + 1):
+        print("building target masses for k", k)
+        t_init_k = time()
         operand = [pair_targets,] * (k - 1)
         multi_pair_targets = combine_target_masses(
             [pair_targets,] + operand)
@@ -189,14 +194,14 @@ def test_multiresidue_search():
             [boundary_targets,] + operand)
         multi_reflected_boundary_targets = combine_target_masses(
             [reflected_boundary_targets,] + operand) # does this need to be a reflected pair target space? hm
+        t_build = time() - t_init_k
+        t_init_k = time()
         # construct multi-residue target spaces
-        pair_tolerance = 0.01
-        boundary_tolerance = 0.01
-        reflected_boundary_tolerance = 0.015
-    
-        for (anno_peaks, aug_peaks) in zip(TEST_PEAKS, AUG_PEAKS):
+
+        for (anno_peaks, aug_peaks) in tqdm.tqdm(zip(TEST_PEAKS, AUG_PEAKS),total=len(TEST_PEAKS)):
             print(anno_peaks.tabulate())
 
+            print("find multi pairs", len(aug_peaks), len(multi_pair_targets.target_masses))
             res = find_pairs(
                 aug_peaks,
                 pair_tolerance,
@@ -206,11 +211,10 @@ def test_multiresidue_search():
             observed_pairs = [(x,y) for (x,y) in res.indices.tolist()]
             true_pairs = [(x,y) for (x,y) in anno_peaks.pairs(k)]
             missed_pairs = list(set(true_pairs).difference(observed_pairs))
-            print("observed pairs",observed_pairs)
-            print("true pairs",true_pairs)
             assert len(missed_pairs) == 0
             # peak search
     
+            print("find multi boundaries", len(aug_peaks), len(multi_boundary_targets.target_masses))
             res = find_boundaries(
                 aug_peaks,
                 boundary_tolerance,
@@ -220,11 +224,10 @@ def test_multiresidue_search():
             observed_boundaries = res.index.tolist()
             true_boundaries = anno_peaks.lower_boundaries(k).tolist()
             missed_boundaries = list(set(true_boundaries).difference(observed_boundaries))
-            print("observed boundaries",observed_boundaries)
-            print("true boundaries",true_boundaries)
             assert len(missed_boundaries) == 0
             # boundary search
     
+            print("find reflected multi boundaries", len(aug_peaks), len(multi_reflected_boundary_targets.target_masses))
             aug_peaks = AugmentedPeaks.from_peaks(
                 anno_peaks,
                 charges=np.array([1,2,3]),
@@ -239,10 +242,10 @@ def test_multiresidue_search():
             observed_boundaries = res.index.tolist()
             true_boundaries = anno_peaks.upper_boundaries(k).tolist()
             missed_boundaries = list(set(true_boundaries).difference(observed_boundaries))
-            print("observed boundaries",observed_boundaries)
-            print("true boundaries",true_boundaries)
             assert len(missed_boundaries) == 0
             # reflected boundary search
+        print("k", k, "build time", t_build, "search time", time() - t_init_k)
+    print("total",time() - t_init)
 
 def test_search_pivots():
     residue_space = ResidueStateSpace.from_config(

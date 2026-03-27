@@ -2,7 +2,7 @@ import dataclasses, abc
 from typing import Self, Iterator
 import itertools as it
 
-from ..util import HYDROGEN_MASS, mesh_ravel
+from ..util import HYDROGEN_MASS, mesh_ravel, fuzzy_unique
 
 import numpy as np
 from omegaconf.dictconfig import DictConfig
@@ -150,13 +150,62 @@ class ResidueStateSpace:
 
 @dataclasses.dataclass(slots=True)
 class TargetMasses(abc.ABC):
-    """A collection of masses (and underlying annotations) spanned by a given triplet of a residue space, a left fragment space, and a right fragment space. A classmethod constructor is deliberately not implemented; use the fragments.masses.construct_*_target_masses functions instead."""
+    """A collection of masses (and underlying annotations) spanned by a given triplet of a residue space, a left fragment space, and a right fragment space. The classmethod constructor from_unclustered is implemented but it is strongly recommended to use the fragments.masses.construct_*_target_masses functions instead."""
     target_masses: np.ndarray                   # [float; n]
+    # truncated_masses: np.ndarray                # [float; m]
+    # target_clusters: np.ndarray                 # [[int; 2]; m]
     target_states: np.ndarray                   # [[int; 4]; n]
     null_states: list[np.ndarray]               # [[int; _]; 3]
     residue_space: ResidueStateSpace
     left_fragment_space: FragmentStateSpace
     right_fragment_space: FragmentStateSpace
+
+    @staticmethod
+    def _sort_and_cluster(
+        target_masses,
+        target_states,
+        tolerance
+    ) -> tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
+        n_targets = len(target_masses)
+        sort_key = np.argsort(target_masses)
+        target_masses = target_masses[sort_key]
+        target_states = target_states[sort_key]
+        truncated_masses, cluster_idx = fuzzy_unique(target_masses, tolerance)
+        print("  ", n_targets, "->", len(truncated_masses))
+        target_clusters = [0,] + sum([[i - 1, i] for i in range(1, n_targets) if cluster_idx[i - 1] != cluster_idx[i]],[]) + [n_targets - 1,]
+        target_clusters = np.array(target_clusters).reshape((-1,2))
+        assert len(truncated_masses) == len(target_clusters)
+        return (
+            target_masses,
+            truncated_masses,
+            target_clusters,
+            target_states,
+        )
+
+    @classmethod
+    def from_unclustered(
+        cls,
+        target_masses,
+        target_states,
+        null_states,
+        residue_space,
+        left_fragment_space,
+        right_fragment_space,
+        tolerance: float,
+    ) -> Self:
+        print("TargetMasses")
+        target_masses, truncated_masses, target_clusters, target_states = cls._sort_and_cluster(target_masses,target_states,tolerance)
+        return cls(
+            target_masses,
+            truncated_masses,
+            target_clusters,
+            target_states,
+            null_states,
+            residue_space,
+            left_fragment_space,
+            right_fragment_space,
+            tolerance,
+        )
 
     @staticmethod
     def _count_nonnull(
@@ -178,10 +227,15 @@ class TargetMasses(abc.ABC):
         hit_ranges: np.ndarray,
         query_masses: np.ndarray,
     ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
+        # hit_ranges = np.clip(hit_ranges,0,len(self.target_clusters) - 1)
+        # expanded_hit_ranges = np.array([(self.target_clusters[l,0],self.target_clusters[r,1]) for (l,r) in hit_ranges])
+        # hit_states = [self.target_states[l:r,:] for (l,r) in expanded_hit_ranges]
+        # offsets = [np.abs(qm - self.target_masses[l:r]) for (qm,(l,r)) in zip(query_masses,expanded_hit_ranges)]
         hit_states = [self.target_states[l:r,:] for (l,r) in hit_ranges]
         offsets = [np.abs(qm - self.target_masses[l:r]) for (qm,(l,r)) in zip(query_masses,hit_ranges)]
         complexities = [self._count_nonnull(x[:,1:4],self.null_states) for x in hit_states]
         costs = [(o * (1 + c)) for (o,c) in zip(offsets,complexities)]
+        # segments = np.cumsum(expanded_hit_ranges[:,1] - expanded_hit_ranges[:,0]) # + 1
         segments = np.cumsum(hit_ranges[:,1] - hit_ranges[:,0]) # + 1
         return (
             np.concat(hit_states),
@@ -229,6 +283,33 @@ class MultiResidueTargetMasses(TargetMasses):
     """A TargetMasses object with the additional num_residues field.
     Like TargetMasses, a classmethod constructor is deliberately not provided in lieu of fragments.masses.combine_target_masses."""
     num_residues: int
+
+    @classmethod
+    def from_unclustered(
+        cls,
+        target_masses,
+        target_states,
+        null_states,
+        residue_space,
+        left_fragment_space,
+        right_fragment_space,
+        tolerance: float,
+        num_residues: int,
+    ) -> Self:
+        print("MultiResidueTargetMasses")
+        target_masses, truncated_masses, target_clusters, target_states = cls._sort_and_cluster(target_masses,target_states,tolerance)
+        return cls(
+            target_masses,
+            truncated_masses,
+            target_clusters,
+            target_states,
+            null_states,
+            residue_space,
+            left_fragment_space,
+            right_fragment_space,
+            tolerance,
+            num_residues,
+        )
     
 @dataclasses.dataclass(slots=True)
 class AbstractAnnotation(abc.ABC):

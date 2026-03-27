@@ -40,7 +40,7 @@ def mesh_sum(
     ).flatten()
 
 def fuzzy_unique(x: np.ndarray, tolerance: float) -> tuple[np.ndarray,np.ndarray]:
-    unique_scaled_x, idx = np.unique_inverse(x / tolerance)
+    unique_scaled_x, idx = np.unique_inverse((x / tolerance).astype(int))
     return (
         unique_scaled_x * tolerance,
         idx

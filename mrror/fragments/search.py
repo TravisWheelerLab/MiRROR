@@ -10,7 +10,7 @@ from .types import PairResult, BoundaryResult, PivotResult, TargetMasses
 import numpy as np
 import numba
 
-def _find_pairs_minimal(
+def _find_pairs_per_peak(
     peaks: np.ndarray, # [float; n]
     tolerance: float,
     target_masses: np.ndarray # [float; k]
@@ -95,15 +95,66 @@ def _find_pairs(
         query_masses
     )
 
+def _find_pairs_hybrid(
+    peaks: np.ndarray, # [float; n]
+    tolerance: float,
+    target_masses: np.ndarray # [float; k]
+) -> tuple[np.ndarray,np.ndarray]:
+    min_target = target_masses[0] - tolerance
+    max_target = target_masses[-1] + tolerance
+    n = len(peaks)
+    results = list()
+    queries = list()
+    left_ind_arrs = list()
+    right_ind_arrs = list()
+    query_mass_arrs = list()
+    for i in range(n - 1):
+        query_peak = peaks[i]
+        subpeaks = peaks[i + 1:]
+        query_lo = bisect_left(peaks[i + 1:], query_peak + min_target)
+        query_hi = bisect_right(peaks[i + 1:], query_peak + max_target)
+        query_mass_arrs.append(subpeaks[query_lo:query_hi] - query_peak)
+        left_ind_arrs.append(np.full(query_hi - query_lo, i))
+        right_ind_arrs.append(np.arange(query_hi - query_lo) + query_lo + i + 1)
+    query_masses = np.concat(query_mass_arrs)
+    left_indices = np.concat(left_ind_arrs)
+    right_indices = np.concat(right_ind_arrs)
+
+    hits_lo = bisect_left(target_masses, query_masses - tolerance)
+    hits_hi = bisect_right(target_masses, query_masses + tolerance)
+    # find the hit range for each query
+
+    result_mask = hits_hi > hits_lo
+    result_data = np.vstack([
+        left_indices,
+        right_indices,
+        hits_lo,
+        hits_hi,
+    ]).T
+    result_data = result_data[result_mask]
+    query_masses = query_masses[result_mask]
+    # remove results with no hits
+
+    return (
+        result_data,
+        query_masses
+    )
+
 def find_pairs(
     peaks: AugmentedPeaks,
     tolerance: float,
     targets: TargetMasses,
     targets_index: int,
-    mode: str = "minimal",
+    mode: str = "hybrid",
 ) -> PairResult:
-    if mode == "minimal":
-        results, queries = _find_pairs_minimal(
+    if mode == "hybrid":
+        results, queries = _find_pairs_hybrid(
+            peaks.mz,
+            tolerance,
+            targets.target_masses,
+        )
+    elif mode == "per_peak":
+        results, queries = _find_pairs_per_peak(
             peaks.mz,
             tolerance,
             targets.target_masses,
@@ -115,7 +166,7 @@ def find_pairs(
             targets.target_masses,
         )
     else:
-        raise ValueError(f"unrecognized pair search mode {mode}")
+        raise ValueError(f"pair search mode {mode} must be \"hybrid\", \"per_peak\", or \"full\".")
     local_indices = results[:,:2]
     global_indices = peaks.get_original_indices(local_indices)
     # reindex augmented peak indices to original peak indices
@@ -198,7 +249,7 @@ def find_boundaries(
     results, queries = _find_boundaries(
         peaks.mz,
         tolerance,
-        targets.target_masses
+        targets.target_masses,
     )
     if results.size == 0:
         return BoundaryResult.empty()

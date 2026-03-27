@@ -1,3 +1,7 @@
+# =============================================================================
+# this module describes methods for the construction and transformation 
+# of target masses. for class descriptions, refer to mrror.fragments.types.
+# =============================================================================
 import dataclasses
 import itertools as it
 from typing import Self, Iterable
@@ -85,10 +89,10 @@ def _construct_target_masses(
     right_fragment_space,
 ) -> TargetMasses:
     """Given augmented target masses and the state spaces used to create them, prepare the data and construct the final TargetMass object."""
-    sort_key = np.argsort(target_masses)
+    key = np.argsort(target_masses)
     return TargetMasses(
-        target_masses = target_masses[sort_key],
-        target_states = target_states[sort_key],
+        target_masses = target_masses[key],
+        target_states = target_states[key],
         null_states = [
             left_fragment_space.loss_null_indices,
             right_fragment_space.loss_null_indices,
@@ -201,7 +205,7 @@ def _combine_residue_spaces(
 def combine_target_masses(
     targets: list[TargetMasses],
 ) -> MultiResidueTargetMasses:
-    """Takes the product of a list of target masses. Every mass in the product is the sum of one mass from each operand. For example, the combination of target masses [1.0, 2.0] and [0.3, 0.7] is [1.3, 1.7, 2.3, 2.7]. Duplicate masses are not clustered in order to preserve unique annotations. For example, combining [1.0, 1.5] and [0.2, 0.7] will produce [1.2, 1.7, 1.7, 2.2], wherein each distinct 1.7 corresponds to different annotated properties.
+    """Takes the product of a list of target masses. Every mass in the product is the sum of one mass from each operand. For example, the combination of target masses [1.0, 2.0] and [0.3, 0.7] is [1.3, 1.7, 2.3, 2.7]. Duplicate masses are clustered, but their unique annotations are retained and re-constructed after search.
     
     The underlying spaces are combined in a similar way to facilitate state and symbol retrieval using the same TargetMasses interface."""
     combined_residue_space = _combine_residue_spaces([
@@ -210,8 +214,10 @@ def combine_target_masses(
         x.left_fragment_space for x in targets])
     combined_right_fragment_space = _combine_fragment_spaces([
         x.right_fragment_space for x in targets])
+    target_masses = mesh_sum([x.target_masses for x in targets])
+    key = np.argsort(target_masses)
     return MultiResidueTargetMasses(
-        target_masses = mesh_sum([x.target_masses for x in targets]),
+        target_masses = target_masses[key],
         target_states = np.c_[ # form a 2d array by stacking columns
             mesh_ravel( # combined amino states
                 [x.target_states[:,0] for x in targets],
@@ -229,7 +235,7 @@ def combine_target_masses(
                 [x.target_states[:,3] for x in targets],
                 tuple([x.residue_space.n_total_modifications() for x in targets]),
             ),
-        ],
+        ][key],
         null_states = [
             combined_left_fragment_space.loss_null_indices,
             combined_right_fragment_space.loss_null_indices,
