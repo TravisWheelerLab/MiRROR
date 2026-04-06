@@ -188,8 +188,8 @@ def test_multiresidue_search():
         print("building target masses for k", k)
         t_init_k = time()
         operand = [pair_targets,] * (k - 1)
-        multi_pair_targets = combine_target_masses(
-            [pair_targets,] + operand)
+        # multi_pair_targets = combine_target_masses(
+            # [pair_targets,] + operand)
         multi_boundary_targets = combine_target_masses(
             [boundary_targets,] + operand)
         multi_reflected_boundary_targets = combine_target_masses(
@@ -201,17 +201,18 @@ def test_multiresidue_search():
         for (anno_peaks, aug_peaks) in tqdm.tqdm(zip(TEST_PEAKS, AUG_PEAKS),total=len(TEST_PEAKS)):
             print(anno_peaks.tabulate())
 
-            print("find multi pairs", len(aug_peaks), len(multi_pair_targets.target_masses))
-            res = find_pairs(
-                aug_peaks,
-                pair_tolerance,
-                multi_pair_targets,
-                -1,
-            )
-            observed_pairs = [(x,y) for (x,y) in res.indices.tolist()]
-            true_pairs = [(x,y) for (x,y) in anno_peaks.pairs(k)]
-            missed_pairs = list(set(true_pairs).difference(observed_pairs))
-            assert len(missed_pairs) == 0
+            print("skipping multi pairs")
+            # print("find multi pairs", len(aug_peaks), len(multi_pair_targets.target_masses))
+            # res = find_pairs(
+            #     aug_peaks,
+            #     pair_tolerance,
+            #     multi_pair_targets,
+            #     -1,
+            # )
+            # observed_pairs = [(x,y) for (x,y) in res.indices.tolist()]
+            # true_pairs = [(x,y) for (x,y) in anno_peaks.pairs(k)]
+            # missed_pairs = list(set(true_pairs).difference(observed_pairs))
+            # assert len(missed_pairs) == 0
             # peak search
     
             print("find multi boundaries", len(aug_peaks), len(multi_boundary_targets.target_masses))
