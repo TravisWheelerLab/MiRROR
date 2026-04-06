@@ -174,7 +174,7 @@ def evaluate(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, ann
         res.save(output_path)
     if app_cfg.verbosity > 0:
         print(f"| annotation\t{anno_runtime}s")
-    # runs and records spectrum annotation. identifies initial and terminal fragments, and pairs of fragments whose difference encodes the mass of a residue.
+    # runs and records spectrum annotation. identifies initial and terminal fragments, and pairs of fragments whose difference encodes the mass of a residue. exports peak annotations. constructs spectrum graphs.
     
     algn_results = [
        align(anno_res, targets, algn_params, verbose=app_cfg.verbosity > 1)
@@ -186,7 +186,7 @@ def evaluate(cfg, app_cfg, spec_cfg, output_dir, working_dir, suffix_arrays, ann
         res.save(output_path)
     if app_cfg.verbosity > 0:
         print(f"| alignment\t{algn_runtime}s")
-    # runs and records graph alignment. constructs spectrum graphs and their (sparse) product via cost propagation.
+    # runs and records graph alignment. constructs a sparse product between spectrum graphs using propagation.
     
     enmr_results = [
        enumerate_candidates(anno_res, algn_res, targets, suffix_arrays, enmr_params, verbose=app_cfg.verbosity > 1)
