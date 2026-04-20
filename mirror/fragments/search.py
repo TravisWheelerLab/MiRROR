@@ -402,49 +402,53 @@ def find_pivots(
 ) -> PivotResult:
     if not(find_overlap or find_virtual):
         raise ValueError("both find_overlap and find_virtual are False. there are no other ways to find pivots.")
-    pivot_points, pivot_indices = zip(*_find_pivots(
+    pivot_res = list(_find_pivots(
         peaks,
         pairs,
         query_tolerance,
         find_overlap,
-        find_virtual))
-    pivot_points = np.array(pivot_points)
-    pivot_indices = np.array(pivot_indices)
-    # generate pivots
-
-    cluster_points, pivot_cluster_ids = _bin_pivots(
-        pivot_points,
-        precision=bin_precision)
-    # cluster by pivot point
-
-    scr_result = _screen_pivots(
-        peaks,
-        cluster_points,
-        pivot_cluster_ids,
-        symmetry_tolerance,
-        score_factor,
-    )
-    pvt_mask, clust_mask, pivot_cluster_ids, clust_scores, clust_sym = scr_result
-    pivot_points = pivot_points[pvt_mask]
-    pivot_indices = pivot_indices[pvt_mask]
-    cluster_points = cluster_points[clust_mask]
-    p = len(pivot_points)
-    k = len(cluster_points)
-    # screen clusters
-
-    clusters = [[] for _ in range(k)]
-    for pivot_idx in range(p):
-        cluster_id = pivot_cluster_ids[pivot_idx]
-        clusters[cluster_id].append(pivot_idx)
-    clusters = [np.array(x) for x in clusters]
-    # construct cluster membership lists from pivot cluster ids
-
-    return PivotResult.from_data(
-        cluster_points,
-        clusters,
-        clust_scores,
-        clust_sym,
-        pivot_points,
-        pivot_indices,
-    )
+        find_virtual,
+    ))
+    if len(pivot_res) == 0:
+        return PivotResult.empty()
+    else:
+        pivot_points, pivot_indices = zip(*pivot_res)
+        pivot_points = np.array(pivot_points)
+        pivot_indices = np.array(pivot_indices)
+        # generate pivots
     
+        cluster_points, pivot_cluster_ids = _bin_pivots(
+            pivot_points,
+            precision=bin_precision)
+        # cluster by pivot point
+    
+        scr_result = _screen_pivots(
+            peaks,
+            cluster_points,
+            pivot_cluster_ids,
+            symmetry_tolerance,
+            score_factor,
+        )
+        pvt_mask, clust_mask, pivot_cluster_ids, clust_scores, clust_sym = scr_result
+        pivot_points = pivot_points[pvt_mask]
+        pivot_indices = pivot_indices[pvt_mask]
+        cluster_points = cluster_points[clust_mask]
+        p = len(pivot_points)
+        k = len(cluster_points)
+        # screen clusters
+    
+        clusters = [[] for _ in range(k)]
+        for pivot_idx in range(p):
+            cluster_id = pivot_cluster_ids[pivot_idx]
+            clusters[cluster_id].append(pivot_idx)
+        clusters = [np.array(x) for x in clusters]
+        # construct cluster membership lists from pivot cluster ids
+    
+        return PivotResult.from_data(
+            cluster_points,
+            clusters,
+            clust_scores,
+            clust_sym,
+            pivot_points,
+            pivot_indices,
+        )

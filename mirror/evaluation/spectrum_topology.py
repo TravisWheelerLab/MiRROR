@@ -98,7 +98,7 @@ def construct_spectrum_topology(
     fragment_labels: FragmentLabels,
     pivots: PivotResult,
     tolerance: float,
-    weight_key: str = float,
+    weight_key: str = 'weight',
 ) -> tuple[
     list[np.ndarray],
     tuple[

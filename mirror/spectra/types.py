@@ -9,6 +9,7 @@ import editdistance
 import numpy as np
 import mzspeclib as mzlib
 import mzpaf
+from pyteomics import mgf
 from tabulate import tabulate
 
 @dataclasses.dataclass(slots=True)
@@ -38,7 +39,18 @@ class Peaks:
         )
 
     @classmethod
-    def from_data(cls,
+    def from_mgf(
+        cls,
+        mgf: mgf.IndexedMGF,
+    ) -> Self:
+        return cls(
+            mz = mgf['m/z array'],
+            intensity = mgf['intensity array'],
+        )
+
+    @classmethod
+    def from_data(
+        cls,
         mz: Iterable,
         intensity: Iterable = None,
     ) -> Self:

@@ -1,6 +1,6 @@
-from mrror.spectra.simulation import DEFAULT_PARAM, COMPLEX_PARAM
-from mrror.spectra.types import AugmentedPeaks, SimulationLabeledPeaks
-from mrror.util import load_config
+from mirror.spectra.simulation import DEFAULT_PARAM, COMPLEX_PARAM
+from mirror.spectra.types import AugmentedPeaks, SimulationLabeledPeaks
+from mirror.util import load_config
 
 import numpy as np
 

@@ -1,8 +1,8 @@
 # uv run ./tests/test_annotated_peaks.py ./data/spectra/Apis-mellifera.mzlib.txt 0.01 True 3
 from sys import argv
 
-from mrror.io import read_mzlib
-from mrror.spectra.types import SimulationLabeledPeaks
+from mirror.io import read_mzlib
+from mirror.spectra.types import SimulationLabeledPeaks
 
 from .shared import TEST_PEPTIDES, DEFAULT_PARAM, COMPLEX_PARAM, _assert_maxmin_tolerance, _assert_positive
 

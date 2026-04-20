@@ -43,13 +43,16 @@ class FragmentLabels:
 	) -> np.ndarray: # [int; l]
 		return self.unique_mass_index[self.pair_segment:self.lower_boundary_segment]
 
+	def _get_interchunk_segment_boundaries(self):
+		return it.pairwise([self.lower_boundary_segment,] + self.pivot_interchunk_segments)
+
 	def reindex_upper_boundaries(
 		self,
 	) -> list[np.ndarray]: # [[int; _]; p]
 		return [
 			self.unique_mass_index[i:j][segments[0]:segments[1]]
 			for ((i,j), segments) in zip(
-			    it.pairwise(self.pivot_interchunk_segments),
+			    self._get_interchunk_segment_boundaries(),
 			    self.pivot_intrachunk_segments
 			)
 		]
@@ -60,7 +63,7 @@ class FragmentLabels:
 		return [
 			self.unique_mass_index[i:j][segments[1]:segments[2]].reshape((-1,4))
 			for ((i,j), segments) in zip(
-			    it.pairwise(self.pivot_interchunk_segments),
+			    self._get_interchunk_segment_boundaries(),
 			    self.pivot_intrachunk_segments
 			)
 		]
@@ -71,7 +74,7 @@ class FragmentLabels:
 		return [
 			self.unique_mass_index[i:j][segments[2]:segments[3]].reshape((-1,2))
 			for ((i,j), segments) in zip(
-			    it.pairwise(self.pivot_interchunk_segments),
+			    self._get_interchunk_segment_boundaries(),
 			    self.pivot_intrachunk_segments
 			)
 		]
@@ -241,6 +244,7 @@ class FragmentLabels:
 	def _concat_labels(
 		cls,
 		labels: list[_LabelData],
+		zero_pad: bool = False,
 	) -> tuple[
 		_LabelData,	# result of concatenation
 		list[int],	# offsets to recover each component label data.
@@ -269,7 +273,7 @@ class FragmentLabels:
 				listsum(losses),		# per-state losses
 				listsum(mods),			# per-state mods
 			),
-			np.cumsum([0] + offsets), 	# segments
+			np.cumsum([0,] + offsets) if zero_pad else np.cumsum(offsets), 	# segments
 		)
 
 	@classmethod
@@ -287,13 +291,17 @@ class FragmentLabels:
 		ub_labels = [cls._extract_boundaries_labels(x) for x in upper_boundaries]
 		pivot_labels, symmetry_labels = cls._extract_pivots_labels(pivots)
 		# extract label data
-
-		pivot_chunks, pivot_intrachunk_segments = zip(*[
-			cls._concat_labels([ub,pvt,sym])
-			for (ub,pvt,sym) in zip(ub_labels,pivot_labels,symmetry_labels)
-		])
-		pivot_chunks = list(pivot_chunks)
-		pivot_intrachunk_segments = list(pivot_intrachunk_segments)
+		
+		if len(pivot_labels) > 0:
+			pivot_chunks, pivot_intrachunk_segments = zip(*[
+				cls._concat_labels([ub,pvt,sym], zero_pad=True)
+				for (ub,pvt,sym) in zip(ub_labels,pivot_labels,symmetry_labels)
+			])
+			pivot_chunks = list(pivot_chunks)
+			pivot_intrachunk_segments = list(pivot_intrachunk_segments)
+		else:
+			pivot_chunks = []
+			pivot_intrachunk_segments = []
 		# concat pivot-dependent triplets
 		
 		labels = [pair_labels, lb_labels] + pivot_chunks
@@ -301,11 +309,11 @@ class FragmentLabels:
 		idx, charge, costs, tgt_idx, loss, mods = concat_labels
 		pair_segment, lb_segment, *pivot_chunk_segments  = segments
 		# concatenate label data.
-
+		
 		fragment_mass = peaks.mz[idx] * charge
 		unique_fragment_mass, unique_mass_index = fuzzy_unique(fragment_mass, tolerance)
 		# use fragment masses to cluster indices.
-
+		
 		return cls(
 			peaks = peaks,
 			index = idx,

@@ -58,7 +58,10 @@ def align(
     prod_topology = [None for _ in range(n)]
     for i in range(n):
         node_costmodel = MatchedNodeCostModel(
-            (ravel(i, j, u.order()) for (i,j) in anno.symmetric_nodes[i]),
+            (
+                ravel(l, u, anno.upper_topology[i].order())
+                for (l,u) in anno.symmetric_nodes[i]
+            ),
             params.node_match_cost,
             params.node_mismatch_cost,
         )
@@ -68,7 +71,7 @@ def align(
             params.weight_key,
             anno.pairs,
             anno.lower_boundaries,
-            anno.right_boundaries[i],
+            anno.upper_boundaries[i],
             params.edge_match_cost,
             params.edge_mismatch_cost,
             params.edge_gap_cost,

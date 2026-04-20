@@ -5,6 +5,7 @@ import numpy as np
 import networkx as nx
 import mzspeclib as mzlib
 import pyopenms as oms
+from pyteomics import mgf
 from mzspeclib.validate import ValidationWarning
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -202,11 +203,7 @@ def read_mzlib(
     with warnings.catch_warnings(action="ignore"):
         return mzlib.SpectrumLibrary(filename = filepath)
 
-def read_mgf():
-    pass
-
-def write_mzlib():
-    pass
-
-def write_mgf():
-    pass
+def read_mgf(
+    filepath: str,
+) -> mgf.IndexedMGF:
+    return mgf.read(filepath)

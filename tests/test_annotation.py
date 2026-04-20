@@ -1,12 +1,12 @@
 import itertools as it
 import pprint
 
-from mrror.annotation import AnnotationParams, AnnotationResult, annotate
-from mrror.evaluation.labeled_peaks import AnnotationLabeledPeaks
-from mrror.util import load_config
+from mirror.annotation import AnnotationParams, AnnotationResult, annotate
+from mirror.evaluation.labeled_peaks import AnnotationLabeledPeaks
+from mirror.util import load_config
 
 from .shared import TEST_PEAKS, ANNO_CFG
-    
+
 def test_annotate():
     params = AnnotationParams.from_config(ANNO_CFG)
     mz_errs = []

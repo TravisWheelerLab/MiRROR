@@ -1,13 +1,13 @@
 from sys import argv
 from time import time
 
-from mrror.util import HYDROGEN_MASS
-from mrror.spectra.types import AugmentedPeaks
-from mrror.fragments.types import TargetMasses, MultiResidueTargetMasses,FragmentStateSpace, ResidueStateSpace
-from mrror.fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, cluster_combinations_by_mass, combine_target_masses
-from mrror.fragments.search import find_pairs, find_pivots, find_boundaries
-from mrror.sequences.suffix_array import TrivialSuffixArray
-from mrror.sequences.queries import generate_unordered_combinations
+from mirror.util import HYDROGEN_MASS
+from mirror.spectra.types import AugmentedPeaks
+from mirror.fragments.types import TargetMasses, MultiResidueTargetMasses,FragmentStateSpace, ResidueStateSpace
+from mirror.fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, cluster_combinations_by_mass, combine_target_masses
+from mirror.fragments.search import find_pairs, find_pivots, find_boundaries
+from mirror.sequences.suffix_array import TrivialSuffixArray
+from mirror.sequences.queries import generate_unordered_combinations
 
 from .shared import ANNO_CFG, TEST_PEPTIDES, TEST_PEAKS, AUG_PEAKS, DEFAULT_PARAM, COMPLEX_PARAM, _assert_maxmin_tolerance
 

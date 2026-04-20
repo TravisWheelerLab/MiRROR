@@ -451,6 +451,17 @@ class PivotResult:
     # [(int,int,int,int); p]
     
     @classmethod
+    def empty(cls):
+        return cls(
+            cluster_points = np.empty(shape=(0,), dtype=float),
+            clusters = [],
+            scores = np.empty(shape=(0,), dtype=float),
+            symmetries = [],
+            pivot_points = np.empty(shape=(0,), dtype=float),
+            pivot_indices = np.empty(shape=(0,4), dtype=float),
+        )
+
+    @classmethod
     def from_data(cls,
         cluster_points: np.ndarray,
         clusters: list[np.ndarray],
