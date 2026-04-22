@@ -1,4 +1,4 @@
-import dataclasses, json, zlib, base64
+import pathlib, dataclasses, json, zlib, base64
 from typing import Iterator, Iterable
 
 import numpy as np
@@ -172,18 +172,16 @@ def read_str_from_fa(
             yield str(record.seq)
 
 def reverse_fasta(
-    path_to_fa: str,
-) -> str:
-    filename, ext = path_to_fa.split('.')
-    try:
-        new_path = f"{filename}_REVERSED.{ext}"
-        write_str_to_fa(
-            (x[::-1] for x in read_str_from_fa(path_to_fa)),
-            new_path,
-        )
-        return new_path
-    except:
-        return None
+    fasta_path: pathlib.Path,
+    output_dir: pathlib.Path,
+) -> None:
+    rev_fasta_path = pathlib.Path(output_dir) / (str(fasta_path.stem) + '.reverse' + str(fasta_path.suffix))
+    with open(str(fasta_path), 'r') as f:
+        sequences = list(SeqIO.parse(f, 'fasta'))
+        for x in sequences:
+            x.seq = x.seq[::-1]
+        SeqIO.write(sequences, str(rev_fasta_path), 'fasta')
+        return str(rev_fasta_path)
 
 def read_mzml(
     filepath: str,

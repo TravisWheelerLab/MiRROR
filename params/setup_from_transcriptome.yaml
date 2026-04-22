@@ -1,0 +1,14 @@
+suffix_array: null
+reverse_suffix_array: null
+transcriptome: ./data/sequences/test.fasta
+session:
+  dir: test-sessions
+  name: test_session_name_with_underscores
+  serialize: true
+
+defaults:
+- annotation: annotation-mono
+- alignment: alignment-local-gapped
+- enumeration: enumeration
+- spectra: spectra
+- _self_
