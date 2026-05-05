@@ -59,6 +59,15 @@ class Peaks:
             intensity = np.array(intensity) if intensity else np.ones_like(mz),
         )
 
+    @classmethod
+    def empty(
+        cls,
+    ) -> Self:
+        return cls(
+            mz = np.array([],dtype=float),
+            intensity = np.array([],dtype=float),
+        )
+
 @dataclasses.dataclass(slots=True)
 class SimulatedPeaks(Peaks):
     mz: np.ndarray          # [float; n]
@@ -377,6 +386,17 @@ class AugmentedPeaks(Peaks):
             intensity = intensity,
             indices = deindexer,
             charges = charge_table
+        )
+
+    @classmethod
+    def empty(
+        cls,
+    ) -> Self:
+        return cls(
+            mz = np.array([],dtype=float),
+            intensity = np.array([],dtype=float),
+            indices = np.array([],dtype=int),
+            charges = np.array([],dtype=int),
         )
 
 class LabelType(enum.Enum):

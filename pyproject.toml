@@ -31,6 +31,8 @@ dependencies = [
 [tool.uv.workspace]
 members = [
     "old-MiRROR",
+    "prototypes/2026-0429_graph-alignment",
+    "prototypes/2026-0429_bnb",
 ]
 
 [dependency-groups]

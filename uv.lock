@@ -6,6 +6,29 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+members = [
+    "2026-0429-bnb",
+    "2026-0429-graph-alignment",
+    "mrror",
+]
+
+[[package]]
+name = "2026-0429-bnb"
+version = "0.1.0"
+source = { virtual = "prototypes/2026-0429_bnb" }
+dependencies = [
+    { name = "pylibsufr" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pylibsufr", specifier = ">=0.1.11" }]
+
+[[package]]
+name = "2026-0429-graph-alignment"
+version = "0.1.0"
+source = { virtual = "prototypes/2026-0429_graph-alignment" }
+
 [[package]]
 name = "antlr4-python3-runtime"
 version = "4.9.3"

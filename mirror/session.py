@@ -25,11 +25,7 @@ def make_session_dir(
             session_name = '_'.join(session_name)
             i = int(suffix) + 1
             # this is a bit dense. it handles cases where an incremented name is passed as a session name.
-            # e.g., there is a session named 'sesh' and one named 'sesh_1'. if the config session name is
-            # 'sesh_1' but that already exists, this logic ensures that the new name will be 'sesh_2'
-            # rather than 'sesh_1_1'. it is a little more complicated because it has to handle names that
-            # also have underscores elsewhere, like 'sesh_with_underscores_1' needs to become 
-            # 'sesh_with_underscores_2' without trying to cast any of the preceding string parts to int.
+            # e.g., there is a session named 'sesh' and one named 'sesh_1'. if the config session name is 'sesh_1' but that already exists, this logic ensures that the new name will be 'sesh_2' rather than 'sesh_1_1'. it is a little more complicated because it has to handle names that also have underscores elsewhere, like 'sesh_with_underscores_1' needs to become 'sesh_with_underscores_2' without trying to cast any of the preceding string parts to int.
         else:
             session_name = config.session.name
             i = 1

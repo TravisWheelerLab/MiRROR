@@ -387,7 +387,7 @@ class PairResult(AbstractAnnotation):
             features = np.empty((0,5),dtype=int),
             costs = np.empty((0,),dtype=float),
             segments = np.empty((0,),dtype=int),
-            mass= np.empty((0,),dtype=float),
+            mass = np.empty((0,),dtype=float),
         )
 
 @dataclasses.dataclass(slots=True)
@@ -428,6 +428,24 @@ class BoundaryResult(AbstractAnnotation):
             costs = np.empty((0,),dtype=float),
             segments = np.empty((0,),dtype=int),
             mass = np.empty((0,),dtype=float),
+        )
+
+@dataclasses.dataclass(slots=True)
+class SingletonResult:
+    index: np.ndarray
+    augmented_index: np.ndarray
+    augmented_charge: np.ndarray
+    mass: np.ndarray
+    diff: np.ndarray
+
+    @classmethod
+    def empty(cls) -> Self:
+        return cls(
+            index = np.empty((0,),dtype=int),
+            augmented_index = np.empty((0,),dtype=int),
+            augmented_charge = np.empty((0,),dtype=int),
+            mass = np.empty((0,),dtype=float),
+            diff = np.empty((0,),dtype=float),
         )
 
 @dataclasses.dataclass(slots=True)

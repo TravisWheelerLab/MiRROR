@@ -10,7 +10,7 @@ from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
 from .fragments.search import find_pairs, find_pivots, find_boundaries 
 from .sequences.suffix_array import SuffixArray
-from .sequences.queries import PeptideMassQueryEngine, all_kmers
+from .sequences.queries import all_kmers
 from .graphs.types import SpectrumGraph, PivotGraph
 from .evaluation.labeled_peaks import FragmentLabels
 from .evaluation.spectrum_topology import construct_spectrum_topology
