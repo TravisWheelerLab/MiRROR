@@ -22,6 +22,7 @@ dependencies = [
     "pylibsufr>=0.1.11",
     "pyopenms>=3.4.0",
     "pyteomics>=4.7.5",
+    "reindent>=3.5.1",
     "scipy>=1.16.2",
     "setuptools>=80.9.0",
     "tabulate>=0.9.0",
@@ -33,6 +34,7 @@ members = [
     "old-MiRROR",
     "prototypes/2026-0429_graph-alignment",
     "prototypes/2026-0429_bnb",
+    "prototypes/2026-0518_unified-fragment-annotation",
 ]
 
 [dependency-groups]

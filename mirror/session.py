@@ -5,7 +5,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from .io import reverse_fasta, SerializableDataclass, serialize_dataclass, deserialize_dataclass
 from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, PivotResult, BoundaryResult
-from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
+from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, combine_target_masses
 from .sequences.suffix_array import SuffixArray
 from .annotation import AnnotationParams
 from .alignment import AlignmentParams
@@ -128,11 +128,14 @@ def construct_targets(
     if max_k > 1:
         # TODO: constrain by suffix arrays.
         for k in range(2, max_k + 1):
+            # print(k)
             operand = [pair_targets,] * (k - 1)
             multi_lower_boundary_targets[k - 2] = combine_target_masses(
-                [boundary_targets,] + operand)
+                [lower_boundary_targets,] + operand)
+            # print("lb")
             multi_reflected_upper_boundary_targets[k - 2] = combine_target_masses(
                 [reflected_upper_boundary_targets,] + operand)
+            # print("rb")
     return (
         [pair_targets,],
         [lower_boundary_targets, *multi_lower_boundary_targets],

@@ -342,6 +342,14 @@ def merge_in_order(
     source = np.hstack([np.full_like(arrays[i], i, dtype=int) for i in range(len(arrays))])
     return merged_array[order], indices[order], source[order]
 
+def decharge(
+    mz: np.ndarray,
+    charge,
+    hydrogen_mass: float = HYDROGEN_MASS,
+) -> np.ndarray:
+    """(charge * mz) - (hydrogen_mass * (charge - 1))"""
+    return (charge * mz) - (hydrogen_mass * (charge - 1))
+
 def decharge_peaks(
     peaks: np.ndarray, # [float; n]
     charges: np.ndarray, # [int; k]
@@ -350,8 +358,7 @@ def decharge_peaks(
     n = len(peaks)
     k = len(charges)
     decharged_peaks = charges.reshape(k,1) * peaks.reshape(1,n)
-    decharged_peaks = np.array([
-        (c * peaks) - (HYDROGEN_MASS * (c - 1)) for c in charges])
+    decharged_peaks = np.array([decharge(peaks,c) for c in charges])
     merged_decharged_peaks, deindexer, charge_table = merge_in_order(decharged_peaks, transformation)
     # construct and re-sort the charge-augmented m/z
 

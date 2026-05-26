@@ -1391,6 +1391,7 @@ dependencies = [
     { name = "pylibsufr" },
     { name = "pyopenms" },
     { name = "pyteomics" },
+    { name = "reindent" },
     { name = "scipy" },
     { name = "setuptools" },
     { name = "tabulate" },
@@ -1421,6 +1422,7 @@ requires-dist = [
     { name = "pylibsufr", specifier = ">=0.1.11" },
     { name = "pyopenms", specifier = ">=3.4.0" },
     { name = "pyteomics", specifier = ">=4.7.5" },
+    { name = "reindent", specifier = ">=3.5.1" },
     { name = "scipy", specifier = ">=1.16.2" },
     { name = "setuptools", specifier = ">=80.9.0" },
     { name = "tabulate", specifier = ">=0.9.0" },
@@ -2136,6 +2138,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2f/db/98b5c277be99dd18bfd91dd04e1b759cad18d1a338188c936e92f921c7e2/referencing-0.36.2.tar.gz", hash = "sha256:df2e89862cd09deabbdba16944cc3f10feb6b3e6f18e902f7cc25609a34775aa", size = 74744, upload-time = "2025-01-25T08:48:16.138Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/b1/3baf80dc6d2b7bc27a95a67752d0208e410351e3feb4eb78de5f77454d8d/referencing-0.36.2-py3-none-any.whl", hash = "sha256:e8699adbbf8b5c7de96d8ffa0eb5c158b3beafce084968e2ea8bb08c6794dcd0", size = 26775, upload-time = "2025-01-25T08:48:14.241Z" },
+]
+
+[[package]]
+name = "reindent"
+version = "3.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "setuptools" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2b/b8/ae4d040d58d2be57a2f738656ea5dcce95410d3be58ae9e16a5ab54e67e6/reindent-3.5.1.tar.gz", hash = "sha256:59aeb8fbc16e45686f65df23b91896a17eb14ace7a7546860f50d2bb5ec4c9c0", size = 5847, upload-time = "2020-07-06T21:24:08.49Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/21/bbfe0baec43c1d1cb1683653334b55161ccc950991c1803e17f276b5759a/reindent-3.5.1-py3-none-any.whl", hash = "sha256:1248ddf8bb209499ddaff6e841d60c822edff7dcff5e0e5beedbafa06dbc33aa", size = 6747, upload-time = "2020-07-06T21:24:07.261Z" },
 ]
 
 [[package]]

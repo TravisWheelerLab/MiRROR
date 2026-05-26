@@ -6,13 +6,12 @@ from typing import Self, Any
 from .util import normalize_dict
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, PivotResult, BoundaryResult
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, PivotResult, BoundaryResult, UniqueFragmentIndex
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
-from .fragments.search import find_pairs, find_pivots, find_boundaries 
+from .fragments.search import find_pairs, find_boundaries, find_axes_of_reflection
 from .sequences.suffix_array import SuffixArray
 from .sequences.queries import all_kmers
-from .graphs.types import SpectrumGraph, PivotGraph
-from .evaluation.labeled_peaks import FragmentLabels
+from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 from .evaluation.spectrum_topology import construct_spectrum_topology
 # local
 
@@ -23,20 +22,20 @@ from omegaconf.dictconfig import DictConfig
 class AnnotationResult(SerializableDataclass):
     peaks: Peaks
     pairs: PairResult
-    pivots: PivotResult
+    axes: AxesResult
     lower_boundaries: BoundaryResult
     upper_boundaries: list[BoundaryResult]
-    fragment_labels: FragmentLabels
+    unique_fragment_index: UniqueFragmentIndex
     lower_topology: list[SpectrumGraph]
     upper_topology: list[SpectrumGraph]
     pivot_topology: list[PivotGraph]
-    symmetric_nodes: list[np.ndarray]
+    symmetric_topology: list[SymmetricGraph]
     # every list has len(self.pivots) items.
     
     _profile: dict[str,float] = None
 
     def __len__(self) -> int:
-        return len(self.pivots)
+        return len(self.axes)
 
     @classmethod
     def from_data(cls,
@@ -45,26 +44,26 @@ class AnnotationResult(SerializableDataclass):
         pivots: PivotResult,
         lower_boundaries: BoundaryResult,
         upper_boundaries: list[BoundaryResult],
-        fragment_labels: FragmentLabels,
+        unique_fragment_index: UniqueFragmentIndex,
         lower_topology: list[SpectrumGraph],
         upper_topology: list[SpectrumGraph],
         pivot_topology: list[PivotGraph],
-        symmetric_nodes: list[np.ndarray],
+        symmetric_topology: list[SymmetricGraph],
         profile: dict[str,float],
     ) -> Self:
         assert len(pivots) == len(upper_boundaries)
         return cls(
-            peaks = peaks.to_peaks(),
-            pairs = pairs,
-            pivots = pivots,
-            lower_boundaries = lower_boundaries,
-            upper_boundaries = upper_boundaries,
-            fragment_labels = fragment_labels,
-            lower_topology = lower_topology,
-            upper_topology = upper_topology,
-            pivot_topology = pivot_topology,
-            symmetric_nodes = symmetric_nodes,
-            _profile = profile,
+            peaks.to_peaks(),
+            pairs,
+            pivots,
+            lower_boundaries,
+            upper_boundaries,
+            unique_fragment_index,
+            lower_topology,
+            upper_topology,
+            pivot_topology,
+            symmetric_topology,
+            profile,
         )
 
 @dataclasses.dataclass(slots=True)
@@ -74,7 +73,7 @@ class AnnotationParams(SerializableDataclass):
     query_tolerance: float
     # the radius around a query in which hits are collected.
     symmetry_tolerance: float
-    # the max distance between a value and another reflected value such that they are considered symmetric.
+    # the max distance between a value and another reflected value such that they are considered symmetric. NOTE - deprecated.
     pivot_score_factor: float
     # tunes the pivot symmetry score threshold := max score * score factor. TODO - this might not work for noisier spectra.
 
@@ -92,10 +91,10 @@ class AnnotationParams(SerializableDataclass):
 
 def annotate(
     peaks: Peaks,
-    params: AnnotationParams,
+    anno_params: AnnotationParams,
     pair_targets: list[TargetMasses],
     boundary_targets: list[TargetMasses],
-    reflected_boundary_targets: list[TargetMasses],
+    reverse_boundary_targets: list[TargetMasses],
     verbose: bool = False,
 ) -> AnnotationResult:
     profile = {}
@@ -108,48 +107,41 @@ def annotate(
     profile["decharged_peaks"] = time() - t
     # construct augmented mz and target masses
 
+    tolerance = anno_params.query_tolerance
+
     t = time()
-    single_residue_pairs = find_pairs(
-        peaks = decharged_peaks,
-        tolerance = params.query_tolerance,
-        targets = pair_targets[0],
-        targets_index = 0,
+    pair_results = find_pairs(
+        decharged_peaks,
+        pair_targets[0],
+        tolerance,
     )
-    pairs = [single_residue_pairs,]
     profile["pairs"] = time() - t
     # find pairs of peaks in the decharged spectrum whose difference matches a target in the pair target masses.
     
     t = time()
-    nb = len(boundary_targets)
-    lower_boundaries = [None for _ in range(nb)]
-    for i in range(nb):
-        targets = boundary_targets[i]
-        lower_boundaries[i] = find_boundaries(
-            peaks = decharged_peaks,
-            tolerance = params.query_tolerance,
-            targets = targets,
-            targets_index = i,
-        )
+    lower_boundary_results = find_boundaries(
+        decharged_peaks,
+        boundary_targets[0],
+        tolerance,
+    )
     profile["lower_boundaries"] = time() - t
     # find single peaks in the decharged spectrum whose mass matches a target in the boundary target masses.
     
     t = time()
-    pivots = find_pivots(
-        peaks = decharged_peaks,
-        pairs = single_residue_pairs,
-        query_tolerance = params.query_tolerance,
-        symmetry_tolerance = params.symmetry_tolerance,
-        score_factor = params.pivot_score_factor,
+    axes = find_axes_of_reflection(
+        decharged_peaks,
+        pair_result,
+        tolerance,
+        anno_params.pivot_score_factor,
     )
-    profile["pivots"] = time() - t
+    profile["axes_of_reflection"] = time() - t
     # using pairs as seeds, find pivots as midpoints of peak quadruplets with mirror symmetry.
 
     profile["reflected_peaks"] = 0.
     profile["upper_boundaries"] = 0.
     p = len(pivots)
-    nrb = len(reflected_boundary_targets)
     reflected_peaks = [None for _ in range(p)]
-    upper_boundaries = [[None for __ in range(nrb)] for _ in range(p)]
+    upper_boundaries = [None for _ in range(p)]
     for i in range(p):
         t = time()
         reflected_peaks[i] = AugmentedPeaks.from_peaks(
@@ -159,38 +151,34 @@ def annotate(
         )
         profile["reflected_peaks"] += time() - t
         # create a reflected peak list for each pivot cluster.
-
-        for j in range(nrb):
-            t = time()
-            targets = reflected_boundary_targets[j]
-            upper_boundaries[i][j] = find_boundaries(
-                peaks = reflected_peaks[i],
-                tolerance = params.query_tolerance,
-                targets = targets,
-                targets_index = j,
-            )
-            profile["upper_boundaries"] += time() - t
-            # find single peaks in the reflected peak lists whose mass matches a target in the reflected boundary target masses.
+        t = time()
+        upper_boundaries[i] = find_boundaries(
+            reflected_peaks[i],
+            reverse_boundary_targets[0],
+            tolerance,
+        )
+        profile["upper_boundaries"] += time() - t
+        # find single peaks in the reflected peak lists whose mass matches a target in the reflected boundary target masses.
 
     t = time()
-    fragment_labels = FragmentLabels.from_results(
+    unique_fragment_index = deduplicate_by_fragment_mass(
         peaks,
-        [single_residue_pairs,],
-        lower_boundaries,
+        pair_result,
+        lower_boundary_result,
+        axes,
         upper_boundaries,
-        pivots,
     )
-    profile["fragment_labels"] = time() - t
-    # collect annotated fragments into a list of unique masses with aggregate properties.
+    profile["deduplicate_by_fragment_mass"] = time() - t
+    # create a compact, unified index into the array of unique fragment masses.
 
     t = time()
-    symmetric_nodes, lower_topology, upper_topology, pivot_topology = construct_spectrum_topology(
-        fragment_labels,
-        pivots,
-        params.query_tolerance,
+    spectrum_topology = construct_spectrum_topology(
+        unique_fragment_index,
+        axes,
+        tolerance,
     )
     profile["spectrum_topology"] = time() - t
-    # stitch together pairs, add a source node connected to boundary nodes, and a sink node to which pivot nodes connect. store pivot-crossing edges in a separate graph. augment pivot symmetries with equivalence between source and sink nodes.
+    # for each axis, construct four graphs: lower and upper spectrum graphs from pairs connecting boundaries to axis nodes, a pivot graph representing edges connecting the lower and upper graphs, and a symmetry graph pairing nodes whose fragment masses are symmetric.
 
     if verbose:
         print(json.dumps(profile, indent=4))
@@ -200,10 +188,10 @@ def annotate(
         pivots,
         lower_boundaries,
         upper_boundaries,
-        fragment_labels,
-        lower_topology,
-        upper_topology,
-        pivot_topology,
-        symmetric_nodes,
-        profile,
+        unique_fragment_index,
+        lower_topology = spectrum_topology[0],
+        upper_topology = spectrum_topology[1],
+        pivot_topology = spectrum_topology[2],
+        symmetric_topology = spectrum_topology[3],
+        profile = profile,
     )

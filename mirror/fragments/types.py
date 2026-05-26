@@ -152,8 +152,6 @@ class ResidueStateSpace:
 class TargetMasses(abc.ABC):
     """A collection of masses (and underlying annotations) spanned by a given triplet of a residue space, a left fragment space, and a right fragment space. The classmethod constructor from_unclustered is implemented but it is strongly recommended to use the fragments.masses.construct_*_target_masses functions instead."""
     target_masses: np.ndarray                   # [float; n]
-    # truncated_masses: np.ndarray                # [float; m]
-    # target_clusters: np.ndarray                 # [[int; 2]; m]
     target_states: np.ndarray                   # [[int; 4]; n]
     null_states: list[np.ndarray]               # [[int; _]; 3]
     residue_space: ResidueStateSpace
@@ -310,125 +308,6 @@ class MultiResidueTargetMasses(TargetMasses):
             tolerance,
             num_residues,
         )
-    
-@dataclasses.dataclass(slots=True)
-class AbstractAnnotation(abc.ABC):
-
-    def __len__(self):
-        return len(self.segments) - 1
-
-    def get_annotation(self, i: int) -> tuple[float,np.ndarray]:
-        if i == -1:
-            return (
-                np.array([0.,]),
-                np.full((1,self.features.shape[1]),-1),
-            )
-            # null annotation
-        else:
-            l, r = self.segments[i:i+2]
-            data = (
-                self.costs[l:r],
-                self.features[l:r,:],
-            )
-            return data
-
-    def _symbolize(self, features: np.ndarray, sym: list[str], segments: np.ndarray, idx: np.ndarray, costs: np.ndarray) -> str:
-        for (i, (l, r)) in enumerate(it.pairwise(segments)):
-            cost = costs[l:r]
-            ord = np.argsort(cost)
-            feat = features[l:r]
-            sym.append(f"{i} {idx[i]} {[' '.join(x).strip() for x in feat[ord]]} {cost[ord]}")
-        return '\n'.join(sym)
-        
-    @abc.abstractmethod
-    def symbolize(self, targets: TargetMasses) -> str:
-        """Generate symbolic representations of annotated features."""
-        # TODO- replace this with a 'tabulate' method.
-
-    @classmethod
-    @abc.abstractmethod
-    def empty(cls) -> Self:
-        """Create an empty annotation."""
-
-@dataclasses.dataclass(slots=True)
-class PairResult(AbstractAnnotation):
-    indices: np.ndarray
-    # [(int,int); m]
-
-    inner_indices: np.ndarray
-    # [(int,int); m]
-
-    charges: np.ndarray
-    # [(int,int); m]
-
-    features: np.ndarray
-    # [(int,int,int,int); n]
-
-    costs: np.ndarray
-    # [float; n]
-
-    segments: np.ndarray
-    # [int; m + 1]
-
-    mass: np.ndarray
-    # [float; m]
-
-    def symbolize(self, targets: TargetMasses) -> str: # TODO convert to tabulate, use TargetMasses
-        features = targets.symbolize_pairs(self.features)
-        sym = ["PairResult"]
-        return self._symbolize(features, sym, self.segments, self.indices, self.costs)
-
-    @classmethod
-    def empty(cls) -> Self:
-        return cls(
-            indices = np.empty((0,2),dtype=int),
-            inner_indices = np.empty((0,2),dtype=int),
-            charges = np.empty((0,2),dtype=int),
-            features = np.empty((0,5),dtype=int),
-            costs = np.empty((0,),dtype=float),
-            segments = np.empty((0,),dtype=int),
-            mass = np.empty((0,),dtype=float),
-        )
-
-@dataclasses.dataclass(slots=True)
-class BoundaryResult(AbstractAnnotation):
-    index: np.ndarray
-    # [int; l]
-
-    inner_index: np.ndarray
-    # [int; l]
-
-    charge: np.ndarray
-    # [int; l]
-
-    features: np.ndarray
-    # [(int,int,int,int); n]
-
-    costs: np.ndarray
-    # [float; n]
-
-    segments: np.ndarray
-    # [int; l + 1]
-
-    mass: np.ndarray
-    # [float; l]
-
-    def symbolize(self, targets: TargetMasses) -> str: # TODO convert to tabulate, use TargetMasses
-        features = targets.symbolize_boundaries(self.features)
-        sym = ["BoundaryResult"]
-        return self._symbolize(features, sym, self.segments, self.index, self.costs)
-
-    @classmethod
-    def empty(cls) -> Self:
-        return cls(
-            index = np.empty((0,),dtype=int),
-            inner_index = np.empty((0,),dtype=int),
-            charge = np.empty((0,),dtype=int),
-            features = np.empty((0,5),dtype=int),
-            costs = np.empty((0,),dtype=float),
-            segments = np.empty((0,),dtype=int),
-            mass = np.empty((0,),dtype=float),
-        )
 
 @dataclasses.dataclass(slots=True)
 class SingletonResult:
@@ -449,7 +328,96 @@ class SingletonResult:
         )
 
 @dataclasses.dataclass(slots=True)
-class PivotResult:
+class PairResult:
+    query_masses: np.ndarray
+    data: np.ndarray
+
+    def __len__(self):
+        return self.query_masses.size
+
+    def get_peak_pair_indices(self):
+        return self.data[:,:2]
+
+    def get_augmented_peak_pair_indices(self):
+        return self.data[:,2:4]
+    
+    def get_augmented_peak_pair_charges(self):
+        return self.data[:,4:6]
+
+    def get_hit_ranges(self):
+        return self.data[:,6:8]
+
+    @classmethod
+    def from_arrays(
+        cls,
+        peak_index_pairs: np.ndarray,
+        augmented_peak_index_pairs: np.ndarray,
+        augmented_peak_charges: np.ndarray,
+        query_masses: np.ndarray,
+        hit_ranges: np.ndarray,
+    ):
+        return cls(
+            query_masses = query_masses,
+            data = np.column_stack(
+                [
+                    peak_index_pairs,
+                    augmented_peak_index_pairs,
+                    augmented_peak_charges,
+                    hit_ranges,
+                ], 
+            ),
+        )
+
+@dataclasses.dataclass(slots=True)
+class BoundaryResult:
+    query_masses: np.ndarray
+    data: np.ndarray
+
+    def __len__(self):
+        return self.query_masses.size
+    
+    def get_peak_indices(self):
+        return self.data[:,0]
+    
+    def get_augmented_peak_indices(self):
+        return self.data[:,1]
+
+    def get_augmented_peak_charges(self):
+        return self.data[:,2]
+    
+    def get_hit_ranges(self):
+        return self.data[:,3:5]
+
+    @classmethod
+    def from_arrays(
+        cls,
+        peak_indices: np.ndarray,
+        augmented_peak_indices: np.ndarray,
+        augmented_peak_charges: np.ndarray,
+        query_masses: np.ndarray,
+        hit_ranges: np.ndarray,
+    ):
+        return cls(
+            query_masses = query_masses,
+            data = np.column_stack(
+                [
+                    peak_indices.reshape((-1,1)),
+                    augmented_peak_indices.reshape((-1,1)),
+                    augmented_peak_charges.reshape((-1,1)),
+                    hit_ranges,
+                ], 
+            ),
+        )
+
+    @classmethod
+    def empty(cls):
+        return cls(
+            query_masses = np.empty(shape=(0,),dtype=float),
+            data = np.empty(shape=(0,5),dtype=int),
+        )
+
+@dataclasses.dataclass(slots=True)
+class AxesResult:
     cluster_points: np.ndarray
     # [float; k]
     
@@ -461,13 +429,39 @@ class PivotResult:
     
     symmetries: list[np.ndarray]
     # [[(int,int); _]; k]
+
+    symmetries_charges: list[np.ndarray]
+
+    symmetries_peak_idx: list[np.ndarray]
     
-    pivot_points: np.ndarray
+    axes_points: np.ndarray
     # [float; p]
     
-    pivot_indices: np.ndarray
+    axes: np.ndarray
     # [(int,int,int,int); p]
-    
+
+    axes_charges: np.ndarray
+
+    axes_peak_idx: np.ndarray
+
+    def __len__(self):
+        return len(self.cluster_points)
+
+    def get_axis(self, i: int) -> float:
+        return self.cluster_points[i]
+
+    def get_axes_peak_indices(self):
+        return self.axes_peak_idx
+
+    def get_axes_charges(self):
+        return self.axes_charges
+
+    def get_symmetries_peak_indices(self):
+        return self.symmetries_peak_idx
+
+    def get_symmetries_charges(self):
+        return self.symmetries_charges
+
     @classmethod
     def empty(cls):
         return cls(
@@ -485,8 +479,12 @@ class PivotResult:
         clusters: list[np.ndarray],
         scores: np.ndarray,
         symmetries: list[np.ndarray],
+        symmetries_charges: list[np.ndarray],
+        symmetries_peak_idx: list[np.ndarray],
         pivot_points: np.ndarray,
         pivot_indices: np.ndarray,
+        pivot_charges: np.ndarray,
+        pivot_peak_idx: np.ndarray
     ) -> Self:
         assert len(cluster_points) == len(clusters) == len(scores) == len(symmetries)
         assert len(pivot_points) == len(pivot_indices)
@@ -495,9 +493,19 @@ class PivotResult:
             clusters,
             scores,
             symmetries,
+            symmetries_charges,
+            symmetries_peak_idx,
             pivot_points,
             pivot_indices,
+            pivot_charges,
+            pivot_peak_idx,
         )
 
-    def __len__(self) -> int:
-        return len(self.cluster_points)
+@dataclasses.dataclass(slots=True)
+class UniqueFragmentIndex:
+    fragment_masses: np.ndarray
+    pairs: np.ndarray
+    lower_boundaries: np.ndarray
+    axes: np.ndarray
+    symmetries: list[np.ndarray]
+    upper_boundaries: list[np.ndarray]

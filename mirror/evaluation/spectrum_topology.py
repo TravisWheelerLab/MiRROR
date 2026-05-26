@@ -1,137 +1,71 @@
 import itertools as it
+from itertools import pairwise
 
-from .labeled_peaks import FragmentLabels
-
-from ..fragments.types import PivotResult
-from ..graphs.types import SpectrumGraph, PivotGraph
+from ..fragments.types import AxesResult, UniqueFragmentIndex
+from ..graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 
 import numpy as np
 import networkx as nx
 
-def _construct_spectrum_graphs(
-    mz: np.ndarray,                     
-    # [float; n]
-    pairs: np.ndarray,                  
-    # [(int,int); m]
-    left_boundaries: np.ndarray,        
-    # [int; l]
-    right_boundary_arrs: list[np.ndarray], 
-    # [[int; _]; p]
-    pivots: list[np.ndarray],           
-    # [(int,int,int,int); p]
+def construct_spectrum_graphs(
+    index: UniqueFragmentIndex,
+    axes: AxesResult,
     tolerance: float,
-    weight_key: str,
 ) -> tuple[
-        list[SpectrumGraph],
-        list[SpectrumGraph],
-        list[PivotGraph],
+    list[SpectrumGraph],
+    list[SpectrumGraph],
+    list[PivotGraph],
+    list[SymmetricGraph],
 ]:
-    pair_mz = mz[pairs]
-    lb_mz = mz[left_boundaries]
-    right_boundary_mz = [mz[right_boundaries] for right_boundaries in right_boundary_arrs]
-    # prep mz values for pairs and left boundaries.
-
-    pairs = np.c_[pairs, np.arange(pairs.shape[0])]
-    left_boundaries = np.c_[left_boundaries, np.arange(left_boundaries.size)]
-    right_boundary_arrs = [np.c_[right_boundaries, np.arange(right_boundaries.size)] for right_boundaries in right_boundary_arrs]
-    # add indices to pairs
-
-    k = len(pivots)
-    left_adj = [None for _ in range(k)]
-    right_adj = [None for _ in range(k)]
-    pivot_adj = [None for _ in range(k)]
+    n_pairs = len(index.pairs)
+    pairs_id = np.arange(n_pairs)
+    n_lbound = len(index.lower_boundaries)
+    lbound_id = n_pairs + np.arange(n_lbound)
+    n_rbounds = [len(x) for x in index.upper_boundaries]
+    offset_rbounds = np.cumsum([0,] + n_rbounds)
+    rbound_ids = [n_pairs + n_lbound + np.arange(i,j) for i,j in pairwise(offset_rbounds)]
+    k = len(axes)
+    lower_graphs = [None for _ in range(k)]
+    upper_graphs = [None for _ in range(k)]
+    pivot_graphs = [None for _ in range(k)]
+    symmetric_graphs = [None for _ in range(k)]
     for i in range(k):
-        pivot = pivots[i]
-        rb_mz = right_boundary_mz[i]
-        right_boundaries = right_boundary_arrs[i]
-        # unpack pivot-specific data
-        
-        left_pair_mask = pair_mz[:,1] < pivot
-        expected_max_mass = 2 * (pivot + tolerance)
-        right_pair_mask = np.logical_and(
-            pair_mz[:,0] > pivot,
-            pair_mz[:,1] < expected_max_mass,
+        axis = axes.get_axis(i)
+        expected_mass = 2 * (axis + tolerance)
+        pairs_mass = index.fragment_masses[index.pairs]
+        lower_pairs_mask = pairs_mass[:,1] < axis
+        upper_pairs_mask = np.logical_and(
+            pairs_mass[:,0] > axis,
+            pairs_mass[:,1] < expected_mass,
         )
-        # bisect pairs into left and right around the pivot.
-
-        pivot_pairs = pairs[np.logical_not(left_pair_mask + right_pair_mask),:]
-        left_sinks = pivot_pairs[:,0]
-        right_sinks = pivot_pairs[:,1]
-        pivot_adj[i] = PivotGraph.from_edges(
-            edges = pivot_pairs,
+        pivot_pairs_mask = np.logical_not(lower_pairs_mask + upper_pairs_mask)
+        pivot_pairs = index.pairs[pivot_pairs_mask]
+        lower_graphs[i] = SpectrumGraph.from_index(
+            index.pairs[lower_pairs_mask],
+            pairs_id[lower_pairs_mask],
+            pairs.lower_boundaries,
+            lbound_id,
+            pivot_pairs[:,0],
+            np.full(len(pivot_pairs),-1),
         )
-        # construct the pivot graph from undirected pairs intersected by pivot.
-        
-        left_edges = pairs[left_pair_mask]
-        left_boundaries_mask = lb_mz < pivot
-        left_sources = left_boundaries[left_boundaries_mask]
-        left_adj[i] = SpectrumGraph.from_edges_and_boundaries(
-            edges = left_edges,
-            boundaries = left_sources,
-            pivots = left_sinks,
-            weight_key = weight_key,
+        upper_graphs[i] = SpectrumGraph.from_index(
+            index.pairs[lower_pairs_mask],
+            pairs_id[lower_pairs_mask],
+            pairs.upper_boundaries[i],
+            rbound_ids[i],
+            pivot_pairs[:,1],
+            np.full(len(pivot_pairs),-1),
         )
-        # construct the left graph from nodes lower than pivot, ascending w.r.t. mz.
-
-        right_edges = pairs[right_pair_mask]
-        right_edges = right_edges[:,[1,0,2]] # transpose edge sources and targets
-        right_boundaries_mask = np.logical_and(
-            rb_mz > pivot,
-            rb_mz < expected_max_mass,
+        pivot_graphs[i] = PivotGraph.from_index(
+            pivot_pairs,
+            pairs_id[pivot_pairs_mask],
         )
-        right_sources = right_boundaries[right_boundaries_mask]
-        right_adj[i] = SpectrumGraph.from_edges_and_boundaries(
-            edges = right_edges,
-            boundaries = right_sources,
-            pivots = right_sinks,
-            weight_key = weight_key,
+        symmetric_graphs[i] = SymmetricGraph.from_index(
+            index.symmetries[i],
         )
-        # construct the right graph from nodes higher than pivot, descending w.r.t. mz.
-
     return (
-        left_adj,
-        right_adj,
-        pivot_adj,
-    )
-
-def construct_spectrum_topology(
-    fragment_labels: FragmentLabels,
-    pivots: PivotResult,
-    tolerance: float,
-    weight_key: str = 'weight',
-) -> tuple[
-    list[np.ndarray],
-    tuple[
-        list[SpectrumGraph],
-        list[SpectrumGraph],
-        list[PivotGraph],
-]]:
-    left_adj, right_adj, pivot_adj = _construct_spectrum_graphs(
-        fragment_labels.mass,
-        fragment_labels.reindex_pairs(),
-        fragment_labels.reindex_lower_boundaries(),
-        fragment_labels.reindex_upper_boundaries(),
-        pivots.cluster_points,
-        tolerance,
-        weight_key,
-    )
-    # for each pivot cluster, build a left, right, and pivot graph.
-
-    sym_nodes = [np.vstack([
-            s, 
-            [np.array([l.boundary_source, r.boundary_source]),],
-            [np.array([l.pivot_sink, r.pivot_sink]),],
-        ]) for (s,l,r) in zip(
-            fragment_labels.reindex_symmetries(),
-            left_adj,
-            right_adj,
-        )
-    ]
-    # amend symmetries with source and sink nodes in each spectrum graph. these nodes do not correspond to peaks, but are defined as symmetric here to simplify the propagation cost model.
-    
-    return (
-        sym_nodes,
-        left_adj,
-        right_adj,
-        pivot_adj,
+        lower_graphs,
+        upper_graphs,
+        pivot_graphs,
+        symmetric_graphs,
     )
