@@ -2,7 +2,7 @@ import abc
 from typing import Iterator, Any, Self
 from collections import deque
 
-from .types import WeightedProductGraph
+# from .types import 
 
 import numpy as np
 
@@ -98,7 +98,7 @@ def _trace(
                     q.append((next_cost, next_cost_state, next_path, next_node))
 
 def trace(
-    prop_graph: WeightedProductGraph,
+    prop_graph,
     sources: Iterator[int],
     threshold: float,
     cost_model: AbstractPathCostModel,

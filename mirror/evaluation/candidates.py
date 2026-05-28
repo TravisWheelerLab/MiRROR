@@ -7,8 +7,10 @@ import numpy as np
 from ..util import combine_symbols, combine_masses
 from ..spectra.types import Peaks
 from ..fragments.types import TargetMasses, PairResult, BoundaryResult
-from ..graphs.types import SpectrumGraph, WeightedProductGraph
+from ..graphs.types import SpectrumGraph
 from ..graphs.trace import AbstractPathSpace
+
+WeightedProductGraph = None # TODO - refactor
 
 from .pathspaces import AnnotatedResiduePathSpace, SuffixArrayPathSpace
 from .costmodels import AnnotatedResiduePathCostModel, SuffixArrayPathCostModel, MISMATCH_SEPARATOR

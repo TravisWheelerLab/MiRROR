@@ -26,7 +26,6 @@ def _construct_graph(
     edges: np.ndarray,
     index: np.ndarray,
 ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
-    print("_construct graph", order, edges, index)
     source_order = edges[:,0].argsort()
     edges = edges[source_order]
     src = edges[:,0]
@@ -62,17 +61,16 @@ class SpectrumGraph:
         1) the boundary node := pairs.max() + 1 is a source whose outgoing edges point to each node in `boundary_sources`.
         2) the axial node := pairs.max() + 2 is a sink node whose incoming edges point from each node in `axial_sinks`.
         3) the gap state node := pairs.max() + 3 is a singleton node, with no outgoing or incoming edges, which is used to represent the branch-and-bound state of the propagate algorithm."""
-        max_node = num_peaks - 1 if num_peaks else pairs.max()
+        max_node = num_peaks - 1 if num_peaks else max(max(pairs.flatten(),default=-1),max(boundary_sources,default=-1),max(axial_sinks,default=-1))
         boundary_node = max_node + 1
         axial_node = max_node + 2
         gap_state_node = max_node + 3
+        boundary_edges = np.array([[boundary_node, source] for source in boundary_sources]) if len(boundary_sources) > 0 else np.empty(shape=(0,2),dtype=int)
+        axial_edges = np.array([[sink, axial_node] for sink in axial_sinks]) if len(axial_sinks) else np.empty(shape=(0,2),dtype=int)
+        edges = np.vstack([pairs,boundary_edges,axial_edges])
         adj, idx, off = _construct_graph(
             order = gap_state_node + 1,
-            edges = np.vstack([
-                pairs, 
-                [[boundary_node, source] for source in boundary_sources],
-                [[sink, axial_node] for sink in axial_sinks],
-            ]),
+            edges = edges,
             index = np.concat([pairs_idx, boundary_idx, axial_idx]),
         )
         return cls(
@@ -117,19 +115,16 @@ class SparseGraph:
         edges = np.array(edges)
         if reverse:
             edges = edges[:,::-1]
-        print("edges,",edges)
         shifted_sources = edges[:,0] + 1
         # why shift by 1? in case there is a node at 0. the true node at 0 is a singleton used to represent all other nodes in capacity that aren't included in edges.
         occupants = np.unique(shifted_sources)
         occupancy = len(occupants)
-        print("occupants", occupancy, occupants)
         vtx = np.zeros(capacity + 1, dtype=int)
         vtx[occupants] = np.arange(occupancy) + 1
         edges = np.stack([
             vtx[shifted_sources],
             edges[:,1],
         ], axis=1)
-        print("dense edges", edges)
         # why only make the edge sources dense?
         # the adjacent function is passed a sparse node index and returns a list of sparse node indices. the denseness of edge sources determines the efficiency of the underlying graph structure, so sources need to be dense. target values don't determine anything* about the structure, so by storing them as the original sparse values we avoid a spurious conversion from dense to sparse, which would require another array.
         # * except its order.
@@ -162,7 +157,7 @@ class PivotGraph:
         ))
 
 @dataclasses.dataclass(slots=True)
-class SymmetryGraph:
+class SymmetricGraph:
     graph: SparseGraph
 
     @classmethod

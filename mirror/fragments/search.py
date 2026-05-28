@@ -285,6 +285,72 @@ def _screen_axes(
         [sym for (keep,sym) in zip(clusters_mask,cluster_symmetries) if keep],
     )
 
+def find_axes_of_reflection(
+    peaks: AugmentedPeaks,
+    pairs: PairResult,
+    query_tolerance: float,
+    score_factor: float,
+    find_overlap = True,
+    find_virtual = False,
+    bin_precision = 3,
+) -> AxesResult:
+    if not(find_overlap or find_virtual):
+        raise ValueError("both find_overlap and find_virtual are False. there are no other ways to find axes.")
+    axes_res = list(_find_axes(
+        peaks,
+        pairs,
+        query_tolerance,
+        find_overlap,
+        find_virtual,
+    ))
+    if len(axes_res) == 0:
+        return AxesResult.empty()
+    else:
+        axes_points, axes_indices = zip(*axes_res)
+        axes_points = np.array(axes_points)
+        axes_indices = np.array(axes_indices)
+        # generate axes
+    
+        cluster_points, axes_cluster_ids = _bin_axes(
+            axes_points,
+            precision=bin_precision)
+        # cluster by axes point
+    
+        scr_result = _screen_axes(
+            peaks,
+            cluster_points,
+            axes_cluster_ids,
+            query_tolerance,
+            score_factor,
+        )
+        pvt_mask, clust_mask, axes_cluster_ids, clust_scores, clust_sym = scr_result
+        axes_points = axes_points[pvt_mask]
+        axes_indices = axes_indices[pvt_mask]
+        cluster_points = cluster_points[clust_mask]
+        p = len(axes_points)
+        k = len(cluster_points)
+        # screen clusters
+    
+        clusters = [[] for _ in range(k)]
+        for axes_idx in range(p):
+            cluster_id = axes_cluster_ids[axes_idx]
+            clusters[cluster_id].append(axes_idx)
+        clusters = [np.array(x) for x in clusters]
+        # construct cluster membership lists from axes cluster ids
+    
+        return AxesResult.from_data(
+            cluster_points,
+            clusters,
+            clust_scores,
+            clust_sym,
+            [peaks.get_augmenting_charges(x) for x in clust_sym],
+            [peaks.get_original_indices(x) for x in clust_sym],
+            axes_points,
+            axes_indices,
+            peaks.get_augmenting_charges(axes_indices),
+            peaks.get_original_indices(axes_indices),
+        )
+
 def deduplicate_by_fragment_mass(
     peaks: Peaks,
     pairs: PairResult,

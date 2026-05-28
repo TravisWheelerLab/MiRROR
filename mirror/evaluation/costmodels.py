@@ -7,11 +7,15 @@ import numpy as np
 from ..util import merge_compare_exact_unique, ravel, unravel, combine_symbols, combine_masses
 from ..sequences.suffix_array import SuffixArray, BisectResult
 from ..fragments.types import TargetMasses, BoundaryResult, PairResult
-from ..graphs.types import SpectrumGraph, ProductEdgeWeight, WeightedProductGraph
+from ..graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 from ..graphs.propagate import AbstractNodeCostModel, AbstractEdgeCostModel
 from ..graphs.trace import AbstractPathCostModel
 
 from .pathspaces import AnnotatedResiduePathState, AnnotatedResiduePathSpace, SuffixArrayPathState, SuffixArrayPathSpace
+
+ProductEdgeWeight = None
+WeightedProductGraph = None
+# TODO - refactor
 
 N_FEATURES = 4
 FEATURE_WEIGHT_TENSOR = np.ones(N_FEATURES).reshape(1,1,N_FEATURES)

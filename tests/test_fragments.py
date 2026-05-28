@@ -5,7 +5,7 @@ from mirror.util import HYDROGEN_MASS
 from mirror.spectra.types import AugmentedPeaks
 from mirror.fragments.types import TargetMasses, MultiResidueTargetMasses,FragmentStateSpace, ResidueStateSpace
 from mirror.fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, cluster_combinations_by_mass, combine_target_masses
-from mirror.fragments.search import find_pairs, find_pivots, find_boundaries
+from mirror.fragments.search import find_pairs, find_axes_of_reflection, find_boundaries
 from mirror.sequences.suffix_array import TrivialSuffixArray
 from mirror.sequences.queries import generate_unordered_combinations
 
@@ -259,8 +259,11 @@ def test_search_pivots():
     score_factor = 0.33
     for (anno_peaks, aug_peaks) in zip(TEST_PEAKS, AUG_PEAKS):
         print(anno_peaks.tabulate())
-        print("true pivot",anno_peaks.pivot)
         pairs = find_pairs(aug_peaks, tolerance, targets, -1)
-        pivots = find_pivots(aug_peaks, pairs, tolerance, sym_tolerance, score_factor)
+        pivots = find_axes_of_reflection(aug_peaks, pairs, tolerance, sym_tolerance, score_factor)
         print(pivots.cluster_points)
+        dif = pivots.cluster_points - anno_peaks.pivot
+        best = pivots.cluster_points[np.abs(dif).argmin()] 
+        print(best, np.abs(dif).min())
+        print("true pivot",anno_peaks.pivot)
         assert any(abs(x - anno_peaks.pivot) < tolerance for x in pivots.cluster_points)

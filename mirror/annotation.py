@@ -6,13 +6,13 @@ from typing import Self, Any
 from .util import normalize_dict
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, PivotResult, BoundaryResult, UniqueFragmentIndex
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, AxesResult, BoundaryResult, UniqueFragmentIndex
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
-from .fragments.search import find_pairs, find_boundaries, find_axes_of_reflection
+from .fragments.search import find_pairs, find_boundaries, find_axes_of_reflection, deduplicate_by_fragment_mass
 from .sequences.suffix_array import SuffixArray
 from .sequences.queries import all_kmers
 from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
-from .evaluation.spectrum_topology import construct_spectrum_topology
+from .evaluation.spectrum_topology import construct_spectrum_graphs
 # local
 
 import numpy as np
@@ -30,7 +30,7 @@ class AnnotationResult(SerializableDataclass):
     upper_topology: list[SpectrumGraph]
     pivot_topology: list[PivotGraph]
     symmetric_topology: list[SymmetricGraph]
-    # every list has len(self.pivots) items.
+    # every list has len(self.axes) items.
     
     _profile: dict[str,float] = None
 
@@ -41,7 +41,7 @@ class AnnotationResult(SerializableDataclass):
     def from_data(cls,
         peaks: Peaks,
         pairs: PairResult,
-        pivots: PivotResult,
+        axes: AxesResult,
         lower_boundaries: BoundaryResult,
         upper_boundaries: list[BoundaryResult],
         unique_fragment_index: UniqueFragmentIndex,
@@ -51,11 +51,11 @@ class AnnotationResult(SerializableDataclass):
         symmetric_topology: list[SymmetricGraph],
         profile: dict[str,float],
     ) -> Self:
-        assert len(pivots) == len(upper_boundaries)
+        assert len(axes) == len(upper_boundaries)
         return cls(
             peaks.to_peaks(),
             pairs,
-            pivots,
+            axes,
             lower_boundaries,
             upper_boundaries,
             unique_fragment_index,
@@ -102,7 +102,7 @@ def annotate(
     t = time()
     decharged_peaks = AugmentedPeaks.from_peaks(
         peaks,
-        charges=params.charges,
+        charges=anno_params.charges,
     )
     profile["decharged_peaks"] = time() - t
     # construct augmented mz and target masses
@@ -130,24 +130,24 @@ def annotate(
     t = time()
     axes = find_axes_of_reflection(
         decharged_peaks,
-        pair_result,
+        pair_results,
         tolerance,
         anno_params.pivot_score_factor,
     )
     profile["axes_of_reflection"] = time() - t
-    # using pairs as seeds, find pivots as midpoints of peak quadruplets with mirror symmetry.
+    # using pairs as seeds, find axes as midpoints of peak quadruplets with mirror symmetry.
 
     profile["reflected_peaks"] = 0.
     profile["upper_boundaries"] = 0.
-    p = len(pivots)
+    p = len(axes)
     reflected_peaks = [None for _ in range(p)]
     upper_boundaries = [None for _ in range(p)]
     for i in range(p):
         t = time()
         reflected_peaks[i] = AugmentedPeaks.from_peaks(
             peaks,
-            charges=params.charges,
-            pivot_point=pivots.cluster_points[i],
+            charges=anno_params.charges,
+            pivot_point=axes.cluster_points[i],
         )
         profile["reflected_peaks"] += time() - t
         # create a reflected peak list for each pivot cluster.
@@ -163,8 +163,8 @@ def annotate(
     t = time()
     unique_fragment_index = deduplicate_by_fragment_mass(
         peaks,
-        pair_result,
-        lower_boundary_result,
+        pair_results,
+        lower_boundary_results,
         axes,
         upper_boundaries,
     )
@@ -172,7 +172,7 @@ def annotate(
     # create a compact, unified index into the array of unique fragment masses.
 
     t = time()
-    spectrum_topology = construct_spectrum_topology(
+    spectrum_topology = construct_spectrum_graphs(
         unique_fragment_index,
         axes,
         tolerance,
@@ -184,9 +184,9 @@ def annotate(
         print(json.dumps(profile, indent=4))
     return AnnotationResult.from_data(
         peaks,
-        pairs,
-        pivots,
-        lower_boundaries,
+        pair_results,
+        axes,
+        lower_boundary_results,
         upper_boundaries,
         unique_fragment_index,
         lower_topology = spectrum_topology[0],

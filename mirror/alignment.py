@@ -5,7 +5,7 @@ from typing import Self, Any
 
 from .util import ravel
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
-from .graphs.types import SpectrumGraph, PivotGraph, WeightedProductGraph
+from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 from .graphs.propagate import propagate_cost
 
 from .evaluation.costmodels import MatchedNodeCostModel, AnnotatedProductEdgeCostModel
@@ -17,7 +17,7 @@ import numpy as np
 
 @dataclasses.dataclass(slots=True)
 class AlignmentResult(SerializableDataclass):
-    prod_topology: list[WeightedProductGraph]
+    # prod_topology: list[WeightedProductGraph]
     _profile: dict[str, float]
 
     def __len__(self) -> int:

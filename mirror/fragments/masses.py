@@ -8,7 +8,7 @@ from typing import Self, Iterable
 
 from ..util import HYDROGEN_MASS, mesh_sum, mesh_join, mesh_ravel
 from ..spectra.types import Peaks
-from .types import TargetMasses, MultiResidueTargetMasses, ResidueStateSpace, FragmentStateSpace, PairResult, PivotResult, BoundaryResult
+from .types import TargetMasses, MultiResidueTargetMasses, ResidueStateSpace, FragmentStateSpace, PairResult, BoundaryResult
 
 import numpy as np
 

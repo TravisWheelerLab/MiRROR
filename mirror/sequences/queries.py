@@ -109,8 +109,6 @@ class PeptideResult:
         num_mods: int,
         num_losses: int,
     ) -> Self:
-    #     print("PeptideResult.from_hits")
-    #     print(hits)
         seqs, res, mass_err, mods, losses = zip(*hits)
         seq_str = ''.join(seqs)
         seq_offsets = np.cumsum([0,] + [len(x) for x in seqs])
@@ -118,7 +116,6 @@ class PeptideResult:
         modifications = np.zeros((s, num_mods),dtype=np.uint8)
         for (seq_num,mod_by_pos) in enumerate(mods):
             off = seq_offsets[seq_num]
-    #         print(mod_by_pos)
             for x in mod_by_pos:
                 if x == ():
                     continue
@@ -168,11 +165,8 @@ def multi_combos(
     items: list,
     size: int,
 ):
-    # print("multi_combos", items, size)
     yield ()
-    # print('\t', ())
     for n in range(1, min(len(items), size) + 1):
-    #     print('\t', list(combinations(items, n)))
         yield from combinations(items, n)
 
 def mod_combinations(
@@ -219,7 +213,6 @@ def query_by_mass(
         for x in chain.from_iterable(mods_per_residue)
         if len(x) > 0
     )
-    # print("mods max mass", mods_max_mass)
     loss_masses = fragment_space.loss_masses
     appl_loss = fragment_space.applicable_losses
     max_num_loss = 3
@@ -251,11 +244,9 @@ def query_by_mass(
     while stack:
         counter += 1
         seq, idx, result, mass, loss_tally, mods_per_pos = stack.pop()
-    #     print(seq, mass, loss_tally, mods_per_pos)
 
         minimal_mass = mass - loss_max_mass
         if len(seq) > max_peptide_length or result.count == 0 or minimal_mass > query_mass + tolerance:
-    #         print("prune", len(seq), result.count, minimal_mass)
             continue
 
         mod_space = [
@@ -267,18 +258,14 @@ def query_by_mass(
         loss_space = list(loss_combinations(loss_tally, max_num_loss))
         # [[i; _]; __] :: i is a loss id.
 
-    #     print("mods",len(mod_space),"losses",len(loss_space))
         for (mod_state, loss_ids) in product(mod_space, loss_space):
-    #         print("mod state =",mod_state)
             if mod_state == [()] or len(mod_state) == 0:
                 mod_mass = 0
             else:
                 mod_positions, mod_ids = zip(*mod_state)
                 mod_mass = mod_masses[list(mod_ids)].sum()
-    #         print("loss state=",loss_ids)
             loss_mass = loss_masses[list(loss_ids)].sum()
             augmented_mass = mass + mod_mass - loss_mass
-    #         print(mod_state, mod_mass, loss_ids, loss_mass, augmented_mass)
             mass_error = augmented_mass - query_mass
             if abs(mass_error) < tolerance:
                 hits.append((seq, result, mass_error, mod_state, loss_ids))
@@ -309,7 +296,6 @@ def query_by_mass(
                 new_loss_tally,
                 [x for x in mods_per_pos] + [new_mods,],
             ))
-    # print("counter",counter)
     return (
         PeptideResult.from_hits(
             query_mass,

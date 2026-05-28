@@ -4,7 +4,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from .io import reverse_fasta, SerializableDataclass, serialize_dataclass, deserialize_dataclass
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, PivotResult, BoundaryResult
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, BoundaryResult
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, combine_target_masses
 from .sequences.suffix_array import SuffixArray
 from .annotation import AnnotationParams

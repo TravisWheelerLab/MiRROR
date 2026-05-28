@@ -2,12 +2,15 @@ import dataclasses
 import itertools as it
 
 from ..util import pairwise_disjoint
-from ..graphs.types import PivotGraph, WeightedProductGraph
+from ..graphs.types import PivotGraph
 
 from .pathspaces import AnnotatedResiduePathSpace
 from .costmodels import MISMATCH_SEPARATOR
 
 import numpy as np
+
+WeightedProductGraph = None
+# TODO -refactor
 
 def orient_affixes(
     affixes: AnnotatedResiduePathSpace,

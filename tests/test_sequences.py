@@ -16,10 +16,12 @@ def test_query_peaks():
 
 def test_query_mass():
     # TODO, make exhaustive.
-    cfg = load_config("/home/user/Projects/MiRROR/params", config_name="setup_from_transcriptome")
+    print("load")
+    cfg = load_config("/home/user/Projects/MiRROR/params", config_name="setup_multiresidue.yaml")
     cfg.session.name = str(uuid.uuid4()).split('-')[0]
+    print("setup")
     session = setup(cfg)
-        
+    
     suffix_array = session.forward_suffix_array
     residue_space = session.pair_targets[0].residue_space
     fragment_space = session.pair_targets[0].left_fragment_space
@@ -35,6 +37,7 @@ def test_query_mass():
     q = peptide_mass + mod_mass - loss_mass
 
     query_mass = peptide_mass + mod_mass - loss_mass
+    print("querying...")
     result, _ = query_by_mass(
         query_mass = query_mass,
         tolerance = 0.001,

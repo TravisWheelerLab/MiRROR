@@ -4,7 +4,7 @@ from typing import Iterator, Callable, Any
 from heapq import heappush, heappop
 
 from ..util import ravel, unravel
-from .types import SpectrumGraph, WeightedProductGraph
+from .types import SpectrumGraph
 
 import numpy as np
 import networkx as nx
@@ -99,7 +99,7 @@ def propagate_cost(
     threshold: float,
     node_cost_model: AbstractNodeCostModel,
     edge_cost_model: AbstractEdgeCostModel,
-) -> WeightedProductGraph:
+):# -> WeightedProductGraph:
     upper_order = int(right.order())
     product_sources = [ravel(u, w, upper_order) for (u,w) in it.product(lower_sources,upper_sources)]
     initial_conditions = [(node_cost_model(v), None, None, v) for v in product_sources]
@@ -112,9 +112,9 @@ def propagate_cost(
         node_cost_model,
         edge_cost_model,
     )
-    return WeightedProductGraph(
-        graph = sparse_product,
-        upper_operand_order = upper_order,
-        node_weights = propagated_costs,
-        edge_weights = compared_edges,
-    )
+    return None#WeightedProductGraph(
+        # graph = sparse_product,
+        # upper_operand_order = upper_order,
+        # node_weights = propagated_costs,
+        # edge_weights = compared_edges,
+    # )

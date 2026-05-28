@@ -6,7 +6,6 @@ from typing import Self, Any
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 
 from .fragments.types import TargetMasses
-from .graphs.dfs import dfs
 from .graphs.trace import AbstractPathSpace, trace
 from .sequences.suffix_array import SuffixArray
 
