@@ -3,6 +3,8 @@ from typing import Self, Any, Union, Iterator
 
 import numpy as np
 
+from ..util import ravel, unravel
+
 @dataclasses.dataclass(slots=True)
 class Graph:
     adj: np.ndarray
@@ -170,22 +172,6 @@ class SymmetricGraph:
             edges = np.concat([symmetric_pairs,symmetric_pairs[:,::-1]]),
             edge_indices = np.full(len(symmetric_pairs) * 2, 0),
         ))
-
-def ravel(
-    first_position: int,
-    second_position: int,
-    second_order: int,
-) -> int:
-    return (first_position * second_order) + second_position
-
-def unravel(
-    raveled_position: int,
-    second_order: int,
-) -> tuple[int,int]:
-    return (
-        raveled_position // second_order,
-        raveled_position % second_order,
-    )
 
 @dataclasses.dataclass(slots=True)
 class ProductGraph:

@@ -13,7 +13,8 @@ from ..graphs.trace import AbstractPathSpace
 WeightedProductGraph = None # TODO - refactor
 
 from .pathspaces import AnnotatedResiduePathSpace, SuffixArrayPathSpace
-from .costmodels import AnnotatedResiduePathCostModel, SuffixArrayPathCostModel, MISMATCH_SEPARATOR
+
+MISMATCH_SEPARATOR = '.' # TODO - refactor
 
 @dataclasses.dataclass(slots=True)
 class CandidateResult:

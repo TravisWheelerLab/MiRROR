@@ -8,7 +8,7 @@ from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclas
 from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 from .graphs.propagate import propagate_cost
 
-from .evaluation.costmodels import MatchedNodeCostModel, AnnotatedProductEdgeCostModel
+from .evaluation.costmodels import SymmetricNodeCostModel, AnnotatedEdgeCostModel, MassConstrainedPathCostModel, SuffixArrayPathCostModel
 
 from .annotation import AnnotationResult, AnnotationParams
 # local

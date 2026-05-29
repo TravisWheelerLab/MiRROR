@@ -91,19 +91,19 @@ def combine_symbols(
         )]).reshape(*left_symbols.shape)
 
 def ravel(
-    i: int,
-    j: int,
-    n: int,
+    first_position: int,
+    second_position: int,
+    second_order: int,
 ) -> int:
-    return int((i * n) + j)
+    return (first_position * second_order) + second_position
 
 def unravel(
-    k: int,
-    n: int,
+    raveled_position: int,
+    second_order: int,
 ) -> tuple[int,int]:
     return (
-        int(k // n),
-        int(k % n),
+        raveled_position // second_order,
+        raveled_position % second_order,
     )
 
 @numba.jit(nopython=True)

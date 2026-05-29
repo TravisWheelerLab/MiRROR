@@ -5,7 +5,8 @@ from ..util import pairwise_disjoint
 from ..graphs.types import PivotGraph
 
 from .pathspaces import AnnotatedResiduePathSpace
-from .costmodels import MISMATCH_SEPARATOR
+
+MISMATCH_SEPARATOR = '.' # TODO - refactor
 
 import numpy as np
 

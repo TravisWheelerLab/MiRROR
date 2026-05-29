@@ -9,7 +9,6 @@ from .fragments.types import TargetMasses
 from .graphs.trace import AbstractPathSpace, trace
 from .sequences.suffix_array import SuffixArray
 
-from .evaluation.costmodels import AnnotatedResiduePathCostModel, SuffixArrayPathCostModel
 from .evaluation.affix_pairing import orient_affixes, refine_affixes, pair_affixes
 from .evaluation.candidates import CandidateResult, generate_candidates
 
@@ -50,104 +49,10 @@ def enumerate_candidates(
 ) -> EnumerationResult:
     n = len(algn)
 
-    aligned_affixes = [None for _ in range(n)]
-    prefixes = [None for _ in range(n)]
-    suffixes = [None for _ in range(n)]
-    infixes = [None for _ in range(n)]
-    affix_pairs = [None for _ in range(n)]
-    candidates = [None for _ in range(n)]
-    profile = {}
-    # initialize return types 
-
-    # step 1: trace aligned paths through the product topology, then cluster into prefixes, affixes, and suffixes by boundary annotation.
-    t = time()
-    b_anno, y_anno = anno_params.boundary_target_masses.get_series_loss_symbols()
-    suffix_array, reversed_suffix_array = suffix_arrays
-    if suffix_array is None:
-        for i in range(n):
-            aligned_affixes[i] = trace(
-                algn.prod_topology[i],
-                algn.prod_topology[i].sources(),
-                params.cost_threshold,
-                AnnotatedResiduePathCostModel(
-                    anno.pivots.cluster_points[i],
-                    algn.prod_topology[i],
-                    algn.lower_topology[i],
-                    algn.upper_topology[i],
-                    anno_params.pair_target_masses,
-                    anno_params.boundary_target_masses,
-                    anno_params.reflected_boundary_target_masses,
-                ),
-            )
-            # construct path space of each aligned product topology.
-
-            pfx, sfx, ifx = orient_affixes(aligned_affixes[i], b_anno, y_anno)
-            prefixes[i] = pfx
-            suffixes[i] = sfx
-            infixes[i] = ifx
-            # categorize as prefixes, suffixes, or infixes according to the series annotation of path boundaries.
-    else:
-        for i in range(n):
-            reverse_aligned_affixes = trace(
-                algn.prod_topology[i],
-                algn.prod_topology[i].sources(),
-                params.cost_threshold,
-                SuffixArrayPathCostModel(
-                    anno.pivots.cluster_points[i],
-                    reversed_suffix_array,
-                    algn.prod_topology[i],
-                    algn.lower_topology[i],
-                    algn.upper_topology[i],
-                    anno_params.pair_target_masses,
-                    anno_params.boundary_target_masses,
-                    anno_params.reflected_boundary_target_masses,
-                ),
-            )
-            # trace suffixes through the forward suffix array.
-
-            forward_aligned_affixes = trace(
-                algn.prod_topology[i],
-                algn.prod_topology[i].sources(),
-                params.cost_threshold,
-                SuffixArrayPathCostModel(
-                    suffix_array,
-                    algn.prod_topology[i],
-                    algn.lower_topology[i],
-                    algn.upper_topology[i],
-                    anno_params.pair_target_masses,
-                    anno_params.boundary_target_masses,
-                    anno_params.reflected_boundary_target_masses,
-                ),
-            )
-            # trace prefixes through the reversed suffix array.
-
-            aln, pfx, sfx, inf = refine_affixes(
-                reverse_aligned_affixes,
-                forward_aligned_affixes,
-                b_anno,
-                y_anno,
-            )
-            aligned_affixes[i] = aln
-            prefixes[i] = pfx
-            suffixes[i] = sfx
-            infixes[i] = ifx
-            # refine forward and reverse affixes into prefix, suffix, and infix categories.
-    profile["trace"] = time() - t
-    # end step 1, print results.
-    if verbose:
-        cluster = 0
-        for (a,p,s,i) in zip(aligned_affixes,prefixes,suffixes,infixes):
-            for (tag,afx) in (("prefix",p),("suffix",s),("infix",i)):
-                for (x,y) in afx:
-                    cost, path, annotation = a[x][:3]
-                    anno_res = [u[:,0] for u in annotation]
-                    anno_loss = [u[:,2] for u in annotation]
-                    term = anno_loss[-1][y]
-                    unraveled_path = [algn.prod_topology[cluster].unravel(x) for x in path]
-                    lpath, upath = zip(*unraveled_path)
-                    print(f"{tag} {x} {y} {cost} {[v[0] for v in anno_res]} {term} {path} {lpath} {upath}")
-            cluster += 1
-
+    prefixes = None
+    suffixes = None
+    aligned_affixes = None
+    # TODO - refactor with new AlignmentResult containing pathspaces.
     # step 2: combine affixes and pivot edges to construct peptide sequences.
     for i in range(n):
         affix_pairs[i] = pair_affixes(
