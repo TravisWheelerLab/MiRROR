@@ -263,9 +263,7 @@ def _align(
                 new_first_pos, new_second_pos = direct_tgt[i]
                 first_edge_idx, second_edge_idx = direct_idx[i]
                 new_pos_cost = node_cost_model(new_first_pos, new_second_pos)
-                first_edge_anno = annotation_index[first_edge_idx]
-                second_edge_anno = annotation_index[second_edge_idx]
-                new_edge_cost, new_edge_anno = edge_cost_model(first_edge_anno, second_edge_anno)
+                new_edge_cost, new_edge_anno = edge_cost_model(first_edge_idx, second_edge_idx)
                 new_anno = anno + [new_edge_anno,]
                 new_path_cost, new_path_state = path_cost_model(path_state, new_edge_anno)
                 new_cost = cost + new_pos_cost + new_edge_cost + new_path_cost

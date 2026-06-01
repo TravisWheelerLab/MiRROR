@@ -12,7 +12,8 @@ from .fragments.search import find_pairs, find_boundaries, find_axes_of_reflecti
 from .sequences.suffix_array import SuffixArray
 from .sequences.queries import all_kmers
 from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
-from .evaluation.spectrum_topology import construct_spectrum_graphs
+from .evaluation.spectrum_topology import construct_spectrum_topology
+from .evaluation.costmodels import SymmetricNodeCostModel, MassConstrainedPathCostModel
 # local
 
 import numpy as np
@@ -31,6 +32,8 @@ class AnnotationResult(SerializableDataclass):
     upper_topology: list[SpectrumGraph]
     pivot_topology: list[PivotGraph]
     symmetric_topology: list[SymmetricGraph]
+    node_cost_models: list[SymmetricNodeCostModel]
+    path_cost_models: list[MassConstrainedPathCostModel]
     # every list has len(self.axes) items.
     
     _profile: dict[str,float] = None
@@ -51,6 +54,8 @@ class AnnotationResult(SerializableDataclass):
         upper_topology: list[SpectrumGraph],
         pivot_topology: list[PivotGraph],
         symmetric_topology: list[SymmetricGraph],
+        node_cost_models: list[SymmetricNodeCostModel],
+        path_cost_models: list[MassConstrainedPathCostModel],
         profile: dict[str,float],
     ) -> Self:
         assert len(axes) == len(upper_boundaries)
@@ -66,6 +71,8 @@ class AnnotationResult(SerializableDataclass):
             upper_topology,
             pivot_topology,
             symmetric_topology,
+            node_cost_models,
+            path_cost_models,
             profile,
         )
 
@@ -187,14 +194,14 @@ def annotate(
     profile["annotation_index"] = time() - t
 
     t = time()
-    spectrum_topology = construct_spectrum_graphs(
+    *graphs, node_models, path_models = construct_spectrum_topology(
         unique_fragment_index,
         annotation_index,
         axes,
         tolerance,
     )
     profile["spectrum_topology"] = time() - t
-    # for each axis, construct four graphs: lower and upper spectrum graphs from pairs connecting boundaries to axis nodes, a pivot graph representing edges connecting the lower and upper graphs, and a symmetry graph pairing nodes whose fragment masses are symmetric.
+    # for each axis, construct four graphs: lower and upper spectrum graphs from pairs connecting boundaries to axis nodes, a pivot graph representing edges connecting the lower and upper graphs, and a symmetry graph pairing nodes whose fragment masses are symmetric.    
 
     if verbose:
         print(json.dumps(profile, indent=4))
@@ -206,9 +213,11 @@ def annotate(
         upper_boundaries,
         unique_fragment_index,
         annotation_index,
-        lower_topology = spectrum_topology[0],
-        upper_topology = spectrum_topology[1],
-        pivot_topology = spectrum_topology[2],
-        symmetric_topology = spectrum_topology[3],
+        lower_topology = graphs[0],
+        upper_topology = graphs[1],
+        pivot_topology = graphs[2],
+        symmetric_topology = graphs[3],
+        node_cost_models = node_models,
+        path_cost_models = path_models,
         profile = profile,
     )
