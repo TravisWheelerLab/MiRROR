@@ -225,6 +225,14 @@ class TargetMasses(abc.ABC):
         hit_ranges: np.ndarray,
         query_masses: np.ndarray,
     ) -> tuple[np.ndarray,np.ndarray,np.ndarray]:
+        if len(query_masses) == 0:
+            return (
+                np.empty((0,4),dtype=int),
+                np.empty((0,),dtype=float),
+                None,
+                None,
+                None,
+            )
         # hit_ranges = np.clip(hit_ranges,0,len(self.target_clusters) - 1)
         # expanded_hit_ranges = np.array([(self.target_clusters[l,0],self.target_clusters[r,1]) for (l,r) in hit_ranges])
         # hit_states = [self.target_states[l:r,:] for (l,r) in expanded_hit_ranges]
@@ -509,3 +517,22 @@ class UniqueFragmentIndex:
     axes: np.ndarray
     symmetries: list[np.ndarray]
     upper_boundaries: list[np.ndarray]
+
+@dataclasses.dataclass(slots=True)
+class AnnotationIndex:
+    annotation_id: np.ndarray
+    outer_offset: np.ndarray
+    # outer_offset splits annotation_id into segments for pair results, lower boundary results, and one or more upper boundary results.
+    cost: np.ndarray
+    state: np.ndarray
+    inner_offset: np.ndarray
+    # inner_offset associates each annotation ID to a range of cost values and annotation states.
+
+    def get_pairs_id(self):
+        return self.annotation_id[self.outer_offset[0]:self.outer_offset[1]]
+
+    def get_lower_boundaries_id(self):
+        return self.annotation_id[self.outer_offset[1]:self.outer_offset[2]]
+
+    def get_upper_boundaries_id(self, i: int):
+        return self.annotation_id[self.outer_offset[2 + i]:self.outer_offset[3 + i]]

@@ -7,12 +7,13 @@ import numpy as np
 from ..util import merge_compare_exact_unique, ravel, unravel, combine_symbols, combine_masses
 from ..fragments.types import ResidueStateSpace
 from ..sequences.suffix_array import SuffixArray, BisectResult
-from ..fragments.types import TargetMasses, BoundaryResult, PairResult
+from ..fragments.types import TargetMasses, BoundaryResult, PairResult, UniqueFragmentIndex, AnnotationIndex
 from ..graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 from ..graphs.align import AbstractNodeCostModel, AbstractEdgeCostModel, AbstractPathCostModel, AugmentedLetter
 
 @dataclasses.dataclass(slots=True)
 class SymmetricNodeCostModel:
+    """Assigns pairs of nodes in the product graph a cost based on their reflection symmetry under a given axis. There is one node cost model per axis."""
     lower_mass: np.ndarray
     upper_mass: np.ndarray
     reflector: float
@@ -21,8 +22,11 @@ class SymmetricNodeCostModel:
     def __call__(self, i: int, j: int) -> float:
         return 0. if abs(self.lower_mass[i] + self.upper_mass[j] - self.reflector) < self.tolerance else 1.
 
+    # TODO - constructor
+
 @dataclasses.dataclass(slots=True)
 class AnnotatedEdgeCostModel:
+    """Assigns pairs of edges in the product graph a cost based on the similarity of their annotation and the cost of those annotations. There is one edge cost model per spectrum."""
     cost: np.ndarray
     mass: np.ndarray
     residue_id: np.ndarray
@@ -46,9 +50,33 @@ class AnnotatedEdgeCostModel:
 
         return (min_cost, min_anno)
 
+    @classmethod
+    def from_annotation(
+        cls,
+        index: AnnotationIndex,
+        residue_space: ResidueStateSpace,
+    ) -> Self:
+        amino_id = index.state[:,0]
+        mod_id = index.state[:,1]
+        amino_mass = residue_space.get_amino_mass(amino_id)
+        mod_mass = residue_space.get_mod_mass(mod_id)
+        n_amino = residue_space.n_aminos()
+        n_mod = residue_space.n_total_modifications()
+        dims = (n_amino, n_mod)
+        return cls(
+            cost = index.cost,
+            mass = amino_mass + mod_mass,
+            residue_id = np.ravel_multi_index(
+                np.array([amino_id,mod_id]),
+                dims,
+            ),
+            res_id_dims = dims,
+            segment = index.inner_offset,
+        )
 
 @dataclasses.dataclass(slots=True)
 class MassConstrainedPathCostModel:
+    """Prunes paths whose peptide mass exceeds a given target, which is inferred from an axis of reflection. There is one path cost model per axis."""
     target_mass: float
     tolerance: float
 
@@ -68,6 +96,7 @@ class MassConstrainedPathCostModel:
 
 @dataclasses.dataclass(slots=True)
 class SuffixArrayPathCostModel(MassConstrainedPathCostModel):
+    """Prunes paths whose peptide mass exceeds a given target, which is inferred from an axis of reflection, or whose amino acid sequence is not present in the given suffix array. There is one path cost model per axis, but they all share the same SuffixArray object."""
     residue_space: ResidueStateSpace
     suffix_array: SuffixArray
 

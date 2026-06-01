@@ -6,9 +6,9 @@ from typing import Self, Any
 from .util import normalize_dict
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
 from .spectra.types import Peaks, AugmentedPeaks
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, AxesResult, BoundaryResult, UniqueFragmentIndex
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, AxesResult, BoundaryResult, UniqueFragmentIndex, AnnotationIndex
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses
-from .fragments.search import find_pairs, find_boundaries, find_axes_of_reflection, deduplicate_by_fragment_mass
+from .fragments.search import find_pairs, find_boundaries, find_axes_of_reflection, deduplicate_by_fragment_mass, expand_annotations
 from .sequences.suffix_array import SuffixArray
 from .sequences.queries import all_kmers
 from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
@@ -26,6 +26,7 @@ class AnnotationResult(SerializableDataclass):
     lower_boundaries: BoundaryResult
     upper_boundaries: list[BoundaryResult]
     unique_fragment_index: UniqueFragmentIndex
+    annotation_index: AnnotationIndex
     lower_topology: list[SpectrumGraph]
     upper_topology: list[SpectrumGraph]
     pivot_topology: list[PivotGraph]
@@ -45,6 +46,7 @@ class AnnotationResult(SerializableDataclass):
         lower_boundaries: BoundaryResult,
         upper_boundaries: list[BoundaryResult],
         unique_fragment_index: UniqueFragmentIndex,
+        annotation_index: AnnotationIndex,
         lower_topology: list[SpectrumGraph],
         upper_topology: list[SpectrumGraph],
         pivot_topology: list[PivotGraph],
@@ -59,6 +61,7 @@ class AnnotationResult(SerializableDataclass):
             lower_boundaries,
             upper_boundaries,
             unique_fragment_index,
+            annotation_index,
             lower_topology,
             upper_topology,
             pivot_topology,
@@ -172,8 +175,21 @@ def annotate(
     # create a compact, unified index into the array of unique fragment masses.
 
     t = time()
+    annotation_index = expand_annotations(
+        pair_results,
+        pair_targets[0],
+        lower_boundary_results,
+        boundary_targets[0],
+        upper_boundaries,
+        reverse_boundary_targets[0],
+        unique_fragment_index,
+    )
+    profile["annotation_index"] = time() - t
+
+    t = time()
     spectrum_topology = construct_spectrum_graphs(
         unique_fragment_index,
+        annotation_index,
         axes,
         tolerance,
     )
@@ -189,6 +205,7 @@ def annotate(
         lower_boundary_results,
         upper_boundaries,
         unique_fragment_index,
+        annotation_index,
         lower_topology = spectrum_topology[0],
         upper_topology = spectrum_topology[1],
         pivot_topology = spectrum_topology[2],
