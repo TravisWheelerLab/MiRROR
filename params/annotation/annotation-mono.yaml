@@ -2,7 +2,7 @@ query_tolerance: 0.006
 symmetry_tolerance: 0.006
 pivot_score_factor: 0.33
 
-max_k: 3
+max_k: 1
 
 charges:
   - 1
@@ -109,6 +109,7 @@ mod:
     # - - 0 # O
   
 loss:
+  max_num: 3
   masses:
     - 0.0
     - 18.0153 # 18.01528

@@ -18,6 +18,7 @@ class FragmentStateSpace:
     applicable_losses: list[np.ndarray]
     # [[int; _]; m] 
     # amino index -> {applicable loss indices}.
+    max_num_losses: int
 
     def n_losses(self, amino_id: int) -> int:
         return len(self.applicable_losses[amino_id])
@@ -41,6 +42,7 @@ class FragmentStateSpace:
             loss_symbols = np.array([''],dtype=str),
             loss_null_indices = np.array([0],dtype=int),
             applicable_losses = [np.array([0],dtype=int) for _ in range(20)],
+            max_num_losses = 0,
         )
 
     @classmethod
@@ -53,6 +55,7 @@ class FragmentStateSpace:
             loss_symbols = np.array(cfg.loss.symbols),
             loss_null_indices = np.array(cfg.loss.nulls),
             applicable_losses = [np.array(x) for x in cfg.loss.application],
+            max_num_losses = cfg.loss.max_num,
         )
 
     @classmethod
@@ -64,6 +67,7 @@ class FragmentStateSpace:
         loss_symbols,
         loss_nulls,
         applicable_losses,
+        max_num_losses,
         sep = ' ',
     ) -> Self:
         n_ser = series_masses.size
@@ -78,6 +82,7 @@ class FragmentStateSpace:
             loss_symbols = np.strings.strip(series_symbols.reshape(n_ser,1) + sep + loss_symbols.reshape(1,n_loss)).flatten(),
             loss_null_indices = boundary_nulls,
             applicable_losses = boundary_appl,
+            max_num_losses = max_num_losses,
         )
 
     @classmethod
@@ -97,6 +102,7 @@ class FragmentStateSpace:
             loss_symbols = np.array(cfg.loss.symbols),
             loss_nulls = np.array(cfg.loss.nulls),
             applicable_losses = [np.array(x) for x in cfg.loss.application],
+            max_num_losses = cfg.loss.max_num,
         )
 
 @dataclasses.dataclass(slots=True)

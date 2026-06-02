@@ -11,6 +11,20 @@ HYDROGEN_MASS = 1.007
 
 MESHGRID_INDEXING = 'ij'
 
+def enumerate_samples(
+    num_elements: int,
+    max_sample_size: int,
+    max_occurrences: list[int],
+) -> Iterator[int]:
+    """Every multiset of size 1..max_sample_size drawn from elements 0...(num_elements - 1). The i'th element can appear at most max_occurrences[i] times."""
+    elements = [i for i in range(num_elements) for _ in range(max_occurrences[i])]
+    for n in range(1, max_sample_size + 1):
+        seen = set()
+        for combo in it.combinations(elements,n):
+            if combo not in seen:
+                seen.add(combo)
+                yield combo
+
 def meshgrid(*args, **kwargs) -> tuple:
     """A wrapper around np.meshgrid with the indexing kwarg fixed to the constant MESHGRID_INDEXING. Accordingly, passing 'indexing=...' will throw an exception. This function is provided for the sake of synchronized indexing between meshgrid and it.product."""
     return np.meshgrid(*args, **kwargs, indexing=MESHGRID_INDEXING)
