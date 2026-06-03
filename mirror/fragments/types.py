@@ -2,7 +2,7 @@ import dataclasses, abc
 from typing import Self, Iterator
 import itertools as it
 
-from ..util import HYDROGEN_MASS, mesh_ravel, fuzzy_unique
+from ..util import HYDROGEN_MASS, mesh_ravel, fuzzy_unique, replacement_constrained_multisets, bisect_left
 
 import numpy as np
 from omegaconf.dictconfig import DictConfig
@@ -31,6 +31,9 @@ class FragmentStateSpace:
 
     def get_all_losses(self) -> list[int]:
         return list(range(len(self.loss_masses)))
+
+    def get_loss_mass(self, i: int) -> float:
+        return self.loss_masses[i]
 
     def tabulate(self) -> str:
         ""
@@ -135,6 +138,12 @@ class ResidueStateSpace:
     def get_modifications(self, amino_id: int) -> list[int]:
         return self.applicable_modifications[amino_id]
 
+    def get_amino_mass(self, i: int) -> float:
+        return self.amino_masses[i]
+
+    def get_modification_mass(self, i: int) -> float:
+        return self.modification_masses[i]
+
     @classmethod
     def from_config(
         cls,
@@ -152,6 +161,95 @@ class ResidueStateSpace:
             modification_null_indices = np.array(cfg.mod.nulls),
             applicable_modifications = [np.array(x) for x in cfg.mod.application],
             max_num_modifications = cfg.mod.max_num,
+        )
+
+@dataclasses.dataclass(slots=True)
+class LossDistribution:
+    loss_state_distributions: list[np.ndarray]
+    loss_mass_distributions: list[np.ndarray]
+    min_mass_per_length: np.ndarray
+
+    def query_loss_by_mass(
+        self,
+        query_masses: np.ndarray,
+    ) -> tuple[list[np.ndarray],list[np.ndarray]]:
+        min_mass_peptide_lengths = np.clip(
+            bisect_left(
+                self.min_mass_per_length,
+                query_masses,
+            ),
+            min = 1,
+        ) - 1
+        return (
+            [self.loss_state_distributions[i] for i in min_mass_peptide_lengths],
+            [self.loss_mass_distributions[i] for i in min_mass_peptide_lengths],
+        )
+
+    @classmethod
+    def from_state_spaces(
+        cls,
+        fragment_space: FragmentStateSpace,
+        residue_space: ResidueStateSpace,
+        k = 50,
+    ) -> tuple[np.ndarray,np.ndarray]:
+        n_losses = fragment_space.n_total_losses()
+        n_aminos = residue_space.n_aminos()
+        loss_tally = np.zeros((n_aminos,n_losses),dtype=int)
+        for i in range(n_aminos):
+            for j in fragment_space.get_losses(i)[1:]: # discard null loss 0 at idx 0.
+                loss_tally[i,j] += 1
+        loss_applicator = np.max(loss_tally,axis=0)
+        # construct loss applicator and minimum loss-augmented amino mass.
+        
+        max_num_losses = fragment_space.max_num_losses
+        min_k = min(k, max_num_losses)
+        loss_occurrences_per_length = [
+            np.clip(
+                loss_applicator * peptide_length,
+                0,
+                max_num_losses,
+            )
+            for peptide_length in range(1, min_k + 1)
+        ]
+        loss_distr = [
+            list(replacement_constrained_multisets(
+                n_losses,
+                max_num_losses,
+                loss_occurrences,
+            ))
+            for loss_occurrences in loss_occurrences_per_length
+        ]
+        loss_state_distr = [
+            np.zeros((len(distr),max_num_losses),dtype=int)
+            for distr in loss_distr
+        ]
+        loss_mass_distr = [
+            np.zeros(len(distr),dtype=float)
+            for distr in loss_distr
+        ]
+        for (peptide_length,loss_dist) in enumerate(loss_distr):
+            for (i,loss_state) in enumerate(loss_dist):
+                for (j,loss_id) in enumerate(loss_state):
+                    loss_state_distr[peptide_length][i,j] = loss_id
+                state = loss_state_distr[peptide_length][i,:]
+                mass = np.sum(fragment_space.loss_masses[state])
+                loss_mass_distr[peptide_length][i] = mass
+        # construct the loss distribution for each peptide length.
+
+        loss_augmented_residue_masses = []
+        for i in range(n_aminos):
+            amino_mass = residue_space.amino_masses[i]
+            for loss_state in replacement_constrained_multisets(n_losses,max_num_losses,loss_tally[i]):
+                loss_mass = np.sum(fragment_space.loss_masses[list(loss_state)])
+                loss_augmented_residue_masses.append(amino_mass - loss_mass)
+        min_mass = min(loss_augmented_residue_masses)
+        min_mass_per_length = [min_mass * i for i in range(1, min_k + 1)]
+        # enumerate the minimum mass peptide for each length between 1 and min_k.
+    
+        return cls(
+            loss_state_distributions = loss_state_distr,
+            loss_mass_distributions = loss_mass_distr,
+            min_mass_per_length = min_mass_per_length,
         )
 
 @dataclasses.dataclass(slots=True)
@@ -175,7 +273,6 @@ class TargetMasses(abc.ABC):
         target_masses = target_masses[sort_key]
         target_states = target_states[sort_key]
         truncated_masses, cluster_idx = fuzzy_unique(target_masses, tolerance)
-        print("  ", n_targets, "->", len(truncated_masses))
         target_clusters = [0,] + sum([[i - 1, i] for i in range(1, n_targets) if cluster_idx[i - 1] != cluster_idx[i]],[]) + [n_targets - 1,]
         target_clusters = np.array(target_clusters).reshape((-1,2))
         assert len(truncated_masses) == len(target_clusters)
@@ -197,7 +294,6 @@ class TargetMasses(abc.ABC):
         right_fragment_space,
         tolerance: float,
     ) -> Self:
-        print("TargetMasses")
         target_masses, truncated_masses, target_clusters, target_states = cls._sort_and_cluster(target_masses,target_states,tolerance)
         return cls(
             target_masses,
@@ -308,7 +404,6 @@ class MultiResidueTargetMasses(TargetMasses):
         tolerance: float,
         num_residues: int,
     ) -> Self:
-        print("MultiResidueTargetMasses")
         target_masses, truncated_masses, target_clusters, target_states = cls._sort_and_cluster(target_masses,target_states,tolerance)
         return cls(
             target_masses,
@@ -541,4 +636,32 @@ class AnnotationIndex:
         return self.annotation_id[self.outer_offset[1]:self.outer_offset[2]]
 
     def get_upper_boundaries_id(self, i: int):
-        return self.annotation_id[self.outer_offset[2 + i]:self.outer_offset[3 + i]]
+        i = 2 + i
+        return self.annotation_id[self.outer_offset[i]:self.outer_offset[i + 1]]
+
+    def _get_state(self, anno_id, state_id):
+        if isinstance(anno_id, int):
+            return self.state[self.inner_offset[anno_id]:self.inner_offset[anno_id + 1],state_id]
+        elif isinstance(anno_id, np.ndarray):
+            if len(anno_id.shape) == 1:
+                if len(anno_id) == 0:
+                    return [np.empty(0,dtype=int)]
+                lo = self.inner_offset[anno_id]
+                hi = self.inner_offset[anno_id + 1]
+                return [
+                    self.state[i:j,state_id]
+                    for (i,j) in zip(lo,hi)
+                ]
+        raise ValueError("AnnotationIndex state getters (amino, mod, loss) accept either integer or one-dimensional np.ndarray arguments.")
+
+    def get_amino_id(self, i):
+        return self._get_state(i, 0)
+
+    def get_modification_state(self, i):
+        return self._get_state(i, 3)
+
+    def get_left_loss_state(self, i):
+        return self._get_state(i, 1)
+
+    def get_right_loss_state(self, i):
+        return self._get_state(i, 2)

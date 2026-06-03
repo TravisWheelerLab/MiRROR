@@ -4,7 +4,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from .io import reverse_fasta, SerializableDataclass, serialize_dataclass, deserialize_dataclass
-from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, BoundaryResult
+from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, BoundaryResult, LossDistribution
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, combine_target_masses
 from .sequences.suffix_array import SuffixArray
 from .annotation import AnnotationParams
@@ -96,6 +96,7 @@ def construct_targets(
     list[TargetMasses],
     list[TargetMasses],
     list[TargetMasses],
+    LossDistribution,
 ]:
     """Fourth step in setup: enumerate all viable combinations of amino acids, losses, and modifications given in the config. If configured for multi-residue boundaries, the suffix arrays constrain the space of residue sequences."""
     config = config.annotation
@@ -140,6 +141,7 @@ def construct_targets(
         [pair_targets,],
         [lower_boundary_targets, *multi_lower_boundary_targets],
         [reflected_upper_boundary_targets, *multi_reflected_upper_boundary_targets],
+        LossDistribution.from_state_spaces(pair_fragment_space, residue_space),
     )
 
 @dataclasses.dataclass(slots=True)
@@ -153,6 +155,7 @@ class Session:
     pair_targets: list[TargetMasses]
     boundary_targets: list[TargetMasses]
     reverse_boundary_targets: list[TargetMasses]
+    loss_distribution: LossDistribution
 
 def setup(
     config: DictConfig,
@@ -161,7 +164,7 @@ def setup(
     session_dir = make_session_dir(config)
     anno_params, algn_params, enmr_params = construct_params(config)
     suffix_array, rev_suffix_array = load_suffix_arrays(config, session_dir)
-    pair_tgt, boundary_tgt, rev_boundary_tgt = construct_targets(config, suffix_array, rev_suffix_array)
+    pair_tgt, boundary_tgt, rev_boundary_tgt, loss_distribution = construct_targets(config, suffix_array, rev_suffix_array)
     if config.session.serialize:
         OmegaConf.save(config, session_dir / "config.yaml")
     return Session(
@@ -174,4 +177,5 @@ def setup(
         pair_tgt,
         boundary_tgt,
         rev_boundary_tgt,
+        loss_distribution,
     )

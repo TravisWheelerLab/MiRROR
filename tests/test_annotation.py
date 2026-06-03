@@ -15,5 +15,5 @@ def test_annotate():
     for i, peaks in enumerate(TEST_PEAKS):
         print(i)
         pprint.pprint(peaks)
-        res = annotate(peaks, session.anno_params, session.pair_targets, session.boundary_targets, session.reverse_boundary_targets,)
+        res = annotate(peaks, session.anno_params, session.pair_targets, session.boundary_targets, session.reverse_boundary_targets, session.loss_distribution)
         pprint.pprint(res)

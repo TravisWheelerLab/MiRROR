@@ -1,97 +1,131 @@
 import dataclasses
+from typing import Self
 
-from ..util import enumerate_samples, bisect_left
-from ..fragments.types import FragmentStateSpace, ResidueStateSpace
+from ..util import bisect_left, bisect_left
 from ..spectra.types import AugmentedPeaks
+from ..fragments.types import FragmentStateSpace, LossDistribution, UniqueFragmentIndex, AnnotationIndex
+from ..graphs.align import AbstractNodeLookup
 
 import numpy as np
 
 @dataclasses.dataclass(slots=True)
-class LossDistribution:
-    loss_state_distributions: list[np.ndarray]
-    loss_mass_distributions: list[np.ndarray]
-    min_mass_per_length: np.ndarray
+class PeptideMassLookup(AbstractNodeLookup):
+    topological_masses: np.ndarray
+    topological_indices: np.ndarray
+    loss_augmented_peaks: np.ndarray
+    tolerance: float
+
+    def __call__(self, peptide_mass: float) -> tuple[int,bool]:
+        query_lo = peptide_mass - tolerance
+        query_hi = peptide_mass + tolerance
+        topo_lo = bisect_left(
+            self.topological_masses,
+            query_lo,
+        )
+        topo_hi = bisect_right(
+            self.topological_masses,
+            query_hi,
+        )
+        if topo_lo < topo_hi:
+            topo_hit_masses = topological_masses[topo_lo:topo_hi]
+            err = np.abs(topo_hits - peptide_mass)
+            topo_hit_indices = topological_indices[topo_lo:topo_hi]
+            return (
+                topo_indices[np.argmin(err)],
+                None,
+            )
+        else:
+            peak_lo = bisect_left(
+                self.loss_augmented_peaks,
+                query_lo,
+            )
+            peak_hi = bisect_right(
+                self.loss_augmented_peaks,
+                query_hi,
+            )
+            return (
+                None,
+                peak_lo < peak_hi,
+            )
 
     @classmethod
-    def from_state_spaces(
+    def from_masses(
         cls,
-        fragment_space: FragmentStateSpace,
-        residue_space: ResidueStateSpace,
-        k = 50,
-    ) -> tuple[np.ndarray,np.ndarray]:
-        n_losses = fragment_space.n_total_losses()
-        n_aminos = residue_space.n_aminos()
-        loss_tally = np.zeros((n_aminos,n_losses),dtype=int)
-        for i in range(n_aminos):
-            for j in fragment_space.get_losses(i)[1:]: # discard null loss 0 at idx 0.
-                loss_tally[i,j] += 1
-        loss_applicator = np.max(loss_tally,axis=0)
-        # construct loss applicator and minimum loss-augmented amino mass.
-        
-        max_num_losses = fragment_space.max_num_losses
-        min_k = min(k, max_num_losses)
-        loss_occurrences_per_length = [
-            np.clip(
-                loss_applicator * peptide_length,
-                0,
-                max_num_losses,
-            )
-            for peptide_length in range(1, min_k + 1)
-        ]
-        loss_distr = [
-            list(enumerate_samples(
-                n_losses,
-                max_num_losses,
-                loss_occurrences,
-            ))
-            for loss_occurrences in loss_occurrences_per_length
-        ]
-        loss_state_distr = [
-            np.zeros((len(distr),max_num_losses),dtype=int)
-            for distr in loss_distr
-        ]
-        loss_mass_distr = [
-            np.zeros(len(distr),dtype=float)
-            for distr in loss_distr
-        ]
-        for (peptide_length,loss_dist) in enumerate(loss_distr):
-            for (i,loss_state) in enumerate(loss_dist):
-                for (j,loss_id) in enumerate(loss_state):
-                    loss_state_distr[peptide_length][i,j] = loss_id
-                state = loss_state_distr[peptide_length][i,:]
-                mass = np.sum(fragment_space.loss_masses[state])
-                loss_mass_distr[peptide_length][i] = mass
-        # construct the loss distribution for each peptide length.
-
-        loss_augmented_residue_masses = []
-        for i in range(n_aminos):
-            amino_mass = residue_space.amino_masses[i]
-            for loss_state in enumerate_samples(n_losses,max_num_losses,loss_tally[i]):
-                loss_mass = np.sum(fragment_space.loss_masses[list(loss_state)])
-                loss_augmented_residue_masses.append(amino_mass - loss_mass)
-        min_mass = min(loss_augmented_residue_masses)
-        min_mass_per_length = [min_mass * i for i in range(1, min_k + 1)]
-        # enumerate the minimum mass peptide for each length between 1 and min_k.
-    
+        topological_masses: np.ndarray,
+        topological_indices: np.ndarray,
+        loss_augmented_peaks: np.ndarray,
+        tolerance: float,
+    ) -> Self:
+        topo_order = np.argsort(topological_masses)
         return cls(
-            loss_state_distributions = loss_state_distr,
-            loss_mass_distributions = loss_mass_distr,
-            min_mass_per_length = min_mass_per_length,
+            topological_masses = topological_masses[topo_order],
+            topological_indices = topological_indices[topo_order],
+            loss_augmented_peaks = np.sort(loss_augmented_peaks),
+            tolerance = tolerance,
         )
 
-    def query_peptide_mass(
-        self,
-        query_masses: np.ndarray,
-    ) -> tuple[list[np.ndarray],list[np.ndarray]]:
-        min_mass_peptide_lengths = np.clip(
-            bisect_left(
-                self.min_mass_per_length,
-                query_masses,
-            ),
-            min = 1,
-        ) - 1
-        print(min_mass_peptide_lengths)
-        return (
-            [self.loss_state_distributions[i] for i in min_mass_peptide_lengths],
-            [self.loss_mass_distributions[i] for i in min_mass_peptide_lengths],
-        )
+def construct_peptide_mass_lookup(
+    decharged_peaks: AugmentedPeaks,
+    loss_distribution: LossDistribution,
+    fragment_index: UniqueFragmentIndex,
+    annotation_index: AnnotationIndex,
+    left_pair_fragment_space: FragmentStateSpace,
+    right_pair_fragment_space: FragmentStateSpace,
+    lower_boundary_fragment_space: FragmentStateSpace,
+    upper_boundary_fragment_space: FragmentStateSpace,
+    tolerance: float,
+) -> PeptideMassLookup:
+    misc_frag_mass = list(set(decharged_peaks.mz).difference(fragment_index.fragment_masses))
+    if len(misc_frag_mass) == 0:
+        misc_peptide_mass = np.empty(0,dtype=float)
+    else:
+        misc_loss_mass = loss_distribution.query_loss_by_mass(misc_frag_mass)[1]
+        misc_peptide_mass = np.concat([
+            frag_mass + loss_mass
+            for (frag_mass,loss_mass) in zip(misc_frag_mass,misc_loss_mass)
+        ])
+    # transform decharged peaks that were not annotated into peptide masses by applying the inverse (positive) mass of every possible loss state to every such peak.
+
+    lbound_anno_ids = annotation_index.get_lower_boundaries_id()
+    lbound_loss = annotation_index.get_right_loss_state(lbound_anno_ids)
+    lbound_loss_mass = lower_boundary_fragment_space.get_loss_mass(np.concat(lbound_loss))
+    pair_anno_ids = annotation_index.get_pairs_id()
+    left_pair_loss = annotation_index.get_left_loss_state(pair_anno_ids)
+    left_pair_loss_mass = left_pair_fragment_space.get_loss_mass(np.concat(left_pair_loss))
+    right_pair_loss = annotation_index.get_right_loss_state(pair_anno_ids)
+    right_pair_loss_mass = right_pair_fragment_space.get_loss_mass(np.concat(right_pair_loss))
+    k = len(fragment_index.upper_boundaries)
+    ubounds_anno_ids = [
+        annotation_index.get_upper_boundaries_id(i)
+        for i in range(k)
+    ]
+    ubounds_loss = [
+        annotation_index.get_right_loss_state(ids)
+        for ids in ubounds_anno_ids
+    ]
+    ubounds_loss_mass = [
+        upper_boundary_fragment_space.get_loss_mass(np.concat(loss))
+        for loss in ubounds_loss
+    ]
+    loss_mass = np.concat([lbound_loss_mass,left_pair_loss_mass,right_pair_loss_mass] + ubounds_loss_mass)
+    lbound_frag_ids = fragment_index.lower_boundaries
+    repeat_lbound_frag_ids = [np.repeat(id,len(loss)) for (id,loss) in zip(lbound_frag_ids,lbound_loss)]
+    left_pair_frag_ids = fragment_index.pairs[:,0]
+    repeat_left_pair_frag_ids = [np.repeat(id,len(loss)) for (id,loss) in zip(left_pair_frag_ids,left_pair_loss)]
+    right_pair_frag_ids = fragment_index.pairs[:,1]
+    repeat_right_pair_frag_ids = [np.repeat(id,len(loss)) for (id,loss) in zip(right_pair_frag_ids,right_pair_loss)]
+    repeat_ubounds_frag_ids = [
+        [np.repeat(id,len(loss)) for (id,loss) in zip(ubound_frag_ids,ubound_loss)]
+        for (ubound_frag_ids,ubound_loss) in zip(fragment_index.upper_boundaries,ubounds_loss)
+    ]
+    frag_ids = np.concat(sum([repeat_lbound_frag_ids, repeat_left_pair_frag_ids, repeat_right_pair_frag_ids, *repeat_ubounds_frag_ids],[]))
+    frag_mass = fragment_index.fragment_masses[frag_ids]
+    peptide_mass = frag_mass + loss_mass
+    # derive peptide masses from annotations by applying the inverse of every annotated loss state; retain fragment indices for lookup into spectrum graphs.
+
+    return PeptideMassLookup.from_masses(
+        topological_masses = peptide_mass,
+        topological_indices = frag_ids,
+        loss_augmented_peaks = misc_peptide_mass,
+        tolerance = tolerance,
+    )

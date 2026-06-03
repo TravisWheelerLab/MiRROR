@@ -11,7 +11,7 @@ HYDROGEN_MASS = 1.007
 
 MESHGRID_INDEXING = 'ij'
 
-def enumerate_samples(
+def replacement_constrained_multisets(
     num_elements: int,
     max_sample_size: int,
     max_occurrences: list[int],

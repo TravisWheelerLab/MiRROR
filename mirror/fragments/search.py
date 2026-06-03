@@ -5,7 +5,7 @@ from typing import Iterator, Iterable
 
 from ..spectra.types import Peaks, AugmentedPeaks
 from ..util import bisect_left, bisect_right, mirror_symmetries, decharge
-from .types import PairResult, BoundaryResult, AxesResult, TargetMasses, UniqueFragmentIndex, AnnotationIndex
+from .types import PairResult, BoundaryResult, AxesResult, TargetMasses, LossDistribution, UniqueFragmentIndex, AnnotationIndex
 # local
 
 import numpy as np
@@ -357,6 +357,7 @@ def deduplicate_by_fragment_mass(
     lower_boundaries: BoundaryResult,
     axes: AxesResult,
     upper_boundaries: list[BoundaryResult],
+    loss_distribution: LossDistribution,
 ) -> UniqueFragmentIndex:
     """For each result type (pairs, boundaries, axes, reflected boundaries), map peaks to fragments, wherein each index refers to a unique, chargeless fragment mass rather than a peak in the original or augmented spectra. Other than producing a single list of all identified fragment masses, this step also cleans up the underlying space that will be stitched together in the spectrum topology."""
     pairs_mz = peaks.mz[pairs.get_peak_pair_indices().flatten()]
@@ -410,6 +411,7 @@ def deduplicate_by_fragment_mass(
         pairs_mass,lbound_mass,axes_mass,cat_ubound_mass,cat_symmetry_mass,
     ])
     fragment_masses, fragment_indices = np.unique(cat_mass,return_inverse=True)
+    # deduplicate concatenated masses to derive unique fragments mass and index.
 
     cat_ubound_idx = fragment_indices[outer_offsets[3]:outer_offsets[4]]
     cat_symmetry_idx = fragment_indices[outer_offsets[4]:outer_offsets[5]]
@@ -439,29 +441,29 @@ def expand_annotations(
     n_lbound = len(lower_boundary_results)
     n_pairs_lbound = n_pairs + n_lbound
     lbound_id = np.arange(n_pairs, n_pairs_lbound)
-    n_rbounds = [len(results) for results in upper_boundaries]
-    offset_rbounds = np.cumsum([0,] + n_rbounds)
-    rbound_ids = [
+    n_ubounds = [len(results) for results in upper_boundaries]
+    offset_ubounds = np.cumsum([0,] + n_ubounds)
+    ubound_ids = [
         np.arange(n_pairs_lbound + i, n_pairs_lbound + j)
-        for (i,j) in pairwise(offset_rbounds)
+        for (i,j) in pairwise(offset_ubounds)
     ]
-    n_annotations = n_pairs + n_lbound + sum(n_rbounds)
+    n_annotations = n_pairs + n_lbound + sum(n_ubounds)
     # construct annotation IDs and outer segments for recovering pair, lower, and upper boundary ID ranges.
 
     pair_hits = pair_results.get_hit_ranges()
-    pair_costs, pair_states, *_ = pair_targets.get_hit_states(
+    pair_states, pair_costs, *_ = pair_targets.get_hit_states(
         pair_hits,
         pair_results.query_masses,
     )
     lbound_hits = lower_boundary_results.get_hit_ranges()
-    lbound_costs, lbound_states, *_ = lower_boundary_targets.get_hit_states(
+    lbound_states, lbound_costs, *_ = lower_boundary_targets.get_hit_states(
         lbound_hits,
         lower_boundary_results.query_masses,
     )
-    rbounds_hits = [results.get_hit_ranges() for results in upper_boundaries]
-    rbounds_costs, rbounds_states, *_ = zip(*[
+    ubounds_hits = [results.get_hit_ranges() for results in upper_boundaries]
+    ubounds_states, ubounds_costs, *_ = zip(*[
         upper_boundary_targets.get_hit_states(
-            rbounds_hits[i],
+            ubounds_hits[i],
             results.query_masses,
         )
         for (i,results) in enumerate(upper_boundaries)
@@ -470,16 +472,16 @@ def expand_annotations(
 
     pair_segments = pair_hits[:,1] - pair_hits[:,0]
     lbound_segments = lbound_hits[:,1] - lbound_hits[:,0]
-    rbounds_segments = [hits[:,1] - hits[:,0] for hits in rbounds_hits]
+    ubounds_segments = [hits[:,1] - hits[:,0] for hits in ubounds_hits]
     annotation_segments = np.concat(
-        [[0,], pair_segments, lbound_segments] + rbounds_segments,
+        [[0,], pair_segments, lbound_segments] + ubounds_segments,
     )
     # construct inner segments for annotation results.
 
     return AnnotationIndex(
         annotation_id = np.arange(n_annotations),
-        outer_offset = np.cumsum([0,n_pairs,n_lbound] + n_rbounds),
-        cost = np.concat([pair_costs, lbound_costs] + list(rbounds_costs)),
-        state = np.concat([pair_states, lbound_states] + list(rbounds_states)),
+        outer_offset = np.cumsum([0,n_pairs,n_lbound] + n_ubounds),
+        cost = np.concat([pair_costs, lbound_costs] + list(ubounds_costs)),
+        state = np.concat([pair_states, lbound_states] + list(ubounds_states)),
         inner_offset = np.cumsum(annotation_segments),
     )

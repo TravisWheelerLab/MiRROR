@@ -1,26 +1,68 @@
-import itertools as it
+import dataclasses
 from itertools import pairwise
+from typing import Self
 
-from ..fragments.types import AxesResult, UniqueFragmentIndex, AnnotationIndex
+from ..fragments.types import AxesResult, UniqueFragmentIndex, AnnotationIndex, LossDistribution
 from ..graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 from .costmodels import SymmetricNodeCostModel, MassConstrainedPathCostModel
+from .peptide_mass_lookup import PeptideMassLookup
 
 import numpy as np
 import networkx as nx
 
+@dataclasses.dataclass(slots=True)
+class SpectrumTopology:
+    """A collection of graphs, cost models, and lookup object for each axis identified in a spectrum."""
+    lower: list[SpectrumGraph]
+    upper: list[SpectrumGraph]
+    pivot: list[PivotGraph]
+    symmetric: list[SymmetricGraph]
+    node_cost: list[SymmetricNodeCostModel]
+    path_cost: list[MassConstrainedPathCostModel]
+
+    def __getitem__(self, i: int) -> tuple[
+        SpectrumGraph,
+        SpectrumGraph,
+        PivotGraph,
+        SymmetricGraph,
+        SymmetricNodeCostModel,
+        MassConstrainedPathCostModel,
+    ]:
+        return (
+            self.lower[i],
+            self.upper[i],
+            self.pivot[i],
+            self.symmetric[i],
+            self.node_cost[i],
+            self.path_cost[i],
+        )
+    
+    @classmethod
+    def from_data(
+        cls,
+        lower: list[SpectrumGraph],
+        upper: list[SpectrumGraph],
+        pivot: list[PivotGraph],
+        symmetric: list[SymmetricGraph],
+        node_cost: list[SymmetricNodeCostModel],
+        path_cost: list[MassConstrainedPathCostModel],
+    ) -> Self:
+        assert len(lower) == len(upper) == len(pivot) == len(symmetric) == len(node_cost) == len(path_cost)
+        return cls(
+            lower,
+            upper,
+            pivot,
+            symmetric,
+            node_cost,
+            path_cost,
+        )
+    
 def construct_spectrum_topology(
     fragment_index: UniqueFragmentIndex,
     annotation_index: AnnotationIndex,
     axes: AxesResult,
     tolerance: float,
-) -> tuple[
-    list[SpectrumGraph],
-    list[SpectrumGraph],
-    list[PivotGraph],
-    list[SymmetricGraph],
-    list[SymmetricNodeCostModel],
-    list[MassConstrainedPathCostModel],
-]:
+) -> SpectrumTopology:
     pairs_id = annotation_index.get_pairs_id()
     lbound_id = annotation_index.get_lower_boundaries_id()
     k = len(axes)
@@ -43,14 +85,14 @@ def construct_spectrum_topology(
         pivot_pairs_mask = np.logical_not(lower_pairs_mask + upper_pairs_mask)
         pivot_pairs = fragment_index.pairs[pivot_pairs_mask]
         # partition pairs into lower, upper, and pivot by their relation to the axis.
-
+    
         lower_sinks = pivot_pairs[:,0]
         lower_sink_mass = fragment_index.fragment_masses[lower_sinks]
         lower_sinks = lower_sinks[lower_sink_mass < axis]
         upper_sinks = pivot_pairs[:,1]
         upper_sink_mass = fragment_index.fragment_masses[upper_sinks]
         upper_sinks = upper_sinks[upper_sink_mass > axis]
-        # construct sinks as the relative sources of pairs cut in half by the axis.
+        # construct sinks as the components of pairs cut in half by the axis.
 
         node_cost_models[i] = SymmetricNodeCostModel.from_axis(
             fragment_index.fragment_masses,
@@ -62,7 +104,7 @@ def construct_spectrum_topology(
             tolerance,
         )
         # build costmodels
-
+    
         lower_graphs[i] = SpectrumGraph.from_index(
             fragment_index.pairs[lower_pairs_mask],
             pairs_id[lower_pairs_mask],
@@ -91,7 +133,7 @@ def construct_spectrum_topology(
             fragment_index.symmetries[i],
         ]))
         # build graphs
-    return (
+    return SpectrumTopology.from_data(
         lower_graphs,
         upper_graphs,
         pivot_graphs,
