@@ -619,6 +619,9 @@ class UniqueFragmentIndex:
     symmetries: list[np.ndarray]
     upper_boundaries: list[np.ndarray]
 
+    def __len__(self):
+        return len(self.fragment_masses)
+
 @dataclasses.dataclass(slots=True)
 class AnnotationIndex:
     annotation_id: np.ndarray

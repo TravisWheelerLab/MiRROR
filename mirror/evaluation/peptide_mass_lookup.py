@@ -75,57 +75,71 @@ def construct_peptide_mass_lookup(
     upper_boundary_fragment_space: FragmentStateSpace,
     tolerance: float,
 ) -> PeptideMassLookup:
-    misc_frag_mass = list(set(decharged_peaks.mz).difference(fragment_index.fragment_masses))
-    if len(misc_frag_mass) == 0:
-        misc_peptide_mass = np.empty(0,dtype=float)
+    fragment_masses = fragment_index.fragment_masses
+    misc_frag_masses = list(set(decharged_peaks.mz).difference(fragment_masses))
+    if len(misc_frag_masses) == 0:
+        misc_peptide_masses = np.empty(0,dtype=float)
     else:
-        misc_loss_mass = loss_distribution.query_loss_by_mass(misc_frag_mass)[1]
-        misc_peptide_mass = np.concat([
-            frag_mass + loss_mass
-            for (frag_mass,loss_mass) in zip(misc_frag_mass,misc_loss_mass)
+        misc_loss_masses = loss_distribution.query_loss_by_mass(misc_frag_masses)[1]
+        misc_peptide_masses = np.concat([
+            frag_mass + loss_masses
+            for (frag_mass,loss_masses) in zip(misc_frag_masses,misc_loss_masses)
         ])
     # transform decharged peaks that were not annotated into peptide masses by applying the inverse (positive) mass of every possible loss state to every such peak.
 
-    lbound_anno_ids = annotation_index.get_lower_boundaries_id()
-    lbound_loss = annotation_index.get_right_loss_state(lbound_anno_ids)
-    lbound_loss_mass = lower_boundary_fragment_space.get_loss_mass(np.concat(lbound_loss))
-    pair_anno_ids = annotation_index.get_pairs_id()
-    left_pair_loss = annotation_index.get_left_loss_state(pair_anno_ids)
-    left_pair_loss_mass = left_pair_fragment_space.get_loss_mass(np.concat(left_pair_loss))
-    right_pair_loss = annotation_index.get_right_loss_state(pair_anno_ids)
-    right_pair_loss_mass = right_pair_fragment_space.get_loss_mass(np.concat(right_pair_loss))
-    k = len(fragment_index.upper_boundaries)
-    ubounds_anno_ids = [
-        annotation_index.get_upper_boundaries_id(i)
-        for i in range(k)
+    fragment_loss_masses = [
+        [np.empty(0,dtype=float),]
+        for _ in range(len(fragment_index))
     ]
-    ubounds_loss = [
-        annotation_index.get_right_loss_state(ids)
-        for ids in ubounds_anno_ids
-    ]
-    ubounds_loss_mass = [
-        upper_boundary_fragment_space.get_loss_mass(np.concat(loss))
-        for loss in ubounds_loss
-    ]
-    loss_mass = np.concat([lbound_loss_mass,left_pair_loss_mass,right_pair_loss_mass] + ubounds_loss_mass)
-    lbound_frag_ids = fragment_index.lower_boundaries
-    repeat_lbound_frag_ids = [np.repeat(id,len(loss)) for (id,loss) in zip(lbound_frag_ids,lbound_loss)]
-    left_pair_frag_ids = fragment_index.pairs[:,0]
-    repeat_left_pair_frag_ids = [np.repeat(id,len(loss)) for (id,loss) in zip(left_pair_frag_ids,left_pair_loss)]
-    right_pair_frag_ids = fragment_index.pairs[:,1]
-    repeat_right_pair_frag_ids = [np.repeat(id,len(loss)) for (id,loss) in zip(right_pair_frag_ids,right_pair_loss)]
-    repeat_ubounds_frag_ids = [
-        [np.repeat(id,len(loss)) for (id,loss) in zip(ubound_frag_ids,ubound_loss)]
-        for (ubound_frag_ids,ubound_loss) in zip(fragment_index.upper_boundaries,ubounds_loss)
-    ]
-    frag_ids = np.concat(sum([repeat_lbound_frag_ids, repeat_left_pair_frag_ids, repeat_right_pair_frag_ids, *repeat_ubounds_frag_ids],[]))
-    frag_mass = fragment_index.fragment_masses[frag_ids]
-    peptide_mass = frag_mass + loss_mass
-    # derive peptide masses from annotations by applying the inverse of every annotated loss state; retain fragment indices for lookup into spectrum graphs.
+    def collect_fragment_losses(fragment_ids,loss_states,fragment_space):
+        for (frag_id,losses) in zip(fragment_ids,loss_states):
+            loss_masses = fragment_space.get_loss_mass(losses)
+            fragment_loss_masses[frag_id].append(loss_masses)
+    collect_fragment_losses(
+        fragment_index.lower_boundaries,
+        annotation_index.get_right_loss_state(
+            annotation_index.get_lower_boundaries_id()
+        ),
+        lower_boundary_fragment_space,
+    )
+    collect_fragment_losses(
+        fragment_index.pairs[:,0],
+        annotation_index.get_left_loss_state(
+            annotation_index.get_pairs_id()
+        ),
+        left_pair_fragment_space,
+    )
+    collect_fragment_losses(
+        fragment_index.pairs[:,1],
+        annotation_index.get_right_loss_state(
+            annotation_index.get_pairs_id()
+        ),
+        right_pair_fragment_space,
+    )
+    ubounds_frag_ids = fragment_index.upper_boundaries
+    for (i, ubound_frag_ids) in enumerate(ubounds_frag_ids):
+        collect_fragment_losses(
+            ubound_frag_ids,
+            annotation_index.get_right_loss_state(
+                annotation_index.get_upper_boundaries_id(i)
+            ),
+            upper_boundary_fragment_space,
+        )
+    fragment_loss_masses = [np.unique(np.concat(x)) for x in fragment_loss_masses]    
+    n = len(fragment_masses)
+    peptide_masses = np.concat([
+        fragment_masses[i] + fragment_loss_masses[i]
+        for i in range(n)
+    ])
+    frag_ids = np.concat([
+        np.repeat(i,len(fragment_loss_masses[i]))
+        for i in range(n)
+    ])
+    # derive peptide masses from annotations by applying inverse losses to fragment masses.
 
     return PeptideMassLookup.from_masses(
-        topological_masses = peptide_mass,
+        topological_masses = peptide_masses,
         topological_indices = frag_ids,
-        loss_augmented_peaks = misc_peptide_mass,
+        loss_augmented_peaks = misc_peptide_masses,
         tolerance = tolerance,
     )
