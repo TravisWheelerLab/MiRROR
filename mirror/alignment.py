@@ -5,9 +5,10 @@ from typing import Self, Any
 
 from .util import ravel
 from .io import serialize_dataclass, deserialize_dataclass, SerializableDataclass
-from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
-from .graphs.propagate import propagate_cost
-
+from .sequences.suffix_array import SuffixArray
+from .fragments.types import ResidueStateSpace
+from .graphs.types import AlignedPaths, AugmentedLetter
+from .graphs.align import align_spectrum_graphs
 from .evaluation.costmodels import SymmetricNodeCostModel, AnnotatedEdgeCostModel, MassConstrainedPathCostModel, SuffixArrayPathCostModel
 
 from .annotation import AnnotationResult, AnnotationParams
@@ -17,7 +18,8 @@ import numpy as np
 
 @dataclasses.dataclass(slots=True)
 class AlignmentResult(SerializableDataclass):
-    # prod_topology: list[WeightedProductGraph]
+    aligned_prefix_paths: list[AlignedPaths]
+    aligned_suffix_paths: list[AlignedPaths]
     _profile: dict[str, float]
 
     def __len__(self) -> int:
@@ -49,49 +51,67 @@ class AlignmentParams(SerializableDataclass):
 def align(
     anno: AnnotationResult,
     params: AlignmentParams,
+    augmented_alphabet: list[AugmentedLetter],
+    forward_suffix_array: SuffixArray,
+    reverse_suffix_array: SuffixArray,
+    residue_space: ResidueStateSpace,
     verbose: bool = False,
 ) -> AlignmentResult:
     profile = {}
-
+    edge_cost = AnnotatedEdgeCostModel.from_annotation(
+        anno.annotation_index,
+        residue_space,
+        params.edge_mismatch_cost,
+        params.edge_gap_cost,
+    )
     t = time()
     n = len(anno)
-    prod_topology = [None for _ in range(n)]
+    aligned_prefix_paths = [None for _ in range(n)]
+    aligned_suffix_paths = [None for _ in range(n)]
     for i in range(n):
-        node_costmodel = MatchedNodeCostModel(
-            (
-                ravel(l, u, anno.upper_topology[i].order())
-                for (l,u) in anno.symmetric_nodes[i]
-            ),
-            params.node_match_cost,
-            params.node_mismatch_cost,
+        lower_graph, upper_graph, pivot_graph, symmetric_graph, node_cost, path_cost = anno.spectrum_topology[i]
+        forward_path_cost = SuffixArrayPathCostModel.from_mass_constraint(
+            path_cost,
+            residue_space,
+            forward_suffix_array,
         )
-        edge_costmodel = AnnotatedProductEdgeCostModel(
-            anno.lower_topology[i],
-            anno.upper_topology[i],
-            params.weight_key,
-            anno.pairs,
-            anno.lower_boundaries,
-            anno.upper_boundaries[i],
-            params.edge_match_cost,
-            params.edge_mismatch_cost,
-            params.edge_gap_cost,
+        aligned_prefix_paths[i] = align_spectrum_graphs(
+            lower_graph,
+            upper_graph,
+            lower_graph.boundary_node,
+            upper_graph.boundary_node,
+            node_cost,
+            edge_cost,
+            forward_path_cost,
+            anno.node_lookup,
+            anno.node_lookup,
+            augmented_alphabet,
+            threshold = 5, # placeholder, pending dynamic threshold.
         )
-        prod_topology[i] = propagate_cost(
-            anno.lower_topology[i],
-            anno.lower_topology[i].sources(),
-            anno.upper_topology[i],
-            anno.upper_topology[i].sources(),
-            params.cost_threshold,
-            node_costmodel,
-            edge_costmodel,
+        reverse_path_cost = SuffixArrayPathCostModel.from_mass_constraint(
+            path_cost,
+            residue_space,
+            reverse_suffix_array,
         )
-    profile["propagate"] = time() - t
-    if verbose:
-        pass
+        aligned_suffix_paths[i] = align_spectrum_graphs(
+            lower_graph,
+            upper_graph,
+            lower_graph.boundary_node,
+            upper_graph.boundary_node,
+            node_cost,
+            edge_cost,
+            reverse_path_cost,
+            anno.node_lookup,
+            anno.node_lookup,
+            augmented_alphabet,
+            threshold = 5, # placeholder, pending dynamic threshold.
+        )
+    profile["align"] = time() - t
 
     if verbose:
        print(json.dumps(profile, indent=4))
     return AlignmentResult(
-        prod_topology,
+        aligned_prefix_paths,
+        aligned_suffix_paths,
         profile,
     )

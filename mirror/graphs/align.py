@@ -1,8 +1,9 @@
-import abc
-from typing import Any, Self
+import dataclasses
+from heapq import heappush, heappop
 
-from .types import Graph, Pathspace, SpectrumGraph
+from .types import Graph, SpectrumGraph, AlignedPaths, AbstractNodeCostModel, AbstractEdgeCostModel, AbstractPathCostModel, AbstractNodeLookup, AugmentedLetter
 from ..util import ravel, unravel
+from ..sequences.suffix_array import BisectResult
 
 def direct_product_adj(
     first_graph: Graph,
@@ -10,6 +11,11 @@ def direct_product_adj(
     first_pos: int,
     second_pos: int,
 ):
+    print(f"""    direct_product_adj
+        first_pos {first_pos}
+        second_pos {second_pos}
+        first_adj {first_graph.adjacent(first_pos)}
+        second_adj {second_graph.adjacent(second_pos)}""")
     return (
         [(i,j) for i in first_graph.adjacent(first_pos) for j in second_graph.adjacent(second_pos)],
         [(i,j) for i in first_graph.edge_index(first_pos) for j in second_graph.edge_index(second_pos)],
@@ -37,43 +43,7 @@ def second_box_product_adj(
         [(-1, j) for j in second_graph.edge_index(second_pos)],
     )
 
-class AbstractNodeCostModel(abc.ABC):
-    """Assigns cost to a pair of nodes (i,j) representing a position in the product graph."""
-
-    @abc.abstractmethod
-    def __call__(self, i: int, j: int) -> float:
-        """Assigns cost to a pair of nodes (i,j) representing a position in the product graph."""
-
-AugmentedLetter = tuple[int,int,float]
-
-class AbstractEdgeCostModel(abc.ABC):
-    """Retrieves the pair of annotation sets associated to the product graph edge (i,j) and calculates the minimum-cost matching between the annotation sets."""
-
-    @abc.abstractmethod
-    def __call__(self, i: int, j: int) -> tuple[float,AugmentedLetter]:
-        """Retrieves the pair of annotation sets associated to the product graph edge (i,j) and calculates the minimum-cost matching between the annotation sets."""
-        
-
-class AbstractPathCostModel(abc.ABC):
-    """Handles updating path states with incoming leaves and determines when paths should be pruned."""
-
-    @classmethod
-    @abc.abstractmethod
-    def initial_state(cls) -> Any:
-        """Returns the path state associated to the empty path."""
-
-    @abc.abstractmethod
-    def __call__(self, path_state, edge_anno: AugmentedLetter) -> tuple[float,Any]:
-        """Increments the path state with an incoming edge annotation."""
-
-class AbstractNodeLookup(abc.ABC):
-    """Matches peptide mass queries to nodes in a spectrum graph, or else finds augmented peaks with the query mass."""
-
-    @abc.abstractmethod
-    def __call__(self, peptide_mass: float) -> tuple[int,bool]:
-        """Matches peptide mass queries to nodes in a spectrum graph, or else finds augmented peaks with the query mass."""
-
-def align(
+def align_spectrum_graphs(
     lower: SpectrumGraph,
     upper: SpectrumGraph,
     lower_source: int,
@@ -85,25 +55,41 @@ def align(
     upper_node_lookup: AbstractNodeLookup,
     augmented_alphabet: list[AugmentedLetter],
     threshold: float,
-):
-    paths = _align(
-        lower.graph,
-        upper.graph,
-        lower_source,
-        upper_source,
-        lower.axial_node,
-        upper.axial_node,
-        lower.gap_state_node,
-        upper.gap_state_node,
-        node_cost_model,
-        edge_cost_model,
-        path_cost_model,
-        lower_node_lookup,
-        upper_node_lookup,
-        augmented_alphabet,
-        threshold,
+) -> AlignedPaths:
+    return AlignedPaths.from_align(
+        *_align(
+            lower.graph,
+            upper.graph,
+            lower_source,
+            upper_source,
+            lower.axial_node,
+            upper.axial_node,
+            lower.gap_state_node,
+            upper.gap_state_node,
+            node_cost_model,
+            edge_cost_model,
+            path_cost_model,
+            lower_node_lookup,
+            upper_node_lookup,
+            augmented_alphabet,
+            threshold,
+        )
     )
-    # TODO - to a path space
+
+@dataclasses.dataclass(slots=True)
+class _HeapItem:
+    cost: float
+    first_pos: int
+    second_pos: int
+    anno: list[tuple[AugmentedLetter,float]]
+    path: list[int]
+    state: tuple[BisectResult,float]
+
+    def __lt__(self, other):
+        self.cost < other.cost
+
+    def __iter__(self):
+        return iter((self.cost,self.first_pos,self.second_pos,self.anno,self.path,self.state))
 
 def _align(
 	first_graph: Graph,
@@ -114,22 +100,27 @@ def _align(
 	second_sink: int,
 	first_gap_state: int,
 	second_gap_state: int,
-	annotation_index: list,
     node_cost_model: AbstractNodeCostModel,
     edge_cost_model: AbstractEdgeCostModel,
     path_cost_model: AbstractPathCostModel,
-    lower_node_lookup: AbstractNodeLookup,
-    upper_node_lookup: AbstractNodeLookup,
-	augmented_alphabet: list[tuple[int,int,float]],
+    first_node_lookup: AbstractNodeLookup,
+    second_node_lookup: AbstractNodeLookup,
+	augmented_alphabet: list[AugmentedLetter],
 	threshold: float,
-):
+) -> tuple[
+    list[float],
+    list[float],
+    list[BisectResult],
+    list[list[int]],
+    list[list[AugmentedLetter]],
+]:
     print("align")
     pq = [
-        (
+        _HeapItem(
             0.,             # cost
             first_source,   # first pos
             second_source,  # second pos
-            [],             # anno
+            [(0,0,0.)],    # anno
             [],             # path
             path_cost_model.initial_state(),
         ),
@@ -137,7 +128,11 @@ def _align(
     first_graph_order = first_graph.order()
     second_graph_order = second_graph.order()
     tgt_pos = ravel(first_sink, second_sink, second_graph_order)
-    paths = []
+    costs = [0.,]
+    masses = [0,]
+    path_states = [None,]
+    paths = [[-1,],]
+    annotations = [[(-1,-1,0.),],]
     while len(pq) > 0:
         x = heappop(pq)
         # print(x)
@@ -154,7 +149,12 @@ def _align(
         path = path + [curr_pos,]
         if curr_pos == tgt_pos:
             print("\tcomplete!")
+            costs.append(cost)
+            print("anno",anno)
+            masses.append(0.)
+            path_states.append(path_state)
             paths.append(path)
+            annotations.append(anno)
             continue
         
         direct_tgt, direct_idx = direct_product_adj(
@@ -182,13 +182,13 @@ def _align(
                     new_second_pos = second_gap_state
                 new_node_cost = node_cost_model(new_first_pos, new_second_pos)
                 # new_step_anno, new_step_cost = edge_cost_model(first_anno_res,second_anno_res)
-                new_step_anno = (amino_idx, mod_idx)
+                new_step_anno = (amino_idx, mod_idx, delta_mass)
                 new_step_cost = 0. # TODO based on aug matches
                 new_anno = anno + [new_step_anno,]
                 new_path_cost, new_path_state = path_cost_model(path_state, new_step_anno)
                 new_cost = cost + new_node_cost + new_step_cost + new_path_cost
                 heappush(pq,
-                    (          
+                    _HeapItem(          
                         new_cost,       # cost
                         new_first_pos,  # first_pos
                         new_second_pos, # second_pos
@@ -214,12 +214,15 @@ def _align(
                 new_second_pos, aug_second_match = second_node_lookup(putative_mass)
                 if new_second_pos is None:
                     new_second_pos = second_pos
+                    new_pos_cost = int(not(aug_second_match))
+                else:
+                    new_pos_cost = 0.
                 # retrieve target position; check if it hits on the other graph, or in the augmented spectrum.
 
                 new_path_cost, new_path_state = path_cost_model(path_state, new_edge_anno)
                 new_cost = cost + new_pos_cost + new_edge_cost + new_path_cost
                 heappush(pq,
-                    (          
+                    _HeapItem(          
                         new_cost,       # cost
                         new_first_pos,  # first_pos
                         new_second_pos, # second_pos
@@ -242,12 +245,15 @@ def _align(
                 new_first_pos, aug_first_match = first_node_lookup(putative_mass)
                 if new_first_pos is None:
                     new_first_pos = first_pos
+                    new_pos_cost = int(not(aug_first_match))
+                else:
+                    new_pos_cost = 0.
                 # retrieve target position; check if it hits on the other graph, or in the augmented spectrum.
 
                 new_path_cost, new_path_state = path_cost_model(path_state, new_edge_anno)
                 new_cost = cost + new_pos_cost + new_edge_cost + new_path_cost
                 heappush(pq,
-                    (          
+                    _HeapItem(          
                         new_cost,       # cost
                         new_first_pos,  # first_pos
                         new_second_pos, # second_pos
@@ -268,7 +274,7 @@ def _align(
                 new_path_cost, new_path_state = path_cost_model(path_state, new_edge_anno)
                 new_cost = cost + new_pos_cost + new_edge_cost + new_path_cost
                 heappush(pq,
-                    (          
+                    _HeapItem(          
                         new_cost,       # cost
                         new_first_pos,  # first_pos
                         new_second_pos, # second_pos
@@ -277,4 +283,10 @@ def _align(
                         new_path_state, # path state
                     )
                 )
-    return paths
+    return (
+        costs,
+        masses,
+        path_states,
+        paths,
+        annotations,
+    )

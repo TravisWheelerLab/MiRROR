@@ -14,7 +14,7 @@ from .sequences.queries import all_kmers
 from .graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
 from .evaluation.spectrum_topology import SpectrumTopology, construct_spectrum_topology
 from .evaluation.costmodels import SymmetricNodeCostModel, MassConstrainedPathCostModel
-from .evaluation.peptide_mass_lookup import construct_peptide_mass_lookup
+from .evaluation.peptide_mass_lookup import construct_peptide_mass_lookup, PeptideMassLookup
 # local
 
 import numpy as np
@@ -30,6 +30,7 @@ class AnnotationResult(SerializableDataclass):
     unique_fragment_index: UniqueFragmentIndex
     annotation_index: AnnotationIndex
     spectrum_topology: SpectrumTopology
+    node_lookup: PeptideMassLookup
     # every list has len(self.axes) items.
     
     _profile: dict[str,float] = None
@@ -47,6 +48,7 @@ class AnnotationResult(SerializableDataclass):
         unique_fragment_index: UniqueFragmentIndex,
         annotation_index: AnnotationIndex,
         spectrum_topology: SpectrumTopology,
+        peptide_mass_lookup: PeptideMassLookup,
         profile: dict[str,float],
     ) -> Self:
         assert len(axes) == len(upper_boundaries)
@@ -59,6 +61,7 @@ class AnnotationResult(SerializableDataclass):
             unique_fragment_index,
             annotation_index,
             spectrum_topology,
+            peptide_mass_lookup,
             profile,
         )
 
@@ -215,5 +218,6 @@ def annotate(
         unique_fragment_index,
         annotation_index,
         spectrum_topology,
+        peptide_mass_lookup,
         profile = profile,
     )

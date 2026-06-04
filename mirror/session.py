@@ -7,6 +7,7 @@ from .io import reverse_fasta, SerializableDataclass, serialize_dataclass, deser
 from .fragments.types import FragmentStateSpace, ResidueStateSpace, TargetMasses, MultiResidueTargetMasses, PairResult, BoundaryResult, LossDistribution
 from .fragments.masses import construct_pair_target_masses, construct_boundary_target_masses, combine_target_masses
 from .sequences.suffix_array import SuffixArray
+from .graphs.types import AugmentedLetter
 from .annotation import AnnotationParams
 from .alignment import AlignmentParams
 from .enumeration import EnumerationParams
@@ -88,7 +89,7 @@ def load_suffix_arrays(
             None,
         )
 
-def construct_targets(
+def construct_targets_and_alphabets(
     config: DictConfig,
     forward_suffix_array: SuffixArray,
     reverse_suffix_array: SuffixArray,
@@ -97,6 +98,7 @@ def construct_targets(
     list[TargetMasses],
     list[TargetMasses],
     LossDistribution,
+    list[AugmentedLetter],
 ]:
     """Fourth step in setup: enumerate all viable combinations of amino acids, losses, and modifications given in the config. If configured for multi-residue boundaries, the suffix arrays constrain the space of residue sequences."""
     config = config.annotation
@@ -129,19 +131,34 @@ def construct_targets(
     if max_k > 1:
         # TODO: constrain by suffix arrays.
         for k in range(2, max_k + 1):
-            # print(k)
             operand = [pair_targets,] * (k - 1)
             multi_lower_boundary_targets[k - 2] = combine_target_masses(
                 [lower_boundary_targets,] + operand)
-            # print("lb")
             multi_reflected_upper_boundary_targets[k - 2] = combine_target_masses(
                 [reflected_upper_boundary_targets,] + operand)
-            # print("rb")
+    # multi-residue boundary targets.
+
+    loss_distribution = LossDistribution.from_state_spaces(pair_fragment_space, residue_space)
+    # loss distribution.
+
+    augmented_alphabet = [
+        (
+            amino_id,
+            mod_id,
+            residue_space.get_amino_mass(amino_id) + residue_space.get_modification_mass(mod_id),
+        )
+        for amino_id in range(residue_space.n_aminos())
+        for mod_id in residue_space.get_modifications(amino_id)
+    ]
+    # augmented alphabet.
+    # TODO, spin off into fragments.combinatorics later along w/ loss and modification distributions.
+    
     return (
         [pair_targets,],
         [lower_boundary_targets, *multi_lower_boundary_targets],
         [reflected_upper_boundary_targets, *multi_reflected_upper_boundary_targets],
-        LossDistribution.from_state_spaces(pair_fragment_space, residue_space),
+        loss_distribution,
+        augmented_alphabet,
     )
 
 @dataclasses.dataclass(slots=True)
@@ -156,6 +173,7 @@ class Session:
     boundary_targets: list[TargetMasses]
     reverse_boundary_targets: list[TargetMasses]
     loss_distribution: LossDistribution
+    augmented_alphabet: list[AugmentedLetter]
 
 def setup(
     config: DictConfig,
@@ -164,7 +182,7 @@ def setup(
     session_dir = make_session_dir(config)
     anno_params, algn_params, enmr_params = construct_params(config)
     suffix_array, rev_suffix_array = load_suffix_arrays(config, session_dir)
-    pair_tgt, boundary_tgt, rev_boundary_tgt, loss_distribution = construct_targets(config, suffix_array, rev_suffix_array)
+    pair_tgt, boundary_tgt, rev_boundary_tgt, loss_distribution, augmented_alphabet = construct_targets_and_alphabets(config, suffix_array, rev_suffix_array)
     if config.session.serialize:
         OmegaConf.save(config, session_dir / "config.yaml")
     return Session(
@@ -178,4 +196,5 @@ def setup(
         boundary_tgt,
         rev_boundary_tgt,
         loss_distribution,
+        augmented_alphabet,
     )

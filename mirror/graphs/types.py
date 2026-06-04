@@ -4,6 +4,7 @@ from typing import Self, Any, Union, Iterator
 import numpy as np
 
 from ..util import ravel, unravel
+from ..sequences.suffix_array import BisectResult
 
 @dataclasses.dataclass(slots=True)
 class Graph:
@@ -220,3 +221,85 @@ class Pathspace:
             paths = np.concat(paths),
             off = np.cumsum([0,] + [len(x) for x in paths])
         )
+
+AugmentedLetter = tuple[int,int,float]
+
+@dataclasses.dataclass(slots=True)
+class AlignedPaths:
+    paths: np.ndarray
+    annotation: np.ndarray
+    offset: np.ndarray
+    cost: np.ndarray
+    mass: np.ndarray
+    path_state: list[BisectResult]
+
+    def __len__(self):
+        return len(self.offset) - 1
+
+    def __getitem__(self, i: int) -> tuple[
+        float,
+        float,
+        BisectResult,
+        np.ndarray,
+        np.ndarray,
+    ]:
+        lo = self.offset[i]
+        hi = self.offset[i + 1]
+        return (
+            self.cost[i],
+            self.mass[i],
+            self.path_state[i],
+            self.paths[lo:hi],
+            self.annotation[lo:hi],
+        )
+
+    @classmethod
+    def from_align(
+        cls,
+        cost: list[float],
+        mass: list[float],
+        path_state: list[BisectResult],
+        paths: list[list[int]],
+        anno: list[list[AugmentedLetter]],
+    ) -> Self:
+        return cls(
+            paths = np.concat(paths),
+            annotation = np.concat(anno),
+            offset = np.cumsum([0,] + [len(x) for x in paths]),
+            cost = cost,
+            mass = mass,
+            path_state = path_state,
+        )
+
+class AbstractNodeCostModel(abc.ABC):
+    """Assigns cost to a pair of nodes (i,j) representing a position in the product graph."""
+
+    @abc.abstractmethod
+    def __call__(self, i: int, j: int) -> float:
+        """Assigns cost to a pair of nodes (i,j) representing a position in the product graph."""
+
+class AbstractEdgeCostModel(abc.ABC):
+    """Retrieves the pair of annotation sets associated to the product graph edge (i,j) and calculates the minimum-cost matching between the annotation sets."""
+
+    @abc.abstractmethod
+    def __call__(self, i: int, j: int) -> tuple[float,AugmentedLetter]:
+        """Retrieves the pair of annotation sets associated to the product graph edge (i,j) and calculates the minimum-cost matching between the annotation sets."""
+
+class AbstractPathCostModel(abc.ABC):
+    """Handles updating path states with incoming leaves and determines when paths should be pruned."""
+
+    @classmethod
+    @abc.abstractmethod
+    def initial_state(cls) -> Any:
+        """Returns the path state associated to the empty path."""
+
+    @abc.abstractmethod
+    def __call__(self, path_state, edge_anno: AugmentedLetter) -> tuple[float,Any]:
+        """Increments the path state with an incoming edge annotation."""
+
+class AbstractNodeLookup(abc.ABC):
+    """Matches peptide mass queries to nodes in a spectrum graph, or else finds augmented peaks with the query mass."""
+
+    @abc.abstractmethod
+    def __call__(self, peptide_mass: float) -> tuple[int,bool]:
+        """Matches peptide mass queries to nodes in a spectrum graph, or else finds augmented peaks with the query mass."""

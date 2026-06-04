@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Self
 
-from ..util import bisect_left, bisect_left
+from ..util import bisect_left, bisect_right
 from ..spectra.types import AugmentedPeaks
 from ..fragments.types import FragmentStateSpace, LossDistribution, UniqueFragmentIndex, AnnotationIndex
 from ..graphs.align import AbstractNodeLookup
@@ -16,8 +16,8 @@ class PeptideMassLookup(AbstractNodeLookup):
     tolerance: float
 
     def __call__(self, peptide_mass: float) -> tuple[int,bool]:
-        query_lo = peptide_mass - tolerance
-        query_hi = peptide_mass + tolerance
+        query_lo = peptide_mass - self.tolerance
+        query_hi = peptide_mass + self.tolerance
         topo_lo = bisect_left(
             self.topological_masses,
             query_lo,
@@ -27,11 +27,11 @@ class PeptideMassLookup(AbstractNodeLookup):
             query_hi,
         )
         if topo_lo < topo_hi:
-            topo_hit_masses = topological_masses[topo_lo:topo_hi]
-            err = np.abs(topo_hits - peptide_mass)
-            topo_hit_indices = topological_indices[topo_lo:topo_hi]
+            topo_hit_masses = self.topological_masses[topo_lo:topo_hi]
+            err = np.abs(topo_hit_masses - peptide_mass)
+            topo_hit_indices = self.topological_indices[topo_lo:topo_hi]
             return (
-                topo_indices[np.argmin(err)],
+                topo_hit_indices[np.argmin(err)],
                 None,
             )
         else:

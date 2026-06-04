@@ -8,8 +8,7 @@ from ..util import merge_compare_exact_unique, ravel, unravel, combine_symbols, 
 from ..fragments.types import ResidueStateSpace
 from ..sequences.suffix_array import SuffixArray, BisectResult
 from ..fragments.types import TargetMasses, BoundaryResult, PairResult, UniqueFragmentIndex, AnnotationIndex
-from ..graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph
-from ..graphs.align import AbstractNodeCostModel, AbstractEdgeCostModel, AbstractPathCostModel, AugmentedLetter
+from ..graphs.types import SpectrumGraph, PivotGraph, SymmetricGraph, AbstractNodeCostModel, AbstractEdgeCostModel, AbstractPathCostModel, AugmentedLetter
 
 @dataclasses.dataclass(slots=True)
 class SymmetricNodeCostModel:
@@ -29,7 +28,7 @@ class SymmetricNodeCostModel:
         tolerance: float,
     ) -> Self:
         return cls(
-            mass = fragment_mass,
+            mass = np.concat([fragment_mass,[0.,0.,0.,0.,0.,]]),
             reflector = 2 * axis,
             tolerance = tolerance,
         )
@@ -42,15 +41,35 @@ class AnnotatedEdgeCostModel:
     residue_id: np.ndarray
     res_id_dims: tuple[int,int]
     segment: np.ndarray
+    mismatch_penalty: int
+    gap_penalty: int
 
     def __call__(self, i: int, j: int) -> tuple[int,AugmentedLetter]:
+        if i == j == -1:
+            return (
+                self.gap_penalty,
+                (-1,-1,0.)
+            )
+        if i == -1 or j == -1:
+            idx = max(i,j)
+            lo, hi = self.segment[idx:idx+2]
+            edge_cost = self.cost[lo:hi]
+            idx_min = edge_cost.argmin()
+            min_cost = edge_cost[idx_min]
+            min_anno_amino, min_anno_mod = np.unravel_index(self.residue_id[lo + idx_min],self.res_id_dims)
+            min_anno_mass = self.mass[lo + idx_min]
+            return (
+                self.mismatch_penalty,
+                (min_anno_amino,min_anno_mod,min_anno_mass),
+            )
+           
         i_lo, i_hi = self.segment[i:i+2]
         j_lo, j_hi = self.segment[j:j+2]
         edge_costs = self.cost[i_lo:i_hi] + self.cost[j_lo:j_hi].reshape((-1,1))
         comp_costs = 1 - (self.residue_id[i_lo:i_hi] == self.residue_id[j_lo:j_hi].reshape((-1,1)))
         costs = edge_costs + comp_costs
-        min_i, min_j = np.unravel_index(costs.argmin,costs.shape)
-        min_cost = costs[min_i,min_j]
+        i_min, j_min = np.unravel_index(costs.argmin(),costs.shape)
+        min_cost = costs[i_min,j_min]
         min_anno_amino, min_anno_mod = np.unravel_index(self.residue_id[i_lo + i_min],self.res_id_dims)
         # OK to use just i_min because edge_costs are an epsilon relative to comp_costs; edge costs are used to determine which pair of matching residue ids are used for the final match, but will never dominate the mismatch cost and therefore will never lead to min_i encoding a different id than min_j.
         
@@ -65,11 +84,13 @@ class AnnotatedEdgeCostModel:
         cls,
         index: AnnotationIndex,
         residue_space: ResidueStateSpace,
+        mismatch: int,
+        gap: int,
     ) -> Self:
         amino_id = index.state[:,0]
         mod_id = index.state[:,1]
         amino_mass = residue_space.get_amino_mass(amino_id)
-        mod_mass = residue_space.get_mod_mass(mod_id)
+        mod_mass = residue_space.get_modification_mass(mod_id)
         n_amino = residue_space.n_aminos()
         n_mod = residue_space.n_total_modifications()
         dims = (n_amino, n_mod)
@@ -82,6 +103,8 @@ class AnnotatedEdgeCostModel:
             ),
             res_id_dims = dims,
             segment = index.inner_offset,
+            mismatch_penalty = mismatch,
+            gap_penalty = gap,
         )
 
 
@@ -89,20 +112,19 @@ class AnnotatedEdgeCostModel:
 class MassConstrainedPathCostModel:
     """Prunes paths whose peptide mass exceeds a given target, which is inferred from an axis of reflection. There is one path cost model per axis."""
     target_mass: float
+    
+    def __call__(self, peptide_mass: float, edge_anno: AugmentedLetter):
+        _, _, delta_mass = edge_anno
+        new_mass = peptide_mass + delta_mass
+        return (
+            np.inf if new_mass > self.target else 0.,
+            new_mass,
+        )
 
     @classmethod
     def initial_state(cls) -> None:
-        """The mass constrained path cost model is stateless. Its only function is to check whether the peptide mass of a given AugmentedLetter exceeds the target mass."""
-        return None
-    
-    def __call__(self, path_state: None, edge_anno: AugmentedLetter):
-        new_mass = edge_anno
-        amino = self.residue_space.amino_symbols[amino_idx]
-        new_pfx = self.suffix_array.bisect([amino,],pfx)[0],
-        return (
-            np.inf if (new_pfx.count == 0 or new_mass > self.target) else 0.,
-            new_pfx,
-        )
+        """The mass constrained path cost model state consists only of the peptide mass of the path. The initial peptide mass is zero."""
+        return 0.
 
     @classmethod
     def from_axis(
@@ -121,13 +143,26 @@ class SuffixArrayPathCostModel(MassConstrainedPathCostModel):
     suffix_array: SuffixArray
 
     def __call__(self, path_state: tuple[float,BisectResult], edge_anno: AugmentedLetter):
-        mass, pfx = path_state
-        amino_idx, _, = edge_anno
+        pfx, mass = path_state
+        amino_idx, mod_idx, step_mass = edge_anno
         amino = self.residue_space.amino_symbols[amino_idx]
-        new_pfx = self.suffix_array.bisect([amino,],pfx)[0],
+        new_pfx = self.suffix_array.bisect([amino,],pfx)[0]
+        print("\t\t",amino,new_pfx.count)
+        new_mass = mass + step_mass
         return (
-            np.inf if (new_pfx.count == 0 or new_mass > self.target) else 0.,
-            new_pfx,
+            np.inf if (new_pfx.count == 0 or new_mass > self.target_mass) else 0.,
+            (
+                new_pfx,
+                new_mass,
+            ),
+        )
+
+    @classmethod
+    def initial_state(cls) -> None:
+        """The suffix array path cost model maintains a state with two components: the BisectResult describing a prefix in the suffix array, and the peptide mass. The initial BisectResult is a NoneType, representing a prefix equal to the empty string. The initial peptide mass is zero."""
+        return (
+            None,
+            0.,
         )
 
     @classmethod
@@ -139,7 +174,6 @@ class SuffixArrayPathCostModel(MassConstrainedPathCostModel):
     ) -> Self:
         return cls(
             constraint.target_mass,
-            constraint.tolerance,
             residue_space,
             suffix_array,
         )
