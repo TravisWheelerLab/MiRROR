@@ -147,7 +147,7 @@ class SuffixArrayPathCostModel(MassConstrainedPathCostModel):
         amino_idx, mod_idx, step_mass = edge_anno
         amino = self.residue_space.amino_symbols[amino_idx]
         new_pfx = self.suffix_array.bisect([amino,],pfx)[0]
-        print("\t\t",amino,new_pfx.count)
+        # print("\t\t",amino,new_pfx.count)
         new_mass = mass + step_mass
         return (
             np.inf if (new_pfx.count == 0 or new_mass > self.target_mass) else 0.,

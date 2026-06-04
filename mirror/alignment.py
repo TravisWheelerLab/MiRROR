@@ -86,7 +86,7 @@ def align(
             anno.node_lookup,
             anno.node_lookup,
             augmented_alphabet,
-            threshold = 5, # placeholder, pending dynamic threshold.
+            threshold = 0.99, # placeholder, pending dynamic threshold.
         )
         reverse_path_cost = SuffixArrayPathCostModel.from_mass_constraint(
             path_cost,

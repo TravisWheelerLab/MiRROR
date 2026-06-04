@@ -11,11 +11,11 @@ def direct_product_adj(
     first_pos: int,
     second_pos: int,
 ):
-    print(f"""    direct_product_adj
-        first_pos {first_pos}
-        second_pos {second_pos}
-        first_adj {first_graph.adjacent(first_pos)}
-        second_adj {second_graph.adjacent(second_pos)}""")
+    # print(f"""    direct_product_adj
+        # first_pos {first_pos}
+        # second_pos {second_pos}
+        # first_adj {first_graph.adjacent(first_pos)}
+        # second_adj {second_graph.adjacent(second_pos)}""")
     return (
         [(i,j) for i in first_graph.adjacent(first_pos) for j in second_graph.adjacent(second_pos)],
         [(i,j) for i in first_graph.edge_index(first_pos) for j in second_graph.edge_index(second_pos)],
@@ -114,7 +114,7 @@ def _align(
     list[list[int]],
     list[list[AugmentedLetter]],
 ]:
-    print("align")
+    # print("align")
     pq = [
         _HeapItem(
             0.,             # cost
@@ -138,19 +138,18 @@ def _align(
         # print(x)
         cost, first_pos, second_pos, anno, path, path_state = x
         peptide_mass = anno[-1][-1]
-        if len(path) > 0:
-            print(unravel(path[-1],second_graph_order), "->", (first_pos,second_pos), anno, cost)
+        # if len(path) > 0:
+            # print(unravel(path[-1],second_graph_order), "->", (first_pos,second_pos), anno, cost)
         if cost > threshold:
-            print("\tpruned.")
-            # prune this path.
             continue
+            # print("\tpruned.")
+            # prune this path.
 
         curr_pos = ravel(first_pos, second_pos, second_graph_order)
         path = path + [curr_pos,]
         if curr_pos == tgt_pos:
-            print("\tcomplete!")
+            # print("\tcomplete!")
             costs.append(cost)
-            print("anno",anno)
             masses.append(0.)
             path_states.append(path_state)
             paths.append(path)
@@ -169,7 +168,7 @@ def _align(
         nb2 = len(second_box_tgt)
 
         if nd == nb1 == nb2 == 0:
-            print("\tbranch and bound")
+            # print("\tbranch and bound")
             # branch and bound.
             # the gap state is represented by a special node in each graph that has no neighbors, so it kicks it back into this condition with every step, until either the target mass is reached, or a node is discovered in one or both graphs via lookup.
             for amino_idx, mod_idx, delta_mass in augmented_alphabet:
@@ -198,7 +197,7 @@ def _align(
                     )
                 )
         elif nb2 == 0:
-            print("\tfirst box")
+            # print("\tfirst box")
             # follow first box path and check for reflected nodes in second graph.
             # check for reflected node. this will always fail on the first position of the box path, since the lack of symmetry is why it was entered in the first place.
             # if yes, put that on the queue.
@@ -232,7 +231,7 @@ def _align(
                     )
                 )
         elif nb1 == 0:
-            print("\tsecond box")
+            # print("\tsecond box")
             # follow second box path and check for reflected nodes in first graph. same logic as previous case.
             for i in range(nb2):
                 first_edge_idx, second_edge_idx = second_box_idx[i]
@@ -263,7 +262,7 @@ def _align(
                     )
                 )
         else:
-            print("\ttraverse")
+            # print("\ttraverse")
             # traverse the direct edges of the product graph.
             for i in range(nd):
                 new_first_pos, new_second_pos = direct_tgt[i]
