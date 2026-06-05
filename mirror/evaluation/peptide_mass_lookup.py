@@ -69,10 +69,6 @@ def construct_peptide_mass_lookup(
     loss_distribution: LossDistribution,
     fragment_index: UniqueFragmentIndex,
     annotation_index: AnnotationIndex,
-    left_pair_fragment_space: FragmentStateSpace,
-    right_pair_fragment_space: FragmentStateSpace,
-    lower_boundary_fragment_space: FragmentStateSpace,
-    upper_boundary_fragment_space: FragmentStateSpace,
     tolerance: float,
 ) -> PeptideMassLookup:
     fragment_masses = fragment_index.fragment_masses
@@ -91,39 +87,34 @@ def construct_peptide_mass_lookup(
         [np.empty(0,dtype=float),]
         for _ in range(len(fragment_index))
     ]
-    def collect_fragment_losses(fragment_ids,loss_states,fragment_space):
-        for (frag_id,losses) in zip(fragment_ids,loss_states):
-            loss_masses = fragment_space.get_loss_mass(losses)
-            fragment_loss_masses[frag_id].append(loss_masses)
+    def collect_fragment_losses(fragment_ids,loss_masses):
+        for (frag_id,masses) in zip(fragment_ids,loss_masses):
+            fragment_loss_masses[frag_id].append(masses)
     collect_fragment_losses(
         fragment_index.lower_boundaries,
-        annotation_index.get_right_loss_state(
+        annotation_index.get_right_loss_mass(
             annotation_index.get_lower_boundaries_id()
         ),
-        lower_boundary_fragment_space,
     )
     collect_fragment_losses(
         fragment_index.pairs[:,0],
-        annotation_index.get_left_loss_state(
+        annotation_index.get_left_loss_mass(
             annotation_index.get_pairs_id()
         ),
-        left_pair_fragment_space,
     )
     collect_fragment_losses(
         fragment_index.pairs[:,1],
-        annotation_index.get_right_loss_state(
+        annotation_index.get_right_loss_mass(
             annotation_index.get_pairs_id()
         ),
-        right_pair_fragment_space,
     )
     ubounds_frag_ids = fragment_index.upper_boundaries
     for (i, ubound_frag_ids) in enumerate(ubounds_frag_ids):
         collect_fragment_losses(
             ubound_frag_ids,
-            annotation_index.get_right_loss_state(
+            annotation_index.get_right_loss_mass(
                 annotation_index.get_upper_boundaries_id(i)
             ),
-            upper_boundary_fragment_space,
         )
     fragment_loss_masses = [np.unique(np.concat(x)) for x in fragment_loss_masses]    
     n = len(fragment_masses)

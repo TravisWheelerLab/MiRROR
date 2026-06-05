@@ -35,6 +35,9 @@ class FragmentStateSpace:
     def get_loss_mass(self, i: int) -> float:
         return self.loss_masses[i]
 
+    def get_loss_symbol(self, i: int) -> float:
+        return self.loss_symbols[i]
+
     def tabulate(self) -> str:
         ""
 
@@ -143,6 +146,12 @@ class ResidueStateSpace:
 
     def get_modification_mass(self, i: int) -> float:
         return self.modification_masses[i]
+
+    def get_amino_symbol(self, i: int) -> float:
+        return self.amino_symbols[i]
+
+    def get_modification_symbol(self, i: int) -> float:
+        return self.modification_symbols[i]
 
     @classmethod
     def from_config(
@@ -629,6 +638,8 @@ class AnnotationIndex:
     # outer_offset splits annotation_id into segments for pair results, lower boundary results, and one or more upper boundary results.
     cost: np.ndarray
     state: np.ndarray
+    mass: np.ndarray
+    symbol: np.ndarray
     inner_offset: np.ndarray
     # inner_offset associates each annotation ID to a range of cost values and annotation states.
 
@@ -642,9 +653,13 @@ class AnnotationIndex:
         i = 2 + i
         return self.annotation_id[self.outer_offset[i]:self.outer_offset[i + 1]]
 
-    def _get_state(self, anno_id, state_id):
+    def _get_data(self,
+        data: np.ndarray,
+        field: int,
+        anno_id: int,
+    ):
         if isinstance(anno_id, int):
-            return self.state[self.inner_offset[anno_id]:self.inner_offset[anno_id + 1],state_id]
+            return data[self.inner_offset[anno_id]:self.inner_offset[anno_id + 1],field]
         elif isinstance(anno_id, np.ndarray):
             if len(anno_id.shape) == 1:
                 if len(anno_id) == 0:
@@ -652,19 +667,43 @@ class AnnotationIndex:
                 lo = self.inner_offset[anno_id]
                 hi = self.inner_offset[anno_id + 1]
                 return [
-                    self.state[i:j,state_id]
+                    data[i:j,field]
                     for (i,j) in zip(lo,hi)
                 ]
         raise ValueError("AnnotationIndex state getters (amino, mod, loss) accept either integer or one-dimensional np.ndarray arguments.")
 
-    def get_amino_id(self, i):
-        return self._get_state(i, 0)
+    def get_amino_state(self, i):
+        return self._get_data(self.state, 0, i)
 
     def get_modification_state(self, i):
-        return self._get_state(i, 3)
+        return self._get_data(self.state, 3, i)
 
     def get_left_loss_state(self, i):
-        return self._get_state(i, 1)
+        return self._get_data(self.state, 1, i)
 
     def get_right_loss_state(self, i):
-        return self._get_state(i, 2)
+        return self._get_data(self.state, 2, i)
+
+    def get_amino_mass(self, i):
+        return self._get_data(self.mass, 0, i)
+
+    def get_modification_mass(self, i):
+        return self._get_data(self.mass, 3, i)
+
+    def get_left_loss_mass(self, i):
+        return self._get_data(self.mass, 1, i)
+
+    def get_right_loss_mass(self, i):
+        return self._get_data(self.mass, 2, i)
+
+    def get_amino_symbol(self, i):
+        return self._get_data(self.symbol, 0, i)
+
+    def get_modification_symbol(self, i):
+        return self._get_data(self.symbol, 3, i)
+
+    def get_left_loss_symbol(self, i):
+        return self._get_data(self.symbol, 1, i)
+
+    def get_right_loss_symbol(self, i):
+        return self._get_data(self.symbol, 2, i)

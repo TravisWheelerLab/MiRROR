@@ -478,10 +478,51 @@ def expand_annotations(
     )
     # construct inner segments for annotation results.
 
+    def retrieve_data(state, fragment_space, residue_space):
+        amino_state = state[:,0]
+        left_loss_state = state[:,1]
+        right_loss_state = state[:,2]
+        modification_state = state[:,3]
+        amino_mass = residue_space.get_amino_mass(amino_state)
+        modification_mass = residue_space.get_modification_mass(modification_state)
+        left_loss_mass = fragment_space.get_loss_mass(left_loss_state)
+        right_loss_mass = fragment_space.get_loss_mass(right_loss_state)
+        mass = [amino_mass,left_loss_mass,right_loss_mass,modification_mass]
+        amino_symbol = residue_space.get_amino_symbol(amino_state)
+        modification_symbol = residue_space.get_modification_symbol(modification_state)
+        left_loss_symbol = fragment_space.get_loss_symbol(left_loss_state)
+        right_loss_symbol = fragment_space.get_loss_symbol(right_loss_state)
+        symbol = [amino_symbol,left_loss_symbol,right_loss_symbol,modification_symbol]
+        return (
+            np.concat([x.reshape((-1,1)) for x in mass],axis=1),
+            np.concat([x.reshape((-1,1)) for x in symbol],axis=1),
+        )
+    pair_masses, pair_symbols = retrieve_data(
+        pair_states,
+        pair_targets.right_fragment_space,
+        pair_targets.residue_space,
+    )
+    lbound_masses, lbound_symbols = retrieve_data(
+        lbound_states,
+        lower_boundary_targets.right_fragment_space,
+        lower_boundary_targets.residue_space,
+    )
+    ubounds_masses, ubounds_symbols = zip(*[
+        retrieve_data(
+            states,
+            upper_boundary_targets.right_fragment_space,
+            upper_boundary_targets.residue_space,
+        )
+        for states in ubounds_states
+    ])
+    # retrieve masses and symbols associated to each state
+
     return AnnotationIndex(
         annotation_id = np.arange(n_annotations),
         outer_offset = np.cumsum([0,n_pairs,n_lbound] + n_ubounds),
         cost = np.concat([pair_costs, lbound_costs] + list(ubounds_costs)),
         state = np.concat([pair_states, lbound_states] + list(ubounds_states)),
+        mass = np.concat([pair_masses, lbound_masses] + list(ubounds_masses)),
+        symbol = np.concat([pair_symbols, lbound_symbols] + list(ubounds_symbols)),
         inner_offset = np.cumsum(annotation_segments),
     )

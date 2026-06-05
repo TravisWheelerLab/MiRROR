@@ -200,10 +200,6 @@ def annotate(
         loss_distribution,
         unique_fragment_index,
         annotation_index,
-        pair_targets[0].left_fragment_space,
-        pair_targets[0].right_fragment_space,
-        boundary_targets[0].right_fragment_space,
-        reverse_boundary_targets[0].right_fragment_space,
         tolerance,
     )
 
