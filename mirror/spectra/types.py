@@ -434,7 +434,8 @@ class ComparedLabels:
 @dataclasses.dataclass(slots=True)
 class AbstractLabeledPeaks(Peaks):
     label_type: LabelType
-    peptide: str
+    peptide: str                # len = m
+    mods: list[np.ndarray]      # [[str; _]; m]
     pivot: float
     mz: np.ndarray              # [float; n]
     intensity: np.ndarray       # [float; n]
@@ -442,7 +443,6 @@ class AbstractLabeledPeaks(Peaks):
     position: np.ndarray        # [int; n]
     charge: list[np.ndarray]    # [[int; _]; n]
     loss: list[np.ndarray]      # [[str; _]; n]
-    mods: list[np.ndarray]      # [[str; _]; n]
 
     def __post_init__(self):
         peak_data = [self.mz, self.intensity, self.series, self.position, self.charge, self.loss]
@@ -652,7 +652,7 @@ class SimulationLabeledPeaks(AbstractLabeledPeaks):
             position = position,
             charge = [np.array([x,]) for x in charge],
             loss = [np.array([x,]) for x in loss],
-            mods = [np.empty((0,),dtype=str) for _ in mz],
+            mods = [np.array(["",]) for _ in mz],
         )
 
 class BenchmarkLabeledPeaks(AbstractLabeledPeaks):

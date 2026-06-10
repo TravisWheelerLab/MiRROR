@@ -587,8 +587,8 @@ class AxesResult:
             clusters = [],
             scores = np.empty(shape=(0,), dtype=float),
             symmetries = [],
-            pivot_points = np.empty(shape=(0,), dtype=float),
-            pivot_indices = np.empty(shape=(0,4), dtype=float),
+            axes_points = np.empty(shape=(0,), dtype=float),
+            axes_indices = np.empty(shape=(0,4), dtype=float),
         )
 
     @classmethod
@@ -599,13 +599,13 @@ class AxesResult:
         symmetries: list[np.ndarray],
         symmetries_charges: list[np.ndarray],
         symmetries_peak_idx: list[np.ndarray],
-        pivot_points: np.ndarray,
-        pivot_indices: np.ndarray,
-        pivot_charges: np.ndarray,
-        pivot_peak_idx: np.ndarray
+        axes_points: np.ndarray,
+        axes_indices: np.ndarray,
+        axes_charges: np.ndarray,
+        axes_peak_idx: np.ndarray
     ) -> Self:
         assert len(cluster_points) == len(clusters) == len(scores) == len(symmetries)
-        assert len(pivot_points) == len(pivot_indices)
+        assert len(axes_points) == len(axes_indices)
         return cls(
             cluster_points,
             clusters,
@@ -613,10 +613,10 @@ class AxesResult:
             symmetries,
             symmetries_charges,
             symmetries_peak_idx,
-            pivot_points,
-            pivot_indices,
-            pivot_charges,
-            pivot_peak_idx,
+            axes_points,
+            axes_indices,
+            axes_charges,
+            axes_peak_idx,
         )
 
 @dataclasses.dataclass(slots=True)

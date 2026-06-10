@@ -11,6 +11,9 @@ HYDROGEN_MASS = 1.007
 
 MESHGRID_INDEXING = 'ij'
 
+def consecutive_intervals(n: int):
+    return np.arange(2 * n).reshape((n,2)) - np.arange(n).reshape((n,1))
+
 def replacement_constrained_multisets(
     num_elements: int,
     max_sample_size: int,

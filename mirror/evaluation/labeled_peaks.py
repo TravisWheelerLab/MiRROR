@@ -4,9 +4,61 @@ from typing import Self
 
 from ..util import listsum, fuzzy_unique
 from ..spectra.types import Peaks, AbstractLabeledPeaks, LabelType
-from ..fragments.types import PairResult, BoundaryResult, PivotResult, TargetMasses
+from ..fragments.types import FragmentIndex, AnnotationIndex, AxesResult
 
 import numpy as np
+
+@dataclasses.dataclass(slots=True)
+class AnnotationLabeledPeaks(AbstractLabeledPeaks):
+	@classmethod
+	def from_fragment_labels(
+		cls,
+		peaks: Peaks,
+		fragment_index: UniqueFragmentIndex,
+		annotation_index: AnnotationIndex,
+		axes: AxesResult,
+		i: int,
+	) -> Self:
+		n = len(peaks)
+		losses = [[]  for _ in range(n)]
+		costs = [[] for _ in range(n)]
+		target_indices = [[] for _ in range(n)]
+		charges = [[] for _ in range(n)]
+		original_indices = labels.index
+		m = len(original_indices)
+		for i in range(m):
+			j = original_indices[i]
+			costs[j].append(labels.costs[i])
+			losses[j].append(labels.loss[i])
+			target_indices[j].append(labels.target_index[i])
+			charges[j].append(np.array([labels.charge[i],] * len(labels.costs[i])))
+		# cluster fragment labels by original (peak) index.
+
+		losses = [np.concat(x) for x in losses]
+		costs = [np.concat(x) for x in costs]
+		target_indices = [np.concat(x) for x in target_indices]
+		charges = [np.concat(x) for x in charges]
+		for i in range(n):
+			order = np.argsort(costs[i])
+			charges[i] = charges[i][order]
+			losses[i] = np.array([
+				targets[t].right_fragment_space.loss_symbols[l] if t != -1 else '' # TODO
+				for (t,l) in zip(target_indices[i],losses[i])
+			])[order]
+		# sort labels and convert to symbolic representation.
+		
+		return cls(
+			label_type = LabelType.FRAGMENTS,
+			peptide = '',
+			pivot = axes.get_axis(i),
+			mz = peaks.mz,
+			intensity = labels.peaks.intensity,
+			series = np.full(n, '', dtype=str),
+			position = np.zeros(n, dtype=int),
+			charge = charges,
+			loss = losses,
+			mods = [],
+		)
 
 _LabelData = tuple[
 	np.ndarray,			# indices
@@ -328,56 +380,6 @@ class FragmentLabels:
 			lower_boundary_segment = lb_segment,
 			pivot_interchunk_segments = pivot_chunk_segments,
 			pivot_intrachunk_segments = pivot_intrachunk_segments,
-		)
-
-@dataclasses.dataclass(slots=True)
-class AnnotationLabeledPeaks(AbstractLabeledPeaks):
-	@classmethod
-	def from_fragment_labels(
-		cls,
-		labels: FragmentLabels,
-		targets: list[TargetMasses],
-	) -> Self:
-		mz = labels.peaks.mz
-		n = len(mz)
-		losses = [[]  for _ in range(n)]
-		costs = [[] for _ in range(n)]
-		target_indices = [[] for _ in range(n)]
-		charges = [[] for _ in range(n)]
-		original_indices = labels.index
-		m = len(original_indices)
-		for i in range(m):
-			j = original_indices[i]
-			costs[j].append(labels.costs[i])
-			losses[j].append(labels.loss[i])
-			target_indices[j].append(labels.target_index[i])
-			charges[j].append(np.array([labels.charge[i],] * len(labels.costs[i])))
-		# cluster fragment labels by original (peak) index.
-
-		losses = [np.concat(x) for x in losses]
-		costs = [np.concat(x) for x in costs]
-		target_indices = [np.concat(x) for x in target_indices]
-		charges = [np.concat(x) for x in charges]
-		for i in range(n):
-			order = np.argsort(costs[i])
-			charges[i] = charges[i][order]
-			losses[i] = np.array([
-				targets[t].right_fragment_space.loss_symbols[l] if t != -1 else '' # TODO
-				for (t,l) in zip(target_indices[i],losses[i])
-			])[order]
-		# sort labels and convert to symbolic representation.
-		
-		return cls(
-			label_type = LabelType.FRAGMENTS,
-			peptide = '',
-			pivot = 0.,
-			mz = mz,
-			intensity = labels.peaks.intensity,
-			series = np.full(n, '', dtype=str),
-			position = np.zeros(n, dtype=int),
-			charge = charges,
-			loss = losses,
-			mods = [],
 		)
 
 @dataclasses.dataclass(slots=True)
